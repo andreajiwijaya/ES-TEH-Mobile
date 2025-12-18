@@ -1,134 +1,148 @@
-// User Types
+// /types/index.ts
+
+// ==================== USER & AUTH ====================
 export interface User {
-  id: string;
+  id: number;
   username: string;
-  password: string;
   role: 'karyawan' | 'gudang' | 'owner';
-  outlet_id?: string;
+  outlet_id?: number | null;
+  outlet?: Outlet;
 }
 
-// Product Types
-export interface Product {
-  id: string;
-  outlet_id: string;
+export interface LoginResponse {
+  access_token: string;
+  token?: string;        // <--- Agar error di login.tsx hilang
+  token_type: string;
+  user: User;
+  message?: string;
+}
+
+// ==================== OUTLET ====================
+export interface Outlet {
+  id: number;
   nama: string;
-  harga: number;
-  gambar?: string;
-  is_available: boolean;
-  category: string;
+  alamat: string;
+  is_active: boolean;
+  users_count?: number;
 }
 
-export interface OrderItem {
-  id: string;
-  transaksi_id?: string;
-  produk_id: string;
-  quantity: number;
-  subtotal: number;
-  notes?: string;
-}
-
-// Stock Types
+// ==================== BAHAN & PRODUK ====================
 export interface Bahan {
-  id: string;
+  id: number;
   nama: string;
   satuan: string;
   stok_minimum_gudang: number;
   stok_minimum_outlet: number;
 }
 
-export interface StokOutlet {
-  outlet_id: string;
-  bahan_id: string;
-  stok: number;
+export interface Komposisi {
+  id?: number;
+  produk_id?: number;
+  bahan_id: number;
+  quantity: number;
+  bahan?: Bahan;
 }
 
-export interface StokGudang {
-  bahan_id: string;
-  stok: number;
-}
-
-// Transaction Types
-export interface Transaksi {
-  id: string;
-  outlet_id: string;
-  karyawan_id: string;
-  tanggal: Date;
-  total: number;
-  metode_bayar: 'tunai' | 'qris';
-  bukti_bayar?: string;
-}
-
-// Outlet Types
-export interface Outlet {
-  id: string;
+export interface Product {
+  id: number;
   nama: string;
-  alamat: string;
-  telepon: string;
-  is_active: boolean;
+  harga: number;
+  gambar?: string | null;
+  is_available?: boolean;
+  category?: string; // Agar error di transaksi.tsx hilang
+  komposisi?: Komposisi[];
 }
 
-// Stock Request Types
-export interface PermintaanStok {
-  id: string;
-  outlet_id: string;
-  bahan_id: string;
-  jumlah: number;
-  status: 'pending' | 'approved' | 'rejected' | 'completed';
+// ==================== TRANSAKSI & CART ====================
+
+// Tambahkan OrderItem untuk state keranjang belanja di Frontend
+export interface OrderItem {
+  id: string; // Menggunakan string karena pakai Date.now() di frontend
+  produk_id: number;
+  quantity: number;
+  subtotal: number;
+  notes?: string;
 }
 
-// Goods Movement Types
-export interface BarangMasuk {
-  id: string;
-  gudang_id: string;
-  bahan_id: string;
-  jumlah: number;
-  tanggal: Date;
-  suplier: string;
-}
-
-export interface BarangKeluar {
-  id: string;
-  gudang_id: string;
-  outlet_id: string;
-  tanggal_keluar: Date;
-  status: 'pending' | 'in_transit' | 'received' | 'cancelled';
-}
-
-export interface DetailBarangKeluar {
-  barang_keluar_id: string;
-  bahan_id: string;
+// Tipe untuk item yang dikirim ke Backend (API)
+export interface TransaksiItemPayload {
+  produk_id: number;
   quantity: number;
 }
 
-export interface BuktiPenerimaan {
-  id: string;
-  barang_keluar_id: string;
-  outlet_id: string;
-  karyawan_id: string;
-  foto?: string;
-  tanggal_terima: Date;
+// Tipe data detail transaksi dari Backend
+export interface TransaksiItem {
+  id?: number;
+  transaksi_id?: number;
+  produk_id: number;
+  quantity: number;
+  subtotal?: number;
+  produk?: Product;
 }
 
-// Daily Revenue/Expense Types
-export interface PemasukanHarian {
-  outlet_id: string;
-  tanggal: Date;
-  total_pemasukan: number;
+export interface Transaksi {
+  id: number;
+  outlet_id: number;
+  karyawan_id: number;
+  tanggal: string;
+  total: number;
+  metode_bayar: 'tunai' | 'qris';
+  bukti_qris?: string | null;
+  items?: TransaksiItem[];
 }
 
-export interface PengeluaranHarian {
-  id: string;
-  outlet_id: string;
-  tanggal: Date;
-  deskripsi: string;
+// ==================== GUDANG (WAREHOUSE) ====================
+
+// --- TAMBAHAN BARU DI SINI (Supaya overview.tsx tidak error) ---
+export interface StokGudang {
+  bahan_id: number;
+  stok: number;
+  bahan?: Bahan;
+}
+// -------------------------------------------------------------
+
+export interface BarangMasuk {
+  id: number;
+  bahan_id: number;
   jumlah: number;
+  tanggal: string;
+  supplier: string;
+  bahan?: Bahan;
 }
 
-// Report Types
-export interface Laporan {
-  id: string;
-  jenis: 'penjualan' | 'stok' | 'keuangan' | 'gudang';
-  tanggal_dibuat: Date;
-  data: string;
+export interface BarangKeluar {
+  id: number;
+  permintaan_id?: number;
+  gudang_id?: number;
+  outlet_id?: number;
+  tanggal_keluar: string;
+  status: 'pending' | 'in_transit' | 'received' | 'cancelled';
+  bukti_foto?: string | null;
+  jumlah?: number;
+  bahan?: Bahan;
 }
 
+export interface PermintaanStok {
+  id: number;
+  outlet_id: number;
+  bahan_id: number;
+  jumlah: number;
+  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  bahan?: Bahan;
+  outlet?: Outlet;
+}
+
+// ==================== LAPORAN & DASHBOARD ====================
+
+export interface LaporanPendapatan {
+  tanggal: string;
+  total_pendapatan: number;
+  jumlah_transaksi: number;
+}
+
+export interface DashboardData {
+  total_outlet: number;
+  total_karyawan: number;
+  pendapatan_hari_ini: number;
+  stok_kritis_gudang: number;
+}

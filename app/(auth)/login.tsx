@@ -14,6 +14,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+// Import AsyncStorage untuk menyimpan sesi
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { authAPI } from '../../services/api';
 
@@ -25,15 +27,12 @@ const LogoComponent = () => {
   return (
     <View style={styles.logoContainer}>
       <View style={styles.logoShapes}>
-        {/* Red shape */}
         <View style={[styles.logoShape, styles.logoShapeRed]}>
           <View style={styles.logoShapeInner} />
         </View>
-        {/* Green shape */}
         <View style={[styles.logoShape, styles.logoShapeGreen]}>
           <View style={styles.logoShapeInner} />
         </View>
-        {/* Yellow shape */}
         <View style={[styles.logoShape, styles.logoShapeYellow]}>
           <View style={styles.logoShapeInner} />
         </View>
@@ -57,93 +56,78 @@ export default function LoginScreen() {
   const router = useRouter();
 
   const handleLogin = async () => {
-    if (!username || !password) {
-      Alert.alert('Error', 'Silakan masukkan username dan password');
+    // 1. Validasi Input
+    if (!username.trim() || !password.trim()) {
+      Alert.alert('Peringatan', 'Mohon isi username dan password.');
       return;
     }
 
     setLoading(true);
+
     try {
-      console.log('=== LOGIN ATTEMPT ===');
-      console.log('Username:', username);
-      console.log('API Base URL:', 'https://esteh-backend-production.up.railway.app/api');
-      console.log('Login Endpoint:', '/login');
-      
+      // 2. Panggil API Login
+      console.log('Attempting login for:', username);
       const response = await authAPI.login(username, password);
 
-      console.log('=== LOGIN RESPONSE ===');
-      console.log('Response:', JSON.stringify(response, null, 2));
-
+      // 3. Cek Error dari API (Network error, wrong password, etc)
       if (response.error) {
-        console.error('Login error:', response.error);
+        setLoading(false);
+        Alert.alert('Login Gagal', response.error);
+        return;
+      }
+
+      // 4. Validasi Data Response (Menangani format 'token' atau 'access_token')
+      // Backend kamu menggunakan 'token', tapi kita jaga-jaga cek 'access_token' juga
+      const token = response.data?.token || response.data?.access_token;
+      const user = response.data?.user;
+
+      if (!response.data || !user || !token) {
+        setLoading(false);
+        console.error('Missing token/user in response:', response.data);
+        Alert.alert('Error', 'Data tidak lengkap dari server (Token hilang).');
+        return;
+      }
+
+      // ============================================================
+      // 5. SIMPAN SESI KE ASYNC STORAGE
+      // ============================================================
+      try {
+        await AsyncStorage.setItem('@auth_token', token);
+        await AsyncStorage.setItem('@user_data', JSON.stringify(user));
         
-        // Show detailed error message
-        let errorMessage = response.error;
-        if (errorMessage.includes('404') || errorMessage.includes('tidak ditemukan')) {
-          errorMessage = `Backend API tidak dapat diakses!\n\n` +
-            `URL: https://esteh-backend-production.up.railway.app/api/login\n\n` +
-            `Kemungkinan masalah:\n` +
-            `1. Backend API belum di-deploy atau sedang down\n` +
-            `2. URL backend salah\n` +
-            `3. Periksa console untuk detail error`;
-        }
-        
-        Alert.alert('Login Gagal', errorMessage);
+        console.log('Login Success! Token Saved.');
+        console.log('User Role:', user.role);
+      } catch (storageError) {
+        console.error('Failed to save session:', storageError);
+        Alert.alert('Error', 'Gagal menyimpan sesi login.');
         setLoading(false);
         return;
       }
 
-      if (!response.data) {
-        console.error('No data in response');
-        Alert.alert('Error', 'Tidak ada data dari server. Periksa console untuk detail.');
-        setLoading(false);
-        return;
-      }
-
-      const user = response.data.user;
-      if (!user) {
-        console.error('No user in response data');
-        Alert.alert('Error', 'Data user tidak ditemukan dalam response');
-        setLoading(false);
-        return;
-      }
-
-      console.log('=== LOGIN SUCCESS ===');
-      console.log('User:', JSON.stringify(user, null, 2));
-      console.log('User Role:', user.role);
-      
-      // Navigate based on user role
-      switch (user.role?.toLowerCase()) {
+      // 6. Routing Berdasarkan Role
+      const role = user.role?.toLowerCase();
+      switch (role) {
         case 'karyawan':
-          router.replace('/(employee)/transaksi' as any);
+          router.replace('/(employee)/transaksi'); 
           break;
         case 'gudang':
-          router.replace('/(warehouse)/overview' as any);
+          router.replace('/(warehouse)/overview'); 
           break;
         case 'owner':
-          router.replace('/(owner)/dashboard' as any);
+          router.replace('/(owner)/dashboard'); 
           break;
         default:
-          console.error('Unknown role:', user.role);
-          Alert.alert('Error', `Role tidak dikenali: ${user.role}`);
+          setLoading(false);
+          // Hapus token jika role tidak dikenal agar tidak terjebak
+          await AsyncStorage.multiRemove(['@auth_token', '@user_data']);
+          Alert.alert('Akses Ditolak', `Role tidak dikenali: ${role}`);
+          return;
       }
-    } catch (error: any) {
-      console.error('=== LOGIN EXCEPTION ===');
-      console.error('Error:', error);
-      console.error('Error Message:', error.message);
-      console.error('Error Stack:', error.stack);
       
-      Alert.alert(
-        'Error Koneksi', 
-        `Tidak dapat terhubung ke server.\n\n` +
-        `Error: ${error.message || 'Unknown error'}\n\n` +
-        `Pastikan:\n` +
-        `1. Backend API berjalan di Railway\n` +
-        `2. Koneksi internet aktif\n` +
-        `3. Periksa console untuk detail`
-      );
-    } finally {
+    } catch (error: any) {
+      console.error('Login Exception:', error);
       setLoading(false);
+      Alert.alert('Error Aplikasi', 'Terjadi kesalahan tidak terduga.');
     }
   };
 
@@ -164,11 +148,12 @@ export default function LoginScreen() {
             Silakan masuk untuk mengelola outlet.
           </Text>
 
+          {/* Hint Credentials (Bisa dihapus nanti) */}
           <View style={styles.credentialsHint}>
-            <Text style={styles.hintTitle}>Test Credentials:</Text>
-            <Text style={styles.hintText}>• Karyawan: karyawan / karyawan123</Text>
-            <Text style={styles.hintText}>• Gudang: gudang / gudang123</Text>
-            <Text style={styles.hintText}>• Owner: owner / owner123</Text>
+            <Text style={styles.hintTitle}>Akun Demo:</Text>
+            <Text style={styles.hintText}>• Karyawan: kasir1 / 123456</Text>
+            <Text style={styles.hintText}>• Owner: owner / 123</Text>
+            <Text style={styles.hintText}>• Gudang: gudang / 123</Text>
           </View>
 
           <View style={styles.inputContainer}>
@@ -180,6 +165,7 @@ export default function LoginScreen() {
               value={username}
               onChangeText={setUsername}
               autoCapitalize="none"
+              editable={!loading}
             />
           </View>
 
@@ -193,6 +179,7 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!passwordVisible}
+                editable={!loading}
               />
               <TouchableOpacity
                 accessibilityLabel={passwordVisible ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
@@ -203,7 +190,6 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
           </View>
-
 
           <TouchableOpacity 
             style={[styles.loginButton, loading && styles.loginButtonDisabled]} 
@@ -361,44 +347,6 @@ const styles = StyleSheet.create({
     right: 12,
     top: '50%',
     marginTop: -11,
-  },
-  optionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: isSmallScreen ? 20 : 30,
-    flexWrap: 'wrap',
-  },
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    borderRadius: 4,
-    marginRight: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: Colors.primary,
-  },
-  checkmark: {
-    color: Colors.backgroundLight,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  checkboxLabel: {
-    fontSize: 14,
-    color: Colors.text,
-  },
-  forgotPassword: {
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '600',
   },
   loginButton: {
     backgroundColor: Colors.primary,

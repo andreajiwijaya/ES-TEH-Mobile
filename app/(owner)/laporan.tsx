@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   FlatList,
   Modal,
   Platform,
@@ -17,29 +16,55 @@ import {
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { authAPI, ownerAPI } from '../../services/api';
-import { Laporan } from '../../types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const { width: screenWidth } = Dimensions.get('window');
-const isSmallScreen = screenWidth < 375;
+// Interface Lokal untuk Laporan UI
+interface ReportItem {
+  id: string;
+  jenis: 'penjualan' | 'stok' | 'keuangan' | 'gudang';
+  tanggal_dibuat: Date;
+  judul: string;
+  data_ringkasan?: string;
+}
 
 export default function LaporanScreen() {
   const router = useRouter();
+  
+  // State
   const [selectedType, setSelectedType] = useState<'all' | 'penjualan' | 'stok' | 'keuangan' | 'gudang'>('all');
-  const [reports, setReports] = useState<Laporan[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [reports, setReports] = useState<ReportItem[]>([]); // Data lokal sementara
+  
+  // HAPUS: loading state yang tidak terpakai
   const [refreshing, setRefreshing] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
+  
+  // User Profile
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    // Load reports if needed (you might want to store generated reports)
-    // For now, reports are generated on demand
+    loadUserData();
+    // Load dummy reports or fetch history if available
+    setReports([
+      {
+        id: 'LAP-001',
+        jenis: 'penjualan',
+        tanggal_dibuat: new Date(),
+        judul: 'Laporan Penjualan Harian',
+        data_ringkasan: 'Total Pendapatan: Rp 2.500.000'
+      }
+    ]);
   }, []);
+
+  const loadUserData = async () => {
+    const userData = await AsyncStorage.getItem('@user_data');
+    if (userData) setUser(JSON.parse(userData));
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
-    // Reload if needed
-    setRefreshing(false);
+    // Logic refresh jika ada API history laporan
+    setTimeout(() => setRefreshing(false), 1000);
   };
 
   const handleLogout = async () => {
@@ -53,7 +78,7 @@ export default function LaporanScreen() {
           style: 'destructive',
           onPress: async () => {
             await authAPI.logout();
-            router.replace('/(auth)/login' as any);
+            router.replace('/(auth)/login');
           },
         },
       ]
@@ -77,50 +102,35 @@ export default function LaporanScreen() {
 
   const getReportIcon = (jenis: string) => {
     switch (jenis) {
-      case 'penjualan':
-        return 'receipt-outline';
-      case 'stok':
-        return 'cube-outline';
-      case 'keuangan':
-        return 'cash-outline';
-      case 'gudang':
-        return 'storefront-outline';
-      default:
-        return 'document-text-outline';
+      case 'penjualan': return 'receipt-outline';
+      case 'stok': return 'cube-outline';
+      case 'keuangan': return 'cash-outline';
+      case 'gudang': return 'storefront-outline';
+      default: return 'document-text-outline';
     }
   };
 
   const getReportLabel = (jenis: string) => {
     switch (jenis) {
-      case 'penjualan':
-        return 'Penjualan';
-      case 'stok':
-        return 'Stok';
-      case 'keuangan':
-        return 'Keuangan';
-      case 'gudang':
-        return 'Gudang';
-      default:
-        return jenis;
+      case 'penjualan': return 'Penjualan';
+      case 'stok': return 'Stok';
+      case 'keuangan': return 'Keuangan';
+      case 'gudang': return 'Gudang';
+      default: return jenis;
     }
   };
 
   const getReportColor = (jenis: string) => {
     switch (jenis) {
-      case 'penjualan':
-        return Colors.primary;
-      case 'stok':
-        return Colors.warning;
-      case 'keuangan':
-        return Colors.success;
-      case 'gudang':
-        return Colors.primaryDark;
-      default:
-        return Colors.textSecondary;
+      case 'penjualan': return Colors.primary;
+      case 'stok': return Colors.warning;
+      case 'keuangan': return Colors.success;
+      case 'gudang': return '#5D4037'; // Brownish for Gudang
+      default: return Colors.textSecondary;
     }
   };
 
-  const handleDownload = async (report: Laporan, format: 'csv' | 'pdf') => {
+  const handleDownload = async (report: ReportItem, format: 'csv' | 'pdf') => {
     try {
       const today = new Date();
       const startDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
@@ -132,7 +142,8 @@ export default function LaporanScreen() {
           Alert.alert('Error', response.error);
           return;
         }
-        Alert.alert('Sukses', 'Laporan berhasil diekspor');
+        // Simulasi download sukses
+        Alert.alert('Sukses', `Laporan ${report.id} berhasil diekspor ke CSV.`);
       } else {
         Alert.alert('Info', 'Fitur PDF akan segera tersedia');
       }
@@ -148,18 +159,32 @@ export default function LaporanScreen() {
       const startDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
       const endDate = today.toISOString().split('T')[0];
 
-      const response = await ownerAPI.getLaporanPendapatan(startDate, endDate);
-      if (response.error) {
-        Alert.alert('Error', response.error);
-        return;
+      // Panggil API untuk mendapatkan data real
+      let summaryData = "Data tidak tersedia";
+      
+      if (type === 'penjualan' || type === 'keuangan') {
+          const response = await ownerAPI.getLaporanPendapatan(startDate, endDate);
+          if (response.data) {
+              // Jika response array
+              if (Array.isArray(response.data)) {
+                  const total = response.data.reduce((acc: number, curr: any) => acc + (parseInt(curr.total_pendapatan) || 0), 0);
+                  summaryData = `Total Pendapatan: Rp ${total.toLocaleString('id-ID')}`;
+              } else {
+                  // Jika object
+                  const data = response.data as any; // Cast to avoid TS error
+                  summaryData = `Pendapatan: Rp ${(data.total_pendapatan || 0).toLocaleString('id-ID')}`;
+              }
+          }
+      } else {
+          summaryData = `Laporan ${type} generated.`;
       }
 
-      // Create report object from response
-      const newReport: Laporan = {
-        id: `LAP-${Date.now()}`,
+      const newReport: ReportItem = {
+        id: `LAP-${Math.floor(Math.random() * 10000)}`,
         jenis: type as any,
         tanggal_dibuat: new Date(),
-        data: `Laporan ${type} ${new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}`,
+        judul: `Laporan ${getReportLabel(type)} ${new Date().toLocaleDateString('id-ID', { month: 'long' })}`,
+        data_ringkasan: summaryData
       };
 
       setReports([newReport, ...reports]);
@@ -173,18 +198,25 @@ export default function LaporanScreen() {
 
   return (
     <View style={styles.container}>
+      {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.logoContainer}>
-            <Ionicons name="stats-chart" size={24} color={Colors.backgroundLight} />
-            <Text style={styles.headerTitle}>Owner Panel</Text>
+            <Ionicons name="document-text" size={24} color={Colors.backgroundLight} />
+            <Text style={styles.headerTitle}>Laporan Bisnis</Text>
           </View>
-          <TouchableOpacity style={styles.userInfo} onPress={() => setShowProfileMenu(true)} activeOpacity={0.7}>
+          <TouchableOpacity 
+            style={styles.userInfo} 
+            onPress={() => setShowProfileMenu(true)} 
+            activeOpacity={0.7}
+          >
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>OW</Text>
+              <Text style={styles.avatarText}>
+                {user?.username ? user.username.substring(0, 2).toUpperCase() : 'OW'}
+              </Text>
             </View>
             <View>
-              <Text style={styles.userName}>Pak Owner</Text>
+              <Text style={styles.userName}>{user?.username || 'Owner'}</Text>
               <Text style={styles.userRole}>Pemilik</Text>
             </View>
             <Ionicons name="chevron-down" size={16} color={Colors.backgroundLight} style={{ marginLeft: 6 }} />
@@ -194,134 +226,102 @@ export default function LaporanScreen() {
 
       <ScrollView 
         style={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <View style={styles.titleSection}>
-          <View>
-            <Text style={styles.title}>Laporan</Text>
-            <Text style={styles.subtitle}>
-              Generate dan download laporan bisnis
-            </Text>
-          </View>
+          <Text style={styles.title}>Pusat Laporan</Text>
+          <Text style={styles.subtitle}>Generate dan unduh laporan kinerja bisnis Anda.</Text>
         </View>
 
+        {/* GENERATE SECTION */}
         <View style={styles.generateSection}>
-          <Text style={styles.sectionTitle}>Generate Laporan Baru</Text>
-          <View style={styles.generateButtons}>
+          <Text style={styles.sectionTitle}>Buat Laporan Baru</Text>
+          <View style={styles.generateGrid}>
             <TouchableOpacity
-              style={[styles.generateButton, generating === 'penjualan' && styles.generateButtonDisabled]}
+              style={[styles.generateButton, { borderColor: Colors.primary }]}
               onPress={() => handleGenerate('penjualan')}
               disabled={!!generating}
             >
-              {generating === 'penjualan' ? (
-                <ActivityIndicator size="small" color={Colors.primary} />
-              ) : (
+              {generating === 'penjualan' ? <ActivityIndicator color={Colors.primary} /> : (
                 <>
-                  <Ionicons name="receipt-outline" size={24} color={Colors.primary} />
-                  <Text style={styles.generateButtonText}>Laporan Penjualan</Text>
+                    <Ionicons name="receipt-outline" size={28} color={Colors.primary} />
+                    <Text style={styles.generateButtonText}>Penjualan</Text>
                 </>
               )}
             </TouchableOpacity>
+
             <TouchableOpacity
-              style={[styles.generateButton, generating === 'stok' && styles.generateButtonDisabled]}
+              style={[styles.generateButton, { borderColor: Colors.warning }]}
               onPress={() => handleGenerate('stok')}
               disabled={!!generating}
             >
-              {generating === 'stok' ? (
-                <ActivityIndicator size="small" color={Colors.warning} />
-              ) : (
+              {generating === 'stok' ? <ActivityIndicator color={Colors.warning} /> : (
                 <>
-                  <Ionicons name="cube-outline" size={24} color={Colors.warning} />
-                  <Text style={styles.generateButtonText}>Laporan Stok</Text>
+                    <Ionicons name="cube-outline" size={28} color={Colors.warning} />
+                    <Text style={styles.generateButtonText}>Stok</Text>
                 </>
               )}
             </TouchableOpacity>
+
             <TouchableOpacity
-              style={[styles.generateButton, generating === 'keuangan' && styles.generateButtonDisabled]}
+              style={[styles.generateButton, { borderColor: Colors.success }]}
               onPress={() => handleGenerate('keuangan')}
               disabled={!!generating}
             >
-              {generating === 'keuangan' ? (
-                <ActivityIndicator size="small" color={Colors.success} />
-              ) : (
+              {generating === 'keuangan' ? <ActivityIndicator color={Colors.success} /> : (
                 <>
-                  <Ionicons name="cash-outline" size={24} color={Colors.success} />
-                  <Text style={styles.generateButtonText}>Laporan Keuangan</Text>
+                    <Ionicons name="cash-outline" size={28} color={Colors.success} />
+                    <Text style={styles.generateButtonText}>Keuangan</Text>
                 </>
               )}
             </TouchableOpacity>
+
             <TouchableOpacity
-              style={[styles.generateButton, generating === 'gudang' && styles.generateButtonDisabled]}
+              style={[styles.generateButton, { borderColor: '#5D4037' }]}
               onPress={() => handleGenerate('gudang')}
               disabled={!!generating}
             >
-              {generating === 'gudang' ? (
-                <ActivityIndicator size="small" color={Colors.primaryDark} />
-              ) : (
+              {generating === 'gudang' ? <ActivityIndicator color="#5D4037" /> : (
                 <>
-                  <Ionicons name="storefront-outline" size={24} color={Colors.primaryDark} />
-                  <Text style={styles.generateButtonText}>Laporan Gudang</Text>
+                    <Ionicons name="storefront-outline" size={28} color="#5D4037" />
+                    <Text style={styles.generateButtonText}>Gudang</Text>
                 </>
               )}
             </TouchableOpacity>
           </View>
         </View>
 
+        {/* FILTER SECTION */}
         <View style={styles.filterSection}>
-          <Text style={styles.sectionTitle}>Filter Laporan</Text>
-          <View style={styles.filterButtons}>
-            <TouchableOpacity
-              style={[styles.filterButton, selectedType === 'all' && styles.filterButtonActive]}
-              onPress={() => setSelectedType('all')}
-            >
-              <Text style={[styles.filterButtonText, selectedType === 'all' && styles.filterButtonTextActive]}>
-                Semua
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, selectedType === 'penjualan' && styles.filterButtonActive]}
-              onPress={() => setSelectedType('penjualan')}
-            >
-              <Text style={[styles.filterButtonText, selectedType === 'penjualan' && styles.filterButtonTextActive]}>
-                Penjualan
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, selectedType === 'stok' && styles.filterButtonActive]}
-              onPress={() => setSelectedType('stok')}
-            >
-              <Text style={[styles.filterButtonText, selectedType === 'stok' && styles.filterButtonTextActive]}>
-                Stok
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, selectedType === 'keuangan' && styles.filterButtonActive]}
-              onPress={() => setSelectedType('keuangan')}
-            >
-              <Text style={[styles.filterButtonText, selectedType === 'keuangan' && styles.filterButtonTextActive]}>
-                Keuangan
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, selectedType === 'gudang' && styles.filterButtonActive]}
-              onPress={() => setSelectedType('gudang')}
-            >
-              <Text style={[styles.filterButtonText, selectedType === 'gudang' && styles.filterButtonTextActive]}>
-                Gudang
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+            {['all', 'penjualan', 'stok', 'keuangan', 'gudang'].map((type) => (
+                <TouchableOpacity
+                    key={type}
+                    style={[
+                        styles.filterPill,
+                        selectedType === type && styles.filterPillActive
+                    ]}
+                    onPress={() => setSelectedType(type as any)}
+                >
+                    <Text style={[
+                        styles.filterPillText,
+                        selectedType === type && styles.filterPillTextActive
+                    ]}>
+                        {type === 'all' ? 'Semua' : getReportLabel(type)}
+                    </Text>
+                </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
 
+        {/* REPORT LIST */}
         <View style={styles.listSection}>
           <Text style={styles.sectionTitle}>Riwayat Laporan</Text>
 
-          {reports.length === 0 ? (
+          {filteredReports.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>Belum ada laporan yang dibuat</Text>
-              <Text style={styles.emptySubtext}>Klik tombol di atas untuk membuat laporan</Text>
+              <Ionicons name="document-text-outline" size={48} color={Colors.textSecondary} />
+              <Text style={styles.emptyText}>Belum ada laporan</Text>
             </View>
           ) : (
             <FlatList
@@ -329,73 +329,48 @@ export default function LaporanScreen() {
               keyExtractor={item => item.id}
               scrollEnabled={false}
               renderItem={({ item }) => (
-              <View style={styles.reportCard}>
-                <View style={styles.reportHeader}>
-                  <View style={[styles.reportIcon, { backgroundColor: getReportColor(item.jenis) + '20' }]}>
-                    <Ionicons
-                      name={getReportIcon(item.jenis) as any}
-                      size={24}
-                      color={getReportColor(item.jenis)}
-                    />
+                <View style={styles.reportCard}>
+                  <View style={styles.reportHeader}>
+                    <View style={[styles.reportIconCircle, { backgroundColor: getReportColor(item.jenis) + '20' }]}>
+                        <Ionicons name={getReportIcon(item.jenis) as any} size={24} color={getReportColor(item.jenis)} />
+                    </View>
+                    <View style={styles.reportInfo}>
+                        <Text style={styles.reportTitle}>{item.judul}</Text>
+                        <Text style={styles.reportDate}>{formatDate(item.tanggal_dibuat)} • #{item.id}</Text>
+                    </View>
                   </View>
-                  <View style={styles.reportInfo}>
-                    <Text style={styles.reportId}>{item.id}</Text>
-                    <Text style={styles.reportType}>{getReportLabel(item.jenis)}</Text>
-                    <Text style={styles.reportDate}>{formatDate(item.tanggal_dibuat)}</Text>
+                  
+                  <View style={styles.reportContent}>
+                      <Text style={styles.reportSummary}>{item.data_ringkasan}</Text>
+                  </View>
+
+                  <View style={styles.reportActions}>
+                    <TouchableOpacity 
+                        style={[styles.actionBtn, styles.btnCsv]}
+                        onPress={() => handleDownload(item, 'csv')}
+                    >
+                        <Ionicons name="download-outline" size={16} color={Colors.primary} />
+                        <Text style={styles.btnCsvText}>CSV</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={[styles.actionBtn, styles.btnPdf]}
+                        onPress={() => handleDownload(item, 'pdf')}
+                    >
+                        <Ionicons name="document-outline" size={16} color={Colors.error} />
+                        <Text style={styles.btnPdfText}>PDF</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
-
-                <Text style={styles.reportData}>{item.data}</Text>
-
-                <View style={styles.reportActions}>
-                  <TouchableOpacity
-                    style={[styles.downloadButton, styles.csvButton]}
-                    onPress={() => handleDownload(item, 'csv')}
-                  >
-                    <Ionicons name="document-text-outline" size={18} color={Colors.primary} />
-                    <Text style={[styles.downloadButtonText, { color: Colors.primary }]}>
-                      Download CSV
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.downloadButton, styles.pdfButton]}
-                    onPress={() => handleDownload(item, 'pdf')}
-                  >
-                    <Ionicons name="document-outline" size={18} color={Colors.error} />
-                    <Text style={[styles.downloadButtonText, { color: Colors.error }]}>
-                      Download PDF
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-          />
+              )}
+            />
           )}
         </View>
       </ScrollView>
 
-      <Modal
-        visible={showProfileMenu}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowProfileMenu(false)}
-      >
-        <TouchableOpacity
-          style={styles.profileModalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowProfileMenu(false)}
-        >
+      {/* Profile Menu Modal */}
+      <Modal visible={showProfileMenu} transparent animationType="fade" onRequestClose={() => setShowProfileMenu(false)}>
+        <TouchableOpacity style={styles.profileModalOverlay} activeOpacity={1} onPress={() => setShowProfileMenu(false)}>
           <View style={styles.profileMenu}>
-            <View style={styles.profileMenuHeader}>
-              <View style={styles.profileMenuAvatar}>
-                <Text style={styles.profileMenuAvatarText}>OW</Text>
-              </View>
-              <View>
-                <Text style={styles.profileMenuName}>Pak Owner</Text>
-                <Text style={styles.profileMenuRole}>Pemilik</Text>
-              </View>
-            </View>
-            <View style={styles.profileMenuDivider} />
             <TouchableOpacity style={styles.profileMenuItem} onPress={handleLogout}>
               <Ionicons name="log-out-outline" size={20} color={Colors.error} />
               <Text style={styles.profileMenuItemText}>Keluar</Text>
@@ -408,275 +383,109 @@ export default function LaporanScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
   header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 50 : 40,
-    paddingBottom: isSmallScreen ? 15 : 20,
-    paddingHorizontal: isSmallScreen ? 15 : 20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
   },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: Colors.backgroundLight,
-    marginLeft: 10,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.backgroundLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  avatarText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: Colors.primary,
-  },
-  userName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.backgroundLight,
-  },
-  userRole: {
-    fontSize: 12,
-    color: Colors.backgroundLight,
-    opacity: 0.8,
-  },
-  profileModalOverlay: {
-    flex: 1,
-    backgroundColor: '#00000055',
-    justifyContent: 'flex-end',
-  },
-  profileMenu: {
-    backgroundColor: Colors.backgroundLight,
-    margin: 20,
-    borderRadius: 12,
-    padding: 16,
-  },
-  profileMenuHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  profileMenuAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  profileMenuAvatarText: {
-    color: Colors.backgroundLight,
-    fontWeight: 'bold',
-  },
-  profileMenuName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  profileMenuRole: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  profileMenuDivider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: 12,
-  },
-  profileMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  profileMenuItemText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.error,
-  },
-  content: {
-    flex: 1,
-    padding: isSmallScreen ? 15 : 20,
-  },
-  titleSection: {
-    marginBottom: isSmallScreen ? 15 : 20,
-  },
-  title: {
-    fontSize: isSmallScreen ? 20 : 24,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: 5,
-  },
-  subtitle: {
-    fontSize: isSmallScreen ? 13 : 14,
-    color: Colors.textSecondary,
-  },
-  generateSection: {
-    marginBottom: 30,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: 15,
-  },
-  generateButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 15,
-  },
+  headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  logoContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', color: Colors.backgroundLight },
+  userInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  avatarText: { fontWeight: 'bold', color: Colors.primary },
+  userName: { fontSize: 14, fontWeight: 'bold', color: 'white' },
+  userRole: { fontSize: 12, color: 'rgba(255,255,255,0.8)' },
+
+  content: { flex: 1, padding: 20 },
+  titleSection: { marginBottom: 25 },
+  title: { fontSize: 24, fontWeight: 'bold', color: Colors.text },
+  subtitle: { fontSize: 14, color: Colors.textSecondary, marginTop: 5 },
+
+  // Generate Section
+  generateSection: { marginBottom: 30 },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.text, marginBottom: 15 },
+  generateGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 15 },
   generateButton: {
-    width: isSmallScreen ? '100%' : '48%',
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: isSmallScreen ? 10 : 12,
-    padding: isSmallScreen ? 15 : 20,
+    width: '47%',
+    aspectRatio: 1.6,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    elevation: 2,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4
   },
-  generateButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-    marginTop: 10,
-    textAlign: 'center',
-  },
-  filterSection: {
-    marginBottom: 30,
-  },
-  filterButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  filterButton: {
-    paddingHorizontal: 15,
+  generateButtonText: { marginTop: 8, fontSize: 13, fontWeight: '600', color: Colors.text },
+
+  // Filter Section
+  filterSection: { marginBottom: 20 },
+  filterScroll: { paddingBottom: 10 },
+  filterPill: {
+    paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: Colors.backgroundLight,
+    backgroundColor: '#F0F0F0',
+    marginRight: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#E0E0E0'
   },
-  filterButtonActive: {
-    backgroundColor: Colors.primaryLight,
-    borderColor: Colors.primary,
+  filterPillActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary
   },
-  filterButtonText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  filterButtonTextActive: {
-    color: Colors.primaryDark,
-    fontWeight: '600',
-  },
-  listSection: {
-    marginBottom: 20,
-  },
-  reportCard: {
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-  },
-  reportHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  reportIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  reportInfo: {
-    flex: 1,
-  },
-  reportId: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  reportType: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: 2,
-  },
-  reportDate: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  reportData: {
-    fontSize: 14,
-    color: Colors.text,
-    marginBottom: 15,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  reportActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  downloadButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  csvButton: {
-    borderWidth: 1,
-    borderColor: Colors.primary,
-  },
-  pdfButton: {
-    borderWidth: 1,
-    borderColor: Colors.error,
-  },
-  downloadButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  generateButtonDisabled: {
-    opacity: 0.6,
-  },
-  emptyContainer: {
-    paddingVertical: 50,
-    alignItems: 'center',
-  },
-  emptyText: {
-    color: Colors.textSecondary,
-    fontSize: 16,
-    marginBottom: 5,
-  },
-  emptySubtext: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-  },
-});
+  filterPillText: { fontSize: 13, color: Colors.textSecondary, fontWeight: '600' },
+  filterPillTextActive: { color: 'white' },
 
+  // List Section
+  listSection: { paddingBottom: 40 },
+  reportCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 15,
+    elevation: 2,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4
+  },
+  reportHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  reportIconCircle: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  reportInfo: { flex: 1 },
+  reportTitle: { fontSize: 15, fontWeight: 'bold', color: Colors.text },
+  reportDate: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  
+  reportContent: { 
+    backgroundColor: '#F9F9F9', 
+    padding: 12, 
+    borderRadius: 8, 
+    marginBottom: 15 
+  },
+  reportSummary: { fontSize: 14, color: Colors.text, fontWeight: '500' },
+
+  reportActions: { flexDirection: 'row', gap: 10 },
+  actionBtn: { 
+    flex: 1, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    paddingVertical: 10, 
+    borderRadius: 8, 
+    borderWidth: 1,
+    gap: 6
+  },
+  btnCsv: { borderColor: Colors.primary, backgroundColor: '#F0F9FF' },
+  btnCsvText: { color: Colors.primary, fontWeight: 'bold', fontSize: 13 },
+  btnPdf: { borderColor: Colors.error, backgroundColor: '#FFF0F0' },
+  btnPdfText: { color: Colors.error, fontWeight: 'bold', fontSize: 13 },
+
+  emptyContainer: { alignItems: 'center', paddingVertical: 40 },
+  emptyText: { marginTop: 10, color: Colors.textSecondary, fontSize: 16 },
+
+  // Profile Menu
+  profileModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'flex-start', alignItems: 'flex-end', paddingTop: 60, paddingRight: 20 },
+  profileMenu: { backgroundColor: 'white', borderRadius: 12, minWidth: 160, padding: 5, elevation: 8 },
+  profileMenuItem: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
+  profileMenuItemText: { color: Colors.error, fontWeight: 'bold' },
+});

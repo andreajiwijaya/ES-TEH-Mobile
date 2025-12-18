@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,30 +9,32 @@ import {
   FlatList,
   TextInput,
   Modal,
-  Switch,
-  Dimensions,
   Platform,
   ActivityIndicator,
   Alert,
   RefreshControl,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { User, Outlet } from '../../types';
 import { ownerAPI } from '../../services/api';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-const isSmallScreen = screenWidth < 375;
-
 export default function KaryawanScreen() {
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showOutletModal, setShowOutletModal] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<User | null>(null);
+  // State
   const [employees, setEmployees] = useState<User[]>([]);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processing, setProcessing] = useState(false);
+
+  // Modal State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showOutletModal, setShowOutletModal] = useState(false);
+  
+  const [selectedEmployee, setSelectedEmployee] = useState<User | null>(null);
+  
+  // Form Data
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -40,178 +42,52 @@ export default function KaryawanScreen() {
     outlet_id: '',
   });
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  // --- LOAD DATA ---
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
     try {
-      setLoading(true);
       const [usersResponse, outletsResponse] = await Promise.all([
         ownerAPI.getUsers(),
         ownerAPI.getOutlets(),
       ]);
 
-      if (usersResponse.error) {
-        Alert.alert('Error', usersResponse.error);
-      } else if (usersResponse.data) {
-        // Ensure response.data is an array
-        const usersData = Array.isArray(usersResponse.data) ? usersResponse.data : [];
-        const mappedUsers = usersData.map((u: any) => ({
-          id: u.id?.toString() || '',
-          username: u.username || '',
-          password: '***',
+      if (usersResponse.data && Array.isArray(usersResponse.data)) {
+        const mappedUsers: User[] = usersResponse.data.map((u: any) => ({
+          id: u.id,
+          username: u.username || 'Unknown',
           role: u.role || 'karyawan',
-          outlet_id: u.outlet_id?.toString() || '',
+          outlet_id: u.outlet_id,
+          outlet: u.outlet, 
         }));
         setEmployees(mappedUsers);
       }
 
-      if (outletsResponse.error) {
-        Alert.alert('Error', outletsResponse.error);
-      } else if (outletsResponse.data) {
-        // Ensure response.data is an array
-        const outletsData = Array.isArray(outletsResponse.data) ? outletsResponse.data : [];
-        const mappedOutlets = outletsData.map((o: any) => ({
-          id: o.id?.toString() || '',
-          nama: o.nama || '',
-          alamat: o.alamat || '',
-          telepon: o.telepon || '',
-          is_active: o.is_active !== false,
-        }));
-        setOutlets(mappedOutlets);
+      if (outletsResponse.data && Array.isArray(outletsResponse.data)) {
+        setOutlets(outletsResponse.data);
       }
+
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Gagal memuat data');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadData();
+    loadData(true);
   };
 
-  const getOutletName = (outletId?: string) => {
-    if (!outletId) return 'Tidak Ada';
+  // --- HELPERS ---
+  const getOutletName = (outletId?: number | null) => {
+    if (!outletId) return '-';
     const outlet = outlets.find(o => o.id === outletId);
-    return outlet?.nama || 'Tidak Diketahui';
-  };
-
-  const handleAdd = async () => {
-    if (!formData.username || !formData.password) {
-      Alert.alert('Error', 'Username dan password harus diisi');
-      return;
-    }
-
-    setProcessing(true);
-    try {
-      const userData: any = {
-        username: formData.username,
-        password: formData.password,
-        role: formData.role,
-      };
-      
-      // Only include outlet_id if provided
-      if (formData.outlet_id) {
-        userData.outlet_id = parseInt(formData.outlet_id);
-      }
-      
-      const response = await ownerAPI.createUser(userData);
-
-      if (response.error) {
-        Alert.alert('Error', response.error);
-        return;
-      }
-
-      Alert.alert('Sukses', 'Karyawan berhasil ditambahkan');
-      setShowAddModal(false);
-      resetForm();
-      loadData();
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Gagal menambahkan karyawan');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleEdit = (employee: User) => {
-    setSelectedEmployee(employee);
-    setFormData({
-      username: employee.username,
-      password: '',
-      role: employee.role,
-      outlet_id: employee.outlet_id || '',
-    });
-    setShowEditModal(true);
-  };
-
-  const handleUpdate = async () => {
-    if (!selectedEmployee || !formData.username) {
-      Alert.alert('Error', 'Username harus diisi');
-      return;
-    }
-
-    setProcessing(true);
-    try {
-      const updateData: any = {
-        username: formData.username,
-        role: formData.role,
-      };
-      
-      if (formData.password) {
-        updateData.password = formData.password;
-      }
-      
-      if (formData.outlet_id) {
-        updateData.outlet_id = parseInt(formData.outlet_id);
-      }
-
-      const response = await ownerAPI.updateUser(parseInt(selectedEmployee.id), updateData);
-
-      if (response.error) {
-        Alert.alert('Error', response.error);
-        return;
-      }
-
-      Alert.alert('Sukses', 'Karyawan berhasil diupdate');
-      setShowEditModal(false);
-      resetForm();
-      loadData();
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Gagal mengupdate karyawan');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    Alert.alert(
-      'Konfirmasi',
-      'Apakah Anda yakin ingin menghapus karyawan ini?',
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Hapus',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await ownerAPI.deleteUser(parseInt(id));
-              if (response.error) {
-                Alert.alert('Error', response.error);
-                return;
-              }
-              Alert.alert('Sukses', 'Karyawan berhasil dihapus');
-              loadData();
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Gagal menghapus karyawan');
-            }
-          },
-        },
-      ]
-    );
+    return outlet ? outlet.nama : `Outlet #${outletId}`;
   };
 
   const resetForm = () => {
@@ -224,21 +100,133 @@ export default function KaryawanScreen() {
     setSelectedEmployee(null);
   };
 
+  // --- ACTIONS ---
+
+  const handleAdd = async () => {
+    if (!formData.username || !formData.password) {
+      Alert.alert('Validasi', 'Username dan password wajib diisi');
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      const payload: any = {
+        username: formData.username,
+        password: formData.password,
+        role: formData.role,
+      };
+      
+      if (formData.outlet_id) {
+        payload.outlet_id = parseInt(formData.outlet_id);
+      }
+      
+      const response = await ownerAPI.createUser(payload);
+
+      if (response.error) {
+        Alert.alert('Gagal', response.error);
+      } else {
+        Alert.alert('Sukses', 'Karyawan berhasil ditambahkan');
+        setShowAddModal(false);
+        resetForm();
+        loadData(true);
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const openEditModal = (employee: User) => {
+    setSelectedEmployee(employee);
+    setFormData({
+      username: employee.username,
+      password: '', // Kosongkan password saat edit
+      role: employee.role,
+      outlet_id: employee.outlet_id ? employee.outlet_id.toString() : '',
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!selectedEmployee) return;
+    if (!formData.username) {
+      Alert.alert('Validasi', 'Username tidak boleh kosong');
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      const payload: any = {
+        username: formData.username,
+        role: formData.role,
+      };
+      
+      // Kirim password hanya jika diisi (diganti)
+      if (formData.password) {
+        payload.password = formData.password;
+      }
+      
+      if (formData.outlet_id) {
+        payload.outlet_id = parseInt(formData.outlet_id);
+      } else {
+        payload.outlet_id = null; // Reset outlet jika kosong
+      }
+
+      const response = await ownerAPI.updateUser(selectedEmployee.id, payload);
+
+      if (response.error) {
+        Alert.alert('Gagal', response.error);
+      } else {
+        Alert.alert('Sukses', 'Data karyawan diperbarui');
+        setShowEditModal(false);
+        resetForm();
+        loadData(true);
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleDelete = (id: number) => {
+    Alert.alert('Hapus Karyawan', 'Yakin ingin menghapus akun ini? Akses akan dicabut permanen.', [
+      { text: 'Batal', style: 'cancel' },
+      { 
+        text: 'Hapus', 
+        style: 'destructive', 
+        onPress: async () => {
+          setLoading(true); // Pakai loading screen utama biar aman
+          try {
+            const res = await ownerAPI.deleteUser(id);
+            if (res.error) Alert.alert('Gagal', res.error);
+            else {
+              Alert.alert('Terhapus', 'Akun karyawan berhasil dihapus.');
+              loadData(true);
+            }
+          } catch (e: any) {
+            Alert.alert('Error', e.message);
+          } finally {
+            setLoading(false);
+          }
+        }
+      }
+    ]);
+  };
+
   return (
     <View style={styles.container}>
+      {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.logoContainer}>
-            <Ionicons name="stats-chart" size={24} color={Colors.backgroundLight} />
-            <Text style={styles.headerTitle}>Owner Panel</Text>
+            <Ionicons name="people" size={24} color={Colors.backgroundLight} />
+            <Text style={styles.headerTitle}>Manajemen SDM</Text>
           </View>
           <View style={styles.userInfo}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>OW</Text>
-            </View>
-            <View>
-              <Text style={styles.userName}>Pak Owner</Text>
-              <Text style={styles.userRole}>Pemilik</Text>
             </View>
           </View>
         </View>
@@ -246,24 +234,44 @@ export default function KaryawanScreen() {
 
       <ScrollView 
         style={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        contentContainerStyle={{ paddingBottom: 100 }}
       >
         <View style={styles.titleSection}>
           <View>
-            <Text style={styles.title}>Kelola Karyawan</Text>
-            <Text style={styles.subtitle}>
-              Manajemen akun karyawan dan staff
-            </Text>
+            <Text style={styles.title}>Daftar Karyawan</Text>
+            <Text style={styles.subtitle}>Kelola akun & akses pegawai</Text>
           </View>
           <TouchableOpacity
             style={styles.addButton}
-            onPress={() => setShowAddModal(true)}
+            onPress={() => { resetForm(); setShowAddModal(true); }}
           >
-            <Ionicons name="add" size={20} color={Colors.backgroundLight} />
-            <Text style={styles.addButtonText}>Tambah Karyawan</Text>
+            <Ionicons name="person-add" size={18} color={Colors.backgroundLight} />
+            <Text style={styles.addButtonText}>Tambah</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* SUMMARY CARDS */}
+        <View style={styles.summaryCards}>
+          <View style={styles.summaryCard}>
+            <Ionicons name="people-outline" size={28} color={Colors.primary} />
+            <Text style={styles.summaryLabel}>Total Staff</Text>
+            <Text style={styles.summaryValue}>{employees.length}</Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Ionicons name="storefront-outline" size={28} color={Colors.success} />
+            <Text style={styles.summaryLabel}>Outlet Staff</Text>
+            <Text style={styles.summaryValue}>
+              {employees.filter(e => e.role === 'karyawan').length}
+            </Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Ionicons name="cube-outline" size={28} color={Colors.warning} />
+            <Text style={styles.summaryLabel}>Gudang Staff</Text>
+            <Text style={styles.summaryValue}>
+              {employees.filter(e => e.role === 'gudang').length}
+            </Text>
+          </View>
         </View>
 
         {loading ? (
@@ -272,186 +280,164 @@ export default function KaryawanScreen() {
             <Text style={styles.loadingText}>Memuat data...</Text>
           </View>
         ) : (
-          <>
-            <View style={styles.summaryCards}>
-              <View style={styles.summaryCard}>
-                <Ionicons name="people-outline" size={32} color={Colors.primary} />
-                <Text style={styles.summaryLabel}>Total Karyawan</Text>
-                <Text style={styles.summaryValue}>{employees.length}</Text>
-              </View>
-              <View style={styles.summaryCard}>
-                <Ionicons name="storefront-outline" size={32} color={Colors.success} />
-                <Text style={styles.summaryLabel}>Karyawan Aktif</Text>
-                <Text style={styles.summaryValue}>{employees.length}</Text>
-              </View>
-            </View>
-
-            <View style={styles.listSection}>
-              <Text style={styles.sectionTitle}>Daftar Karyawan</Text>
-
-              <FlatList
-                data={employees}
-                keyExtractor={item => item.id}
-                scrollEnabled={false}
-                ListEmptyComponent={
-                  <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyText}>Tidak ada karyawan</Text>
-                  </View>
-                }
-                renderItem={({ item }) => (
-              <View style={styles.employeeCard}>
-                <View style={styles.employeeHeader}>
-                  <View style={styles.employeeAvatar}>
-                    <Text style={styles.employeeAvatarText}>
-                      {item.username.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={styles.employeeInfo}>
-                    <Text style={styles.employeeName}>{item.username}</Text>
-                    <Text style={styles.employeeRole}>
-                      {item.role === 'karyawan' ? 'Karyawan' : item.role === 'gudang' ? 'Staff Gudang' : 'Owner'}
-                    </Text>
-                    <Text style={styles.employeeOutlet}>
-                      {getOutletName(item.outlet_id)}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.moreButton}
-                    onPress={() => handleEdit(item)}
-                  >
-                    <Ionicons name="ellipsis-vertical" size={20} color={Colors.textSecondary} />
-                  </TouchableOpacity>
+          <View style={styles.listSection}>
+            <FlatList
+              data={employees}
+              keyExtractor={item => item.id.toString()}
+              scrollEnabled={false}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>Belum ada data karyawan.</Text>
                 </View>
+              }
+              renderItem={({ item }) => (
+                <View style={styles.employeeCard}>
+                  <View style={styles.employeeHeader}>
+                    <View style={[styles.avatarCircle, { 
+                        backgroundColor: item.role === 'owner' ? Colors.primary : (item.role === 'gudang' ? Colors.warning : '#E0E0E0') 
+                    }]}>
+                      <Text style={styles.avatarLetter}>
+                        {item.username.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.employeeInfo}>
+                      <Text style={styles.employeeName}>{item.username}</Text>
+                      <View style={{flexDirection:'row', alignItems:'center', marginTop: 2}}>
+                        <View style={[
+                            styles.roleBadge, 
+                            { backgroundColor: item.role === 'owner' ? Colors.primary : (item.role === 'gudang' ? Colors.warning : Colors.success) }
+                        ]}>
+                            <Text style={styles.roleText}>{item.role.toUpperCase()}</Text>
+                        </View>
+                        {item.outlet_id && (
+                            <Text style={styles.outletText}> • {getOutletName(item.outlet_id)}</Text>
+                        )}
+                      </View>
+                    </View>
+                  </View>
 
-                <View style={styles.employeeActions}>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.editButton]}
-                    onPress={() => handleEdit(item)}
-                  >
-                    <Ionicons name="create-outline" size={18} color={Colors.primary} />
-                    <Text style={[styles.actionButtonText, { color: Colors.primary }]}>
-                      Edit
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.deleteButton]}
-                    onPress={() => handleDelete(item.id)}
-                  >
-                    <Ionicons name="trash-outline" size={18} color={Colors.error} />
-                    <Text style={[styles.actionButtonText, { color: Colors.error }]}>
-                      Hapus
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={styles.employeeActions}>
+                    <TouchableOpacity 
+                        style={[styles.actionBtn, styles.btnEdit]} 
+                        onPress={() => openEditModal(item)}
+                    >
+                      <Ionicons name="create-outline" size={18} color={Colors.primary} />
+                      <Text style={[styles.actionText, {color: Colors.primary}]}>Edit</Text>
+                    </TouchableOpacity>
+                    
+                    {item.role !== 'owner' && (
+                        <TouchableOpacity 
+                            style={[styles.actionBtn, styles.btnDelete]} 
+                            onPress={() => handleDelete(item.id)}
+                        >
+                        <Ionicons name="trash-outline" size={18} color={Colors.error} />
+                        <Text style={[styles.actionText, {color: Colors.error}]}>Hapus</Text>
+                        </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
-              </View>
-            )}
-          />
-        </View>
-          </>
+              )}
+            />
+          </View>
         )}
       </ScrollView>
 
-      {/* Add Modal */}
+      {/* --- MODAL ADD / EDIT --- */}
       <Modal
-        visible={showAddModal}
+        visible={showAddModal || showEditModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowAddModal(false)}
+        onRequestClose={() => { setShowAddModal(false); setShowEditModal(false); }}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Tambah Karyawan</Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
+              <Text style={styles.modalTitle}>
+                {showAddModal ? 'Tambah Karyawan Baru' : 'Edit Data Karyawan'}
+              </Text>
+              <TouchableOpacity onPress={() => { setShowAddModal(false); setShowEditModal(false); }}>
                 <Ionicons name="close" size={24} color={Colors.text} />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.modalBody}>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Username</Text>
+                <Text style={styles.label}>Username</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="Masukkan username"
                   value={formData.username}
-                  onChangeText={(text) => setFormData({ ...formData, username: text })}
+                  onChangeText={(t) => setFormData({ ...formData, username: t })}
                   autoCapitalize="none"
                 />
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Password</Text>
+                <Text style={styles.label}>
+                    {showEditModal ? 'Password Baru (Opsional)' : 'Password'}
+                </Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Masukkan password"
+                  placeholder={showEditModal ? "Kosongkan jika tidak diubah" : "Masukkan password"}
                   value={formData.password}
-                  onChangeText={(text) => setFormData({ ...formData, password: text })}
+                  onChangeText={(t) => setFormData({ ...formData, password: t })}
                   secureTextEntry
                 />
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Role</Text>
-                <View style={styles.roleButtons}>
-                  <TouchableOpacity
-                    style={[
-                      styles.roleButton,
-                      formData.role === 'karyawan' && styles.roleButtonActive
-                    ]}
-                    onPress={() => setFormData({ ...formData, role: 'karyawan' })}
-                  >
-                    <Text style={[
-                      styles.roleButtonText,
-                      formData.role === 'karyawan' && styles.roleButtonTextActive
-                    ]}>
-                      Karyawan
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.roleButton,
-                      formData.role === 'gudang' && styles.roleButtonActive
-                    ]}
-                    onPress={() => setFormData({ ...formData, role: 'gudang' })}
-                  >
-                    <Text style={[
-                      styles.roleButtonText,
-                      formData.role === 'gudang' && styles.roleButtonTextActive
-                    ]}>
-                      Gudang
-                    </Text>
-                  </TouchableOpacity>
+                <Text style={styles.label}>Role Akses</Text>
+                <View style={styles.roleContainer}>
+                    {['karyawan', 'gudang', 'owner'].map((r) => (
+                        <TouchableOpacity 
+                            key={r}
+                            style={[
+                                styles.roleOption, 
+                                formData.role === r && styles.roleOptionActive
+                            ]}
+                            onPress={() => setFormData({...formData, role: r as any})}
+                        >
+                            <Text style={[
+                                styles.roleOptionText,
+                                formData.role === r && styles.roleOptionTextActive
+                            ]}>{r.charAt(0).toUpperCase() + r.slice(1)}</Text>
+                        </TouchableOpacity>
+                    ))}
                 </View>
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Outlet</Text>
-                <TouchableOpacity 
-                  style={styles.selectButton}
-                  onPress={() => setShowOutletModal(true)}
-                >
-                  <Text style={styles.selectButtonText}>
-                    {formData.outlet_id ? getOutletName(formData.outlet_id) : 'Pilih Outlet'}
-                  </Text>
-                  <Ionicons name="chevron-down" size={20} color={Colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
+              {/* Outlet Selection hanya muncul jika role Karyawan */}
+              {formData.role === 'karyawan' && (
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Penempatan Outlet</Text>
+                    <TouchableOpacity 
+                        style={styles.selectButton}
+                        onPress={() => setShowOutletModal(true)}
+                    >
+                        <Text style={styles.selectText}>
+                            {formData.outlet_id ? getOutletName(parseInt(formData.outlet_id)) : 'Pilih Outlet'}
+                        </Text>
+                        <Ionicons name="chevron-down" size={20} color={Colors.text} />
+                    </TouchableOpacity>
+                  </View>
+              )}
             </ScrollView>
 
             <View style={styles.modalFooter}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowAddModal(false);
-                  resetForm();
-                }}
+                style={styles.cancelButton}
+                onPress={() => { setShowAddModal(false); setShowEditModal(false); }}
                 disabled={processing}
               >
                 <Text style={styles.cancelButtonText}>Batal</Text>
               </TouchableOpacity>
+              
               <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton, processing && styles.saveButtonDisabled]}
-                onPress={handleAdd}
+                style={[styles.saveButton, processing && styles.disabledBtn]}
+                onPress={showAddModal ? handleAdd : handleUpdate}
                 disabled={processing}
               >
                 {processing ? (
@@ -462,511 +448,131 @@ export default function KaryawanScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
-      {/* Edit Modal */}
-      <Modal
-        visible={showEditModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowEditModal(false)}
-      >
+      {/* --- MODAL PILIH OUTLET --- */}
+      <Modal visible={showOutletModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Karyawan</Text>
-              <TouchableOpacity onPress={() => setShowEditModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalBody}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Username</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Masukkan username"
-                  value={formData.username}
-                  onChangeText={(text) => setFormData({ ...formData, username: text })}
-                  autoCapitalize="none"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Password Baru (kosongkan jika tidak diubah)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Masukkan password baru"
-                  value={formData.password}
-                  onChangeText={(text) => setFormData({ ...formData, password: text })}
-                  secureTextEntry
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Role</Text>
-                <View style={styles.roleButtons}>
-                  <TouchableOpacity
-                    style={[
-                      styles.roleButton,
-                      formData.role === 'karyawan' && styles.roleButtonActive
-                    ]}
-                    onPress={() => setFormData({ ...formData, role: 'karyawan' })}
-                  >
-                    <Text style={[
-                      styles.roleButtonText,
-                      formData.role === 'karyawan' && styles.roleButtonTextActive
-                    ]}>
-                      Karyawan
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.roleButton,
-                      formData.role === 'gudang' && styles.roleButtonActive
-                    ]}
-                    onPress={() => setFormData({ ...formData, role: 'gudang' })}
-                  >
-                    <Text style={[
-                      styles.roleButtonText,
-                      formData.role === 'gudang' && styles.roleButtonTextActive
-                    ]}>
-                      Gudang
-                    </Text>
-                  </TouchableOpacity>
+            <View style={[styles.modalContent, {maxHeight: '60%'}]}>
+                <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>Pilih Outlet</Text>
+                    <TouchableOpacity onPress={() => setShowOutletModal(false)}>
+                        <Ionicons name="close" size={24} color={Colors.text} />
+                    </TouchableOpacity>
                 </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Outlet</Text>
-                <TouchableOpacity 
-                  style={styles.selectButton}
-                  onPress={() => setShowOutletModal(true)}
-                >
-                  <Text style={styles.selectButtonText}>
-                    {formData.outlet_id ? getOutletName(formData.outlet_id) : 'Pilih Outlet'}
-                  </Text>
-                  <Ionicons name="chevron-down" size={20} color={Colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowEditModal(false);
-                  resetForm();
-                }}
-                disabled={processing}
-              >
-                <Text style={styles.cancelButtonText}>Batal</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton, processing && styles.saveButtonDisabled]}
-                onPress={handleUpdate}
-                disabled={processing}
-              >
-                {processing ? (
-                  <ActivityIndicator color={Colors.backgroundLight} />
-                ) : (
-                  <Text style={styles.saveButtonText}>Update</Text>
-                )}
-              </TouchableOpacity>
+                <ScrollView>
+                    {outlets.length === 0 ? (
+                        <Text style={{textAlign:'center', padding:20, color:'#999'}}>Belum ada data outlet.</Text>
+                    ) : (
+                        outlets.map((o) => (
+                            <TouchableOpacity 
+                                key={o.id} 
+                                style={[
+                                    styles.outletItem,
+                                    formData.outlet_id === o.id.toString() && styles.outletItemSelected
+                                ]}
+                                onPress={() => {
+                                    setFormData({...formData, outlet_id: o.id.toString()});
+                                    setShowOutletModal(false);
+                                }}
+                            >
+                                <Text style={styles.outletItemText}>{o.nama}</Text>
+                                {formData.outlet_id === o.id.toString() && (
+                                    <Ionicons name="checkmark" size={20} color={Colors.primary} />
+                                )}
+                            </TouchableOpacity>
+                        ))
+                    )}
+                </ScrollView>
             </View>
-          </View>
         </View>
       </Modal>
 
-      {/* Outlet Selection Modal */}
-      <Modal
-        visible={showOutletModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowOutletModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Pilih Outlet</Text>
-              <TouchableOpacity onPress={() => setShowOutletModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.text} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalBody}>
-              {outlets.map((outlet) => (
-                <TouchableOpacity
-                  key={outlet.id}
-                  style={[
-                    styles.outletOption,
-                    formData.outlet_id === outlet.id && styles.outletOptionSelected,
-                  ]}
-                  onPress={() => {
-                    setFormData({ ...formData, outlet_id: outlet.id });
-                    setShowOutletModal(false);
-                  }}
-                >
-                  <Text style={styles.outletOptionText}>{outlet.nama}</Text>
-                  {formData.outlet_id === outlet.id && (
-                    <Ionicons name="checkmark" size={20} color={Colors.primary} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
   header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 50 : 40,
-    paddingBottom: isSmallScreen ? 15 : 20,
-    paddingHorizontal: isSmallScreen ? 15 : 20,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: Colors.backgroundLight,
-    marginLeft: 10,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.backgroundLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  avatarText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: Colors.primary,
-  },
-  userName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.backgroundLight,
-  },
-  userRole: {
-    fontSize: 12,
-    color: Colors.backgroundLight,
-    opacity: 0.8,
-  },
-  content: {
-    flex: 1,
-    padding: isSmallScreen ? 15 : 20,
-  },
-  titleSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: isSmallScreen ? 15 : 20,
-    flexWrap: 'wrap',
-  },
-  title: {
-    fontSize: isSmallScreen ? 20 : 24,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: 5,
-    flex: 1,
-    minWidth: '100%',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 8,
-  },
-  addButtonText: {
-    color: Colors.backgroundLight,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  summaryCards: {
-    flexDirection: 'row',
-    gap: 15,
-    marginBottom: 20,
-  },
-  summaryCard: {
-    flex: 1,
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 10,
-    marginBottom: 5,
-    textAlign: 'center',
-  },
-  summaryValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: Colors.text,
-  },
-  listSection: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: 15,
-  },
-  employeeCard: {
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-  },
-  employeeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  employeeAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: Colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  employeeAvatarText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.primaryDark,
-  },
-  employeeInfo: {
-    flex: 1,
-  },
-  employeeName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  employeeRole: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: 2,
-  },
-  employeeOutlet: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  moreButton: {
-    padding: 5,
-  },
-  employeeActions: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 10,
-    borderRadius: 8,
-    gap: 5,
-  },
-  editButton: {
-    borderWidth: 1,
-    borderColor: Colors.primary,
-  },
-  deleteButton: {
-    borderWidth: 1,
-    borderColor: Colors.error,
-  },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: Colors.backgroundLight,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.text,
-  },
-  modalBody: {
-    padding: 20,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    padding: 15,
-    fontSize: 16,
-    backgroundColor: Colors.backgroundLight,
-  },
-  roleButtons: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  roleButton: {
-    flex: 1,
-    padding: 15,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-  },
-  roleButtonActive: {
-    backgroundColor: Colors.primaryLight,
-    borderColor: Colors.primary,
-  },
-  roleButtonText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  roleButtonTextActive: {
-    color: Colors.primaryDark,
-  },
-  selectButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    padding: 15,
-    backgroundColor: Colors.backgroundLight,
-  },
-  selectButtonText: {
-    fontSize: 16,
-    color: Colors.text,
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    gap: 10,
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  modalButton: {
-    flex: 1,
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: Colors.background,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  saveButton: {
-    backgroundColor: Colors.primary,
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.backgroundLight,
-  },
-  saveButtonDisabled: {
-    opacity: 0.6,
-  },
-  loadingContainer: {
-    paddingVertical: 50,
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    color: Colors.textSecondary,
-    fontSize: 14,
-  },
-  emptyContainer: {
-    paddingVertical: 50,
-    alignItems: 'center',
-  },
-  emptyText: {
-    color: Colors.textSecondary,
-    fontSize: 16,
-  },
-  outletOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  outletOptionSelected: {
-    backgroundColor: Colors.primaryLight + '20',
-  },
-  outletOptionText: {
-    fontSize: 16,
-    color: Colors.text,
-  },
-});
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  logoContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', color: Colors.backgroundLight },
+  userInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  avatarText: { fontWeight: 'bold', color: 'white', fontSize: 12 },
 
+  content: { flex: 1, padding: 20 },
+  titleSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  title: { fontSize: 22, fontWeight: 'bold', color: Colors.text },
+  subtitle: { fontSize: 14, color: Colors.textSecondary },
+  
+  addButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, gap: 5 },
+  addButtonText: { color: Colors.backgroundLight, fontSize: 12, fontWeight: '600' },
+
+  // Summary
+  summaryCards: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  summaryCard: { flex: 1, backgroundColor: 'white', borderRadius: 12, padding: 15, alignItems: 'center', elevation: 2 },
+  summaryLabel: { fontSize: 11, color: Colors.textSecondary, marginTop: 5, textAlign: 'center' },
+  summaryValue: { fontSize: 18, fontWeight: 'bold', color: Colors.text, marginTop: 2 },
+
+  loadingContainer: { paddingVertical: 50, alignItems: 'center' },
+  loadingText: { marginTop: 10, color: Colors.textSecondary },
+  emptyContainer: { alignItems: 'center', paddingVertical: 40 },
+  emptyText: { color: Colors.textSecondary },
+
+  // List Item
+  listSection: { paddingBottom: 20 },
+  employeeCard: { backgroundColor: 'white', borderRadius: 12, padding: 15, marginBottom: 15, elevation: 2 },
+  employeeHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+  avatarCircle: { width: 45, height: 45, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+  avatarLetter: { color: 'white', fontWeight: 'bold', fontSize: 18 },
+  employeeInfo: { flex: 1 },
+  employeeName: { fontSize: 16, fontWeight: 'bold', color: Colors.text },
+  roleBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginRight: 5 },
+  roleText: { color: 'white', fontSize: 10, fontWeight: 'bold' },
+  outletText: { fontSize: 12, color: Colors.textSecondary },
+
+  employeeActions: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#f0f0f0', paddingTop: 10, gap: 10 },
+  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 8, borderRadius: 6, gap: 5 },
+  btnEdit: { backgroundColor: '#F0F9FF' },
+  btnDelete: { backgroundColor: '#FFF0F0' },
+  actionText: { fontSize: 12, fontWeight: 'bold' },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: Colors.backgroundLight, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '90%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.text },
+  modalBody: { marginBottom: 20 },
+
+  inputGroup: { marginBottom: 15 },
+  label: { fontWeight: '600', marginBottom: 8, color: Colors.text, fontSize: 14 },
+  input: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, fontSize: 16, backgroundColor: 'white' },
+  
+  roleContainer: { flexDirection: 'row', gap: 10 },
+  roleOption: { flex: 1, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderColor: Colors.border, borderRadius: 8 },
+  roleOptionActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  roleOptionText: { color: Colors.textSecondary, fontWeight: '600' },
+  roleOptionTextActive: { color: 'white' },
+
+  selectButton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, backgroundColor: 'white' },
+  selectText: { fontSize: 16, color: Colors.text },
+
+  modalFooter: { flexDirection: 'row', gap: 10 },
+  cancelButton: { flex: 1, padding: 15, borderRadius: 8, alignItems: 'center', backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#ddd' },
+  cancelButtonText: { fontWeight: 'bold', color: '#666' },
+  saveButton: { flex: 1, padding: 15, borderRadius: 8, alignItems: 'center', backgroundColor: Colors.primary },
+  saveButtonText: { fontWeight: 'bold', color: 'white' },
+  disabledBtn: { opacity: 0.7 },
+
+  outletItem: { flexDirection: 'row', justifyContent: 'space-between', padding: 15, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  outletItemSelected: { backgroundColor: '#F0F9FF' },
+  outletItemText: { fontSize: 16, color: Colors.text },
+});

@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, Animated, Dimensions, StyleSheet, Text, View } from 'react-native';
@@ -6,6 +7,7 @@ import { Colors } from '../constants/Colors';
 const { width: screenWidth } = Dimensions.get('window');
 const isSmallScreen = screenWidth < 375;
 
+// Logo Component
 const LogoMark = () => {
   return (
     <View style={styles.logoContainer}>
@@ -33,28 +35,96 @@ const LogoMark = () => {
 
 export default function SplashScreen() {
   const router = useRouter();
+  // Animasi Value
   const opacity = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(0.92)).current;
+  const scale = useRef(new Animated.Value(0.9)).current;
+  const translateY = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
+    // 1. Jalankan Animasi Masuk
     Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 600, useNativeDriver: true }),
-      Animated.spring(scale, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        friction: 6,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
     ]).start();
 
-    const timeout = setTimeout(() => {
-      router.replace('/(auth)/login' as any);
-    }, 1400);
-    return () => clearTimeout(timeout);
-  }, [router, opacity, scale]);
+    // 2. Definisi fungsi cek sesi (dimasukkan ke dalam useEffect agar dependency aman)
+    const checkSession = async () => {
+      try {
+        // Tunggu minimal 2 detik agar logo sempat terlihat (Branding)
+        const minWait = new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Cek data di storage
+        const [token, userDataRaw] = await Promise.all([
+          AsyncStorage.getItem('@auth_token'),
+          AsyncStorage.getItem('@user_data'),
+          minWait // Pastikan minimal nunggu 2 detik
+        ]);
+  
+        if (token && userDataRaw) {
+          // User sudah login, arahkan sesuai role
+          const user = JSON.parse(userDataRaw);
+          const role = user.role?.toLowerCase();
+  
+          console.log('Auto-login detected:', role);
+  
+          if (role === 'karyawan') {
+            router.replace('/(employee)/transaksi' as any);
+          } else if (role === 'gudang') {
+            router.replace('/(warehouse)/overview' as any);
+          } else if (role === 'owner') {
+            router.replace('/(owner)/dashboard' as any);
+          } else {
+            // Fallback jika role aneh
+            router.replace('/(auth)/login' as any);
+          }
+        } else {
+          // Belum login, ke halaman login
+          router.replace('/(auth)/login' as any);
+        }
+      } catch (error) {
+        console.error('Splash Check Error:', error);
+        router.replace('/(auth)/login' as any);
+      }
+    };
+
+    // Jalankan fungsi
+    checkSession();
+
+  }, [opacity, scale, translateY, router]); // Dependency lengkap
 
   return (
     <View style={styles.container}>
-      <Animated.View style={{ opacity, transform: [{ scale }] }}>
+      <Animated.View 
+        style={{ 
+          opacity, 
+          transform: [
+            { scale },
+            { translateY }
+          ] 
+        }}
+      >
         <LogoMark />
       </Animated.View>
-      <ActivityIndicator style={styles.spinner} color={Colors.primary} />
-      <Text style={styles.tagline}>Menyajikan yang terbaik setiap hari</Text>
+
+      <View style={styles.footerContainer}>
+        <ActivityIndicator size="small" color={Colors.primary} style={styles.spinner} />
+        <Text style={styles.tagline}>Menyajikan yang terbaik setiap hari</Text>
+        <Text style={styles.version}>v1.0.0</Text>
+      </View>
     </View>
   );
 }
@@ -65,19 +135,31 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: isSmallScreen ? 20 : 24,
+    paddingHorizontal: 20,
+  },
+  footerContainer: {
+    position: 'absolute',
+    bottom: 50,
+    alignItems: 'center',
   },
   spinner: {
-    marginTop: 18,
+    marginBottom: 10,
   },
   tagline: {
-    marginTop: 10,
     color: Colors.textSecondary,
     fontSize: isSmallScreen ? 12 : 13,
-    letterSpacing: 0.3,
+    letterSpacing: 0.5,
+    marginBottom: 5,
   },
+  version: {
+    color: Colors.textSecondary,
+    fontSize: 10,
+    opacity: 0.5,
+  },
+  // LOGO STYLES
   logoContainer: {
     alignItems: 'center',
+    marginBottom: 40,
   },
   logoShapes: {
     flexDirection: 'row',
@@ -151,4 +233,3 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
 });
-

@@ -4,46 +4,59 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
-  Dimensions,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
-import { authAPI, ownerAPI } from '../../services/api';
-
-const { width: screenWidth } = Dimensions.get('window');
-const isSmallScreen = screenWidth < 375;
+import { User, Outlet } from '../../types';
+import { authAPI } from '../../services/api'; 
 
 export default function PengaturanScreen() {
   const router = useRouter();
-  const [user, setUser] = useState<any | null>(null);
-  const [outlet, setOutlet] = useState<any | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [outlet, setOutlet] = useState<Outlet | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        const raw = await AsyncStorage.getItem('@user_data');
-        if (raw) {
-          const u = JSON.parse(raw);
-          setUser(u);
-          if (u?.outlet_id) {
-            const res = await ownerAPI.getOutlet(Number(u.outlet_id));
-            if (res.data) setOutlet(res.data);
-          }
-        }
-      } catch {}
-    };
     loadProfile();
   }, []);
 
+  const loadProfile = async () => {
+    try {
+      // 1. Ambil data user dari penyimpanan lokal
+      const rawUser = await AsyncStorage.getItem('@user_data');
+      if (rawUser) {
+        const parsedUser: User = JSON.parse(rawUser);
+        setUser(parsedUser);
+
+        // REVISI: Ambil data outlet langsung dari object user (local storage).
+        // Tidak perlu call API getOutlet lagi karena bisa kena "403 Forbidden" untuk role Karyawan.
+        if (parsedUser.outlet) {
+            setOutlet(parsedUser.outlet);
+        } else if (parsedUser.outlet_id) {
+            // Jika di user object cuma ada ID, kita set dummy object sementara agar UI tidak kosong
+            setOutlet({
+                id: parsedUser.outlet_id,
+                nama: `Outlet #${parsedUser.outlet_id}`,
+                alamat: '-',
+                is_active: true
+            });
+        }
+      }
+    } catch (error) {
+      console.error('Gagal memuat profil', error);
+    }
+  };
+
   const handleLogout = async () => {
     Alert.alert(
-      'Keluar',
-      'Apakah Anda yakin ingin keluar?',
+      'Konfirmasi Keluar',
+      'Apakah Anda yakin ingin mengakhiri sesi ini?',
       [
         {
           text: 'Batal',
@@ -53,11 +66,17 @@ export default function PengaturanScreen() {
           text: 'Keluar',
           style: 'destructive',
           onPress: async () => {
+            setIsLoggingOut(true);
             try {
+              // Hapus token di server (opsional)
               await authAPI.logout();
-              router.replace('/(auth)/login' as any);
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Gagal logout');
+            } catch (error) {
+              console.log('Logout API error (ignored):', error);
+            } finally {
+              // Hapus data lokal & redirect
+              await AsyncStorage.multiRemove(['@auth_token', '@user_data']);
+              // Gunakan replace agar user tidak bisa back ke halaman ini
+              router.replace('/(auth)/login');
             }
           },
         },
@@ -65,60 +84,107 @@ export default function PengaturanScreen() {
     );
   };
 
+  // Komponen Helper untuk Baris Info
+  const InfoItem = ({ icon, label, value, isLast = false }: { icon: any, label: string, value: string, isLast?: boolean }) => (
+    <View style={[styles.infoItem, isLast && styles.infoItemLast]}>
+      <View style={styles.infoIconContainer}>
+        <Ionicons name={icon} size={20} color={Colors.primary} />
+      </View>
+      <View style={styles.infoTextContainer}>
+        <Text style={styles.infoLabel}>{label}</Text>
+        <Text style={styles.infoValue}>{value}</Text>
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      {/* Header Background */}
+      <View style={styles.headerBackground}>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Pengaturan</Text>
-          <View style={styles.userInfo}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>GH</Text>
-            </View>
-            <View>
-              <Text style={styles.userName}>{user?.username || 'Karyawan'}</Text>
-              <Text style={styles.userRole}>{user?.role ? user.role.charAt(0).toUpperCase()+user.role.slice(1) : 'Karyawan'}</Text>
-            </View>
-          </View>
+            <Text style={styles.headerTitle}>Pengaturan Akun</Text>
+            <Text style={styles.headerSubtitle}>Kelola profil dan sesi anda</Text>
         </View>
       </View>
 
-      <ScrollView style={styles.content}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Profil Karyawan</Text>
-          <View style={styles.sectionContent}>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Username</Text>
-              <Text style={styles.infoValue}>{user?.username || '-'}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Peran</Text>
-              <Text style={styles.infoValue}>{user?.role || '-'}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>ID</Text>
-              <Text style={styles.infoValue}>{user?.id?.toString() || '-'}</Text>
-            </View>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Kartu Profil Utama */}
+        <View style={styles.profileCard}>
+          <View style={styles.avatarContainer}>
+            <Text style={styles.avatarText}>
+              {user?.username?.substring(0, 2).toUpperCase() || 'KS'}
+            </Text>
+          </View>
+          <Text style={styles.profileName}>{user?.username || 'Pengguna'}</Text>
+          <View style={styles.roleBadge}>
+            <Text style={styles.roleText}>
+              {user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Karyawan'}
+            </Text>
           </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Informasi Outlet</Text>
-          <View style={styles.sectionContent}>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Nama Outlet</Text>
-              <Text style={styles.infoValue}>{outlet?.nama || '-'}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Alamat</Text>
-              <Text style={styles.infoValue}>{outlet?.alamat || '-'}</Text>
-            </View>
+        {/* Section: Informasi Akun */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>INFORMASI PRIBADI</Text>
+          <View style={styles.card}>
+            <InfoItem 
+                icon="person-outline" 
+                label="Username" 
+                value={user?.username || '-'} 
+            />
+            <InfoItem 
+                icon="id-card-outline" 
+                label="User ID" 
+                value={user?.id?.toString() || '-'} 
+            />
+            <InfoItem 
+                icon="shield-checkmark-outline" 
+                label="Role Akses" 
+                value={user?.role?.toUpperCase() || '-'} 
+                isLast
+            />
           </View>
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={24} color={Colors.error} />
-          <Text style={styles.logoutButtonText}>Keluar</Text>
+        {/* Section: Informasi Outlet */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>LOKASI BERTUGAS</Text>
+          <View style={styles.card}>
+            <InfoItem 
+                icon="storefront-outline" 
+                label="Nama Outlet" 
+                value={outlet?.nama || '-'} 
+            />
+            <InfoItem 
+                icon="location-outline" 
+                label="Alamat" 
+                value={outlet?.alamat || '-'} 
+                isLast
+            />
+          </View>
+        </View>
+
+        {/* Tombol Logout */}
+        <TouchableOpacity 
+            style={styles.logoutButton} 
+            onPress={handleLogout}
+            disabled={isLoggingOut}
+        >
+            {isLoggingOut ? (
+                <ActivityIndicator color={Colors.error} />
+            ) : (
+                <>
+                    <Ionicons name="log-out-outline" size={20} color={Colors.error} />
+                    <Text style={styles.logoutText}>Keluar Aplikasi</Text>
+                </>
+            )}
         </TouchableOpacity>
+
+        <Text style={styles.versionText}>Es Teh POS App v1.0.0</Text>
       </ScrollView>
     </View>
   );
@@ -129,103 +195,158 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
+  headerBackground: {
     backgroundColor: Colors.primary,
-    paddingTop: Platform.OS === 'ios' ? 50 : 40,
-    paddingBottom: isSmallScreen ? 15 : 20,
-    paddingHorizontal: isSmallScreen ? 15 : 20,
+    height: 180,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
   headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    flexWrap: 'wrap',
   },
   headerTitle: {
-    fontSize: isSmallScreen ? 20 : 24,
+    fontSize: 22,
     fontWeight: 'bold',
     color: Colors.backgroundLight,
+    marginBottom: 5,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  scrollView: {
     flex: 1,
-    minWidth: 120,
+    marginTop: -60,
   },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  profileCard: {
     backgroundColor: Colors.backgroundLight,
+    borderRadius: 20,
+    alignItems: 'center',
+    paddingVertical: 25,
+    paddingHorizontal: 20,
+    marginBottom: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  avatarContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginBottom: 15,
+    borderWidth: 4,
+    borderColor: Colors.backgroundLight,
   },
   avatarText: {
-    fontSize: 14,
+    fontSize: 28,
     fontWeight: 'bold',
     color: Colors.primary,
   },
-  userName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.backgroundLight,
+  profileName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginBottom: 8,
   },
-  userRole: {
+  roleBadge: {
+    backgroundColor: Colors.primary + '20',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  roleText: {
     fontSize: 12,
-    color: Colors.backgroundLight,
-    opacity: 0.8,
-  },
-  content: {
-    flex: 1,
-    padding: isSmallScreen ? 15 : 20,
-  },
-  section: {
-    marginBottom: 30,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    marginBottom: 10,
+    fontWeight: '700',
+    color: Colors.primary,
     textTransform: 'uppercase',
   },
-  sectionContent: {
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 12,
-    overflow: 'hidden',
+  sectionContainer: {
+    marginBottom: 20,
   },
-  infoRow: {
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    marginBottom: 10,
+    marginLeft: 5,
+    letterSpacing: 1,
+  },
+  card: {
+    backgroundColor: Colors.backgroundLight,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  infoItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 15,
+    alignItems: 'center',
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
+  infoItemLast: {
+    borderBottomWidth: 0,
+  },
+  infoIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: Colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  infoTextContainer: {
+    flex: 1,
+  },
   infoLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: Colors.textSecondary,
+    marginBottom: 2,
   },
   infoValue: {
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.text,
     fontWeight: '600',
   },
   logoutButton: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 12,
+    backgroundColor: '#FFF0F0',
+    borderRadius: 16,
     padding: 18,
-    marginTop: 20,
-    marginBottom: 30,
-    gap: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#FFDbdB',
   },
-  logoutButtonText: {
+  logoutText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: Colors.error,
+    marginLeft: 10,
+  },
+  versionText: {
+    textAlign: 'center',
+    color: Colors.textSecondary,
+    fontSize: 12,
+    opacity: 0.6,
+    marginBottom: 20,
   },
 });
-

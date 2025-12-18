@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,70 +11,79 @@ import {
   TextInput,
   Modal,
   Alert,
-  Dimensions,
   Platform,
   ActivityIndicator,
   RefreshControl,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
-import { StokGudang, Bahan } from '../../types';
+import { Bahan } from '../../types';
 import { gudangAPI, authAPI } from '../../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-const isSmallScreen = screenWidth < 375;
-
-interface StockOpnameItem extends StokGudang {
-  bahan: Bahan;
-  stok_fisik: number;
+// Interface Lokal
+interface StockOpnameItem {
+  id: string; 
+  bahan_id: number;
+  stok_sistem: number;
+  stok_fisik: number | null; 
   selisih: number;
-  status: 'sesuai' | 'selisih';
+  bahan: Bahan;
+  status: 'pending' | 'sesuai' | 'selisih';
 }
 
 export default function StokOpnameScreen() {
   const router = useRouter();
+  
+  // State
   const [searchQuery, setSearchQuery] = useState('');
-  const [showRecordModal, setShowRecordModal] = useState(false);
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<StockOpnameItem | null>(null);
-  const [stokFisik, setStokFisik] = useState('');
   const [stockOpnameItems, setStockOpnameItems] = useState<StockOpnameItem[]>([]);
+  const [filteredItems, setFilteredItems] = useState<StockOpnameItem[]>([]);
+  
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
-  useEffect(() => {
-    loadStok();
-  }, []);
+  // Modal Record
+  const [showRecordModal, setShowRecordModal] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<StockOpnameItem | null>(null);
+  const [inputStokFisik, setInputStokFisik] = useState('');
 
-  const loadStok = async () => {
+  // Profile
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+
+  // --- LOAD DATA ---
+  const loadUserData = async () => {
+    const userData = await AsyncStorage.getItem('@user_data');
+    if (userData) setUser(JSON.parse(userData));
+  };
+
+  const loadStok = useCallback(async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
     try {
-      setLoading(true);
       const response = await gudangAPI.getStok();
-      if (response.error) {
-        Alert.alert('Error', response.error);
-        return;
-      }
-      if (response.data) {
-        // Ensure response.data is an array
-        const stokData = Array.isArray(response.data) ? response.data : [];
-        const mappedItems = stokData.map((item: any) => {
-          const stok = item.stok || 0;
-          return {
-            bahan_id: item.bahan_id?.toString() || '',
-            stok: stok,
-            bahan: {
-              id: item.bahan?.id?.toString() || '',
-              nama: item.bahan?.nama || 'Unknown',
-              satuan: item.bahan?.satuan || '',
-              stok_minimum_gudang: item.bahan?.stok_minimum_gudang || 0,
-              stok_minimum_outlet: item.bahan?.stok_minimum_outlet || 0,
-            },
-            stok_fisik: stok, // Default to current stock
-            selisih: 0,
-            status: 'sesuai' as const,
-          };
-        });
+      
+      if (response.data && Array.isArray(response.data)) {
+        const mappedItems: StockOpnameItem[] = response.data.map((item: any) => ({
+          id: `opname-${item.bahan_id}`,
+          bahan_id: Number(item.bahan_id),
+          stok_sistem: Number(item.stok) || 0,
+          stok_fisik: null, // Reset saat reload
+          selisih: 0,
+          status: 'pending',
+          bahan: item.bahan || { 
+            id: item.bahan_id, 
+            nama: 'Unknown', 
+            satuan: 'Unit',
+            stok_minimum_gudang: 0, 
+            stok_minimum_outlet: 0 
+          },
+        }));
         setStockOpnameItems(mappedItems);
+        setFilteredItems(mappedItems);
+      } else if (response.error) {
+        Alert.alert('Error', response.error);
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Gagal memuat stok');
@@ -82,114 +91,198 @@ export default function StokOpnameScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadUserData();
+    loadStok();
+  }, [loadStok]);
+
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredItems(stockOpnameItems);
+    } else {
+      const filtered = stockOpnameItems.filter(item => 
+        item.bahan.nama.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredItems(filtered);
+    }
+  }, [searchQuery, stockOpnameItems]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadStok();
+    loadStok(true);
   };
 
-  const handleLogout = async () => {
-    Alert.alert(
-      'Keluar',
-      'Apakah Anda yakin ingin keluar?',
-      [
-        {
-          text: 'Batal',
-          style: 'cancel',
-        },
-        {
-          text: 'Keluar',
-          style: 'destructive',
-          onPress: async () => {
-            await authAPI.logout();
-            router.replace('/(auth)/login' as any);
-          },
-        },
-      ]
-    );
-    setShowProfileMenu(false);
-  };
+  // --- ACTION HANDLERS ---
 
-  const filteredItems = stockOpnameItems.filter(item =>
-    item.bahan.nama.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const totalItems = stockOpnameItems.length;
-  const sesuaiCount = stockOpnameItems.filter(item => item.status === 'sesuai').length;
-  const selisihCount = stockOpnameItems.filter(item => item.status === 'selisih').length;
-
-  const handleRecord = (item: StockOpnameItem) => {
+  const handleOpenRecord = (item: StockOpnameItem) => {
     setSelectedItem(item);
-    setStokFisik(item.stok_fisik.toString());
+    // Jika sudah ada data sebelumnya, tampilkan
+    setInputStokFisik(item.stok_fisik !== null ? item.stok_fisik.toString() : '');
     setShowRecordModal(true);
   };
 
-  const handleSave = () => {
-    // Handle save logic here
+  const handleSaveRecord = () => {
+    if (!selectedItem) return;
+    
+    const fisik = parseInt(inputStokFisik);
+    if (isNaN(fisik) || fisik < 0) {
+      Alert.alert('Validasi', 'Masukkan jumlah stok fisik yang valid (>= 0)');
+      return;
+    }
+
+    const selisih = fisik - selectedItem.stok_sistem;
+    
+    // FIX 1: Berikan tipe eksplisit agar TypeScript tidak menganggap ini string biasa
+    const status: 'sesuai' | 'selisih' = selisih === 0 ? 'sesuai' : 'selisih';
+
+    // Update state lokal
+    const updatedItems = stockOpnameItems.map(item => 
+      item.id === selectedItem.id 
+        ? { ...item, stok_fisik: fisik, selisih, status } 
+        : item
+    );
+
+    setStockOpnameItems(updatedItems);
+    // Update filtered items juga agar UI langsung berubah
+    if (searchQuery.trim() !== '') {
+        const updatedFiltered = updatedItems.filter(item => 
+            item.bahan.nama.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        setFilteredItems(updatedFiltered);
+    } else {
+        setFilteredItems(updatedItems);
+    }
+
     setShowRecordModal(false);
     setSelectedItem(null);
-    setStokFisik('');
+    setInputStokFisik('');
   };
+
+  // Fungsi Finalisasi (Simpan ke Server - Mockup karena endpoint belum ada)
+  const handleFinalize = async () => {
+    const itemsToUpdate = stockOpnameItems.filter(item => item.status !== 'pending');
+    
+    if (itemsToUpdate.length === 0) {
+      Alert.alert('Info', 'Belum ada data stok fisik yang dicatat.');
+      return;
+    }
+
+    Alert.alert(
+      'Konfirmasi',
+      `Anda akan menyimpan ${itemsToUpdate.length} data hasil opname. Lanjutkan?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        { 
+          text: 'Simpan', 
+          onPress: async () => {
+            setProcessing(true);
+            try {
+              // TODO: Panggil API simpan opname di sini jika sudah ada endpointnya.
+              // Untuk sekarang kita simulasi sukses saja.
+              await new Promise(resolve => setTimeout(resolve, 1500));
+              
+              Alert.alert('Sukses', 'Hasil stok opname berhasil disimpan.');
+              loadStok(true); // Reset form
+            } catch (error) {
+              // FIX 2: Gunakan variabel error agar ESLint senang
+              console.log('Error finalize:', error);
+              Alert.alert('Gagal', 'Terjadi kesalahan saat menyimpan.');
+            } finally {
+              setProcessing(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleLogout = async () => {
+    Alert.alert('Logout', 'Yakin ingin keluar?', [
+      { text: 'Batal' },
+      { text: 'Keluar', style: 'destructive', onPress: async () => {
+          await authAPI.logout();
+          router.replace('/(auth)/login');
+      }}
+    ]);
+  };
+
+  // --- STATISTIK ---
+  const totalRecorded = stockOpnameItems.filter(i => i.status !== 'pending').length;
+  const totalSelisih = stockOpnameItems.filter(i => i.status === 'selisih').length;
 
   return (
     <View style={styles.container}>
+      {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.logoContainer}>
             <Ionicons name="cube" size={24} color={Colors.backgroundLight} />
-            <Text style={styles.headerTitle}>Gudang Favorit</Text>
+            <Text style={styles.headerTitle}>Gudang Pusat</Text>
           </View>
           <TouchableOpacity
             style={styles.userInfo}
             onPress={() => setShowProfileMenu(true)}
-            activeOpacity={0.7}
           >
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>SF</Text>
+              <Text style={styles.avatarText}>
+                {user?.username ? user.username.substring(0,2).toUpperCase() : 'GD'}
+              </Text>
             </View>
             <View>
-              <Text style={styles.userName}>Staff Gudang</Text>
-              <Text style={styles.userRole}>Pusat</Text>
+              <Text style={styles.userName}>{user?.username || 'Staff'}</Text>
+              <Text style={styles.userRole}>Logistik</Text>
             </View>
-            <Ionicons name="chevron-down" size={16} color={Colors.backgroundLight} style={styles.chevronIcon} />
+            <Ionicons name="chevron-down" size={16} color={Colors.backgroundLight} style={{marginLeft: 5}} />
           </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView 
         style={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        contentContainerStyle={{ paddingBottom: 100 }}
       >
         <View style={styles.titleSection}>
           <View>
             <Text style={styles.title}>Stok Opname</Text>
-            <Text style={styles.subtitle}>
-              Pencatatan dan penyesuaian stok fisik
+            <Text style={styles.subtitle}>Pencatatan & Penyesuaian Stok Fisik</Text>
+          </View>
+          {totalRecorded > 0 && (
+            <TouchableOpacity style={styles.finalizeButton} onPress={handleFinalize} disabled={processing}>
+               {processing ? <ActivityIndicator color="white" size="small"/> : (
+                   <>
+                    <Ionicons name="save-outline" size={18} color="white" />
+                    <Text style={styles.finalizeButtonText}>Simpan</Text>
+                   </>
+               )}
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* SUMMARY */}
+        <View style={styles.summaryCards}>
+          <View style={styles.summaryCard}>
+            <Ionicons name="clipboard-outline" size={28} color={Colors.primary} />
+            <Text style={styles.summaryLabel}>Total Item</Text>
+            <Text style={styles.summaryValue}>{stockOpnameItems.length}</Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Ionicons name="checkmark-done-outline" size={28} color={Colors.success} />
+            <Text style={styles.summaryLabel}>Sudah Cek</Text>
+            <Text style={styles.summaryValue}>{totalRecorded}</Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Ionicons name="alert-circle-outline" size={28} color={Colors.warning} />
+            <Text style={styles.summaryLabel}>Selisih</Text>
+            <Text style={[styles.summaryValue, {color: totalSelisih > 0 ? Colors.error : Colors.text}]}>
+                {totalSelisih}
             </Text>
           </View>
         </View>
 
-        <View style={styles.summaryCards}>
-          <View style={styles.summaryCard}>
-            <Ionicons name="cube-outline" size={32} color={Colors.primary} />
-            <Text style={styles.summaryLabel}>Total Item</Text>
-            <Text style={styles.summaryValue}>{totalItems}</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Ionicons name="checkmark-circle" size={32} color={Colors.success} />
-            <Text style={styles.summaryLabel}>Sesuai</Text>
-            <Text style={styles.summaryValue}>{sesuaiCount}</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Ionicons name="alert-circle" size={32} color={Colors.warning} />
-            <Text style={styles.summaryLabel}>Selisih</Text>
-            <Text style={styles.summaryValue}>{selisihCount}</Text>
-          </View>
-        </View>
-
+        {/* SEARCH */}
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={20} color={Colors.textSecondary} style={styles.searchIcon} />
           <TextInput
@@ -199,11 +292,9 @@ export default function StokOpnameScreen() {
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
-          <TouchableOpacity>
-            <Ionicons name="filter" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
         </View>
 
+        {/* LIST */}
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={Colors.primary} />
@@ -211,94 +302,78 @@ export default function StokOpnameScreen() {
           </View>
         ) : (
           <View style={styles.listSection}>
-            <Text style={styles.sectionTitle}>Daftar Stok Opname</Text>
-
             <FlatList
               data={filteredItems}
-              keyExtractor={item => item.bahan_id}
+              keyExtractor={item => item.id}
               scrollEnabled={false}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>Tidak ada stok tersedia</Text>
+                  <Text style={styles.emptyText}>Tidak ada data stok.</Text>
                 </View>
               }
               renderItem={({ item }) => (
-              <View style={styles.stockCard}>
-                <View style={styles.stockHeader}>
-                  <View style={styles.stockInfo}>
-                    <Text style={styles.stockName}>{item.bahan.nama}</Text>
-                    <Text style={styles.stockUnit}>{item.bahan.satuan}</Text>
-                  </View>
-                  <View style={[
-                    styles.statusBadge,
-                    { backgroundColor: item.status === 'sesuai' ? Colors.success + '20' : Colors.warning + '20' }
-                  ]}>
-                    <Text style={[
-                      styles.statusText,
-                      { color: item.status === 'sesuai' ? Colors.success : Colors.warning }
+                <View style={[styles.card, item.status === 'selisih' && styles.cardWarning]}>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardTitle}>{item.bahan.nama}</Text>
+                    <View style={[
+                        styles.statusBadge, 
+                        { backgroundColor: item.status === 'pending' ? '#eee' : (item.status === 'sesuai' ? Colors.success+'20' : Colors.error+'20') }
                     ]}>
-                      {item.status === 'sesuai' ? 'Sesuai' : 'Selisih'}
-                    </Text>
+                        <Text style={[
+                            styles.statusText,
+                            { color: item.status === 'pending' ? '#888' : (item.status === 'sesuai' ? Colors.success : Colors.error) }
+                        ]}>
+                            {item.status === 'pending' ? 'Belum Cek' : item.status.toUpperCase()}
+                        </Text>
+                    </View>
                   </View>
+
+                  <View style={styles.cardBody}>
+                    <View style={styles.stockRow}>
+                        <View style={{flex:1}}>
+                            <Text style={styles.stockLabel}>Sistem</Text>
+                            <Text style={styles.stockValue}>{item.stok_sistem} <Text style={styles.unit}>{item.bahan.satuan}</Text></Text>
+                        </View>
+                        
+                        <Ionicons name="arrow-forward" size={20} color="#ccc" style={{marginHorizontal:10}} />
+                        
+                        <View style={{flex:1, alignItems:'flex-end'}}>
+                            <Text style={styles.stockLabel}>Fisik</Text>
+                            <Text style={[styles.stockValue, item.stok_fisik === null && {color:'#ccc', fontSize:14}]}>
+                                {item.stok_fisik !== null ? item.stok_fisik : '-'} 
+                                {item.stok_fisik !== null && <Text style={styles.unit}> {item.bahan.satuan}</Text>}
+                            </Text>
+                        </View>
+                    </View>
+
+                    {item.selisih !== 0 && (
+                        <View style={styles.selisihBox}>
+                            <Text style={styles.selisihText}>
+                                Selisih: {item.selisih > 0 ? '+' : ''}{item.selisih} {item.bahan.satuan}
+                            </Text>
+                        </View>
+                    )}
+                  </View>
+
+                  <TouchableOpacity 
+                    style={[styles.actionButton, item.status === 'pending' ? styles.btnPrimary : styles.btnOutline]}
+                    onPress={() => handleOpenRecord(item)}
+                  >
+                    <Ionicons name="create-outline" size={18} color={item.status === 'pending' ? 'white' : Colors.primary} />
+                    <Text style={item.status === 'pending' ? styles.btnTextWhite : styles.btnTextPrimary}>
+                        {item.status === 'pending' ? 'Catat Stok' : 'Edit Hasil'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-
-                <View style={styles.stockComparison}>
-                  <View style={styles.stockValue}>
-                    <Text style={styles.stockLabel}>Stok Sistem</Text>
-                    <Text style={styles.stockNumber}>{item.stok}</Text>
-                  </View>
-                  <View style={styles.stockArrow}>
-                    <Ionicons
-                      name={item.selisih === 0 ? "checkmark" : item.selisih > 0 ? "arrow-up" : "arrow-down"}
-                      size={24}
-                      color={item.selisih === 0 ? Colors.success : item.selisih > 0 ? Colors.success : Colors.error}
-                    />
-                  </View>
-                  <View style={styles.stockValue}>
-                    <Text style={styles.stockLabel}>Stok Fisik</Text>
-                    <Text style={[
-                      styles.stockNumber,
-                      { color: item.selisih === 0 ? Colors.text : item.selisih > 0 ? Colors.success : Colors.error }
-                    ]}>
-                      {item.stok_fisik}
-                    </Text>
-                  </View>
-                </View>
-
-                {item.selisih !== 0 && (
-                  <View style={styles.selisihInfo}>
-                    <Text style={styles.selisihLabel}>Selisih:</Text>
-                    <Text style={[
-                      styles.selisihValue,
-                      { color: item.selisih > 0 ? Colors.success : Colors.error }
-                    ]}>
-                      {item.selisih > 0 ? '+' : ''}{item.selisih} {item.bahan.satuan}
-                    </Text>
-                  </View>
-                )}
-
-                <TouchableOpacity
-                  style={styles.recordButton}
-                  onPress={() => handleRecord(item)}
-                >
-                  <Ionicons name="create-outline" size={18} color={Colors.primary} />
-                  <Text style={styles.recordButtonText}>Catat Stok Fisik</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          />
-        </View>
+              )}
+            />
+          </View>
         )}
       </ScrollView>
 
-      {/* Record Modal */}
-      <Modal
-        visible={showRecordModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowRecordModal(false)}
-      >
-        <View style={styles.modalOverlay}>
+      {/* MODAL RECORD */}
+      <Modal visible={showRecordModal} transparent animationType="slide" onRequestClose={() => setShowRecordModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Catat Stok Fisik</Text>
@@ -307,517 +382,149 @@ export default function StokOpnameScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalBody}>
-              {selectedItem && (
-                <>
-                  <View style={styles.modalInfo}>
-                    <Text style={styles.modalInfoLabel}>Bahan:</Text>
-                    <Text style={styles.modalInfoValue}>{selectedItem.bahan.nama}</Text>
-                  </View>
-                  <View style={styles.modalInfo}>
-                    <Text style={styles.modalInfoLabel}>Stok Sistem:</Text>
-                    <Text style={styles.modalInfoValue}>{selectedItem.stok} {selectedItem.bahan.satuan}</Text>
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Stok Fisik</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Masukkan stok fisik"
-                      value={stokFisik}
-                      onChangeText={setStokFisik}
-                      keyboardType="numeric"
-                    />
-                    <Text style={styles.inputHint}>
-                      Satuan: {selectedItem.bahan.satuan}
-                    </Text>
-                  </View>
-
-                  {stokFisik && parseInt(stokFisik) !== selectedItem.stok && (
-                    <View style={styles.selisihPreview}>
-                      <Text style={styles.selisihPreviewLabel}>Selisih:</Text>
-                      <Text style={[
-                        styles.selisihPreviewValue,
-                        {
-                          color: (parseInt(stokFisik) - selectedItem.stok) > 0
-                            ? Colors.success
-                            : Colors.error
-                        }
-                      ]}>
-                        {(parseInt(stokFisik) - selectedItem.stok) > 0 ? '+' : ''}
-                        {parseInt(stokFisik) - selectedItem.stok} {selectedItem.bahan.satuan}
-                      </Text>
+            {selectedItem && (
+                <View style={styles.modalBody}>
+                    <View style={styles.infoBox}>
+                        <Text style={styles.infoTitle}>{selectedItem.bahan.nama}</Text>
+                        <Text style={styles.infoSub}>Stok Sistem: {selectedItem.stok_sistem} {selectedItem.bahan.satuan}</Text>
                     </View>
-                  )}
-                </>
-              )}
-            </View>
+
+                    <Text style={styles.label}>Jumlah Fisik Saat Ini:</Text>
+                    <TextInput 
+                        style={styles.input}
+                        keyboardType="numeric"
+                        value={inputStokFisik}
+                        onChangeText={setInputStokFisik}
+                        placeholder="0"
+                        autoFocus
+                    />
+
+                    {inputStokFisik !== '' && (
+                        <View style={styles.previewBox}>
+                            <Text style={{color: Colors.textSecondary}}>Preview Selisih:</Text>
+                            <Text style={{fontWeight:'bold', fontSize:16, color: (parseInt(inputStokFisik) - selectedItem.stok_sistem) === 0 ? Colors.success : Colors.error}}>
+                                {(parseInt(inputStokFisik) - selectedItem.stok_sistem) > 0 ? '+' : ''}
+                                {parseInt(inputStokFisik) - selectedItem.stok_sistem} {selectedItem.bahan.satuan}
+                            </Text>
+                        </View>
+                    )}
+                </View>
+            )}
 
             <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowRecordModal(false);
-                  setSelectedItem(null);
-                  setStokFisik('');
-                }}
-                disabled={processing}
-              >
-                <Text style={styles.cancelButtonText}>Batal</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton, processing && styles.saveButtonDisabled]}
-                onPress={handleRecord}
-                disabled={processing}
-              >
-                {processing ? (
-                  <ActivityIndicator color={Colors.backgroundLight} />
-                ) : (
-                  <Text style={styles.saveButtonText}>Simpan</Text>
-                )}
-              </TouchableOpacity>
+                <TouchableOpacity style={styles.btnCancel} onPress={() => setShowRecordModal(false)}>
+                    <Text style={styles.btnCancelText}>Batal</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.btnSave} onPress={handleSaveRecord}>
+                    <Text style={styles.btnSaveText}>Simpan</Text>
+                </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
-      {/* Profile Menu Modal */}
-      <Modal
-        visible={showProfileMenu}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowProfileMenu(false)}
-      >
-        <TouchableOpacity
-          style={styles.profileModalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowProfileMenu(false)}
-        >
+      {/* PROFILE MENU */}
+      <Modal visible={showProfileMenu} transparent animationType="fade" onRequestClose={() => setShowProfileMenu(false)}>
+        <TouchableOpacity style={styles.profileModalOverlay} activeOpacity={1} onPress={() => setShowProfileMenu(false)}>
           <View style={styles.profileMenu}>
-            <View style={styles.profileMenuHeader}>
-              <View style={styles.profileMenuAvatar}>
-                <Text style={styles.profileMenuAvatarText}>SF</Text>
-              </View>
-              <View>
-                <Text style={styles.profileMenuName}>Staff Gudang</Text>
-                <Text style={styles.profileMenuRole}>Pusat</Text>
-              </View>
-            </View>
-            <View style={styles.profileMenuDivider} />
-            <TouchableOpacity
-              style={styles.profileMenuItem}
-              onPress={handleLogout}
-            >
+            <TouchableOpacity style={styles.profileMenuItem} onPress={handleLogout}>
               <Ionicons name="log-out-outline" size={20} color={Colors.error} />
               <Text style={styles.profileMenuItemText}>Keluar</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
+
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
   header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 50 : 40,
-    paddingBottom: isSmallScreen ? 15 : 20,
-    paddingHorizontal: isSmallScreen ? 15 : 20,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: Colors.backgroundLight,
-    marginLeft: 10,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.backgroundLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  avatarText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: Colors.primary,
-  },
-  userName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.backgroundLight,
-  },
-  userRole: {
-    fontSize: 12,
-    color: Colors.backgroundLight,
-    opacity: 0.8,
-  },
-  content: {
-    flex: 1,
-    padding: isSmallScreen ? 15 : 20,
-  },
-  titleSection: {
-    marginBottom: isSmallScreen ? 15 : 20,
-  },
-  title: {
-    fontSize: isSmallScreen ? 20 : 24,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: 5,
-  },
-  subtitle: {
-    fontSize: isSmallScreen ? 13 : 14,
-    color: Colors.textSecondary,
-  },
-  summaryCards: {
-    flexDirection: 'row',
-    gap: 15,
-    marginBottom: 20,
-  },
-  summaryCard: {
-    flex: 1,
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 10,
-    marginBottom: 5,
-    textAlign: 'center',
-  },
-  summaryValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.text,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    marginBottom: 20,
-  },
-  searchIcon: {
-    marginRight: 10,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: Colors.text,
-  },
-  listSection: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: 15,
-  },
-  stockCard: {
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-  },
-  stockHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  stockInfo: {
-    flex: 1,
-  },
-  stockName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  stockUnit: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  stockComparison: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 15,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  stockValue: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  stockLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginBottom: 5,
-  },
-  stockNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.text,
-  },
-  stockArrow: {
-    paddingHorizontal: 10,
-  },
-  selisihInfo: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 15,
-    gap: 8,
-  },
-  selisihLabel: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  selisihValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  recordButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-    gap: 8,
-  },
-  recordButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: Colors.backgroundLight,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.text,
-  },
-  modalBody: {
-    padding: 20,
-  },
-  modalInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 15,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  modalInfoLabel: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  modalInfoValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    padding: 15,
-    fontSize: 16,
-    backgroundColor: Colors.backgroundLight,
-  },
-  inputHint: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 5,
-  },
-  selisihPreview: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 15,
-    backgroundColor: Colors.background,
-    borderRadius: 8,
-    gap: 8,
-  },
-  selisihPreviewLabel: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  selisihPreviewValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    gap: 10,
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  modalButton: {
-    flex: 1,
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: Colors.background,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  saveButton: {
-    backgroundColor: Colors.primary,
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.backgroundLight,
-  },
-  chevronIcon: {
-    marginLeft: 8,
-  },
-  profileModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
-    paddingTop: 60,
-    paddingRight: 20,
-  },
-  profileMenu: {
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 12,
-    minWidth: 200,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-  },
-  profileMenuHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-  },
-  profileMenuAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  profileMenuAvatarText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: Colors.primaryDark,
-  },
-  profileMenuName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  profileMenuRole: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  profileMenuDivider: {
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  profileMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-    gap: 12,
-  },
-  profileMenuItemText: {
-    fontSize: 16,
-    color: Colors.error,
-    fontWeight: '600',
-  },
-  loadingContainer: {
-    paddingVertical: 50,
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    color: Colors.textSecondary,
-    fontSize: 14,
-  },
-  saveButtonDisabled: {
-    opacity: 0.6,
-  },
-});
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  logoContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', color: Colors.backgroundLight },
+  userInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
+  avatarText: { fontWeight: 'bold', color: Colors.primary },
+  userName: { fontSize: 14, fontWeight: 'bold', color: 'white' },
+  userRole: { fontSize: 12, color: 'rgba(255,255,255,0.8)' },
 
+  content: { flex: 1, padding: 20 },
+  titleSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  title: { fontSize: 22, fontWeight: 'bold', color: Colors.text },
+  subtitle: { fontSize: 14, color: Colors.textSecondary },
+  
+  finalizeButton: { flexDirection: 'row', backgroundColor: Colors.success, paddingHorizontal: 15, paddingVertical: 10, borderRadius: 8, gap: 5, alignItems: 'center' },
+  finalizeButtonText: { color: 'white', fontWeight: 'bold' },
+
+  summaryCards: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  summaryCard: { flex: 1, backgroundColor: 'white', borderRadius: 12, padding: 15, alignItems: 'center', elevation: 2 },
+  summaryLabel: { fontSize: 12, color: Colors.textSecondary, marginTop: 5 },
+  summaryValue: { fontSize: 20, fontWeight: 'bold', color: Colors.text },
+
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f5f5f5', borderRadius: 8, paddingHorizontal: 10, marginBottom: 15 },
+  searchIcon: { marginRight: 10 },
+  searchInput: { flex: 1, paddingVertical: 10, fontSize: 14 },
+
+  listSection: { marginBottom: 20 },
+  card: { backgroundColor: 'white', borderRadius: 12, padding: 15, marginBottom: 15, elevation: 2, borderWidth: 1, borderColor: 'transparent' },
+  cardWarning: { borderColor: Colors.warning },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  cardTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.text },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  statusText: { fontSize: 11, fontWeight: 'bold' },
+
+  cardBody: { marginBottom: 15 },
+  stockRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  stockLabel: { fontSize: 12, color: Colors.textSecondary, marginBottom: 2 },
+  stockValue: { fontSize: 16, fontWeight: 'bold', color: Colors.text },
+  unit: { fontSize: 12, fontWeight: 'normal', color: Colors.textSecondary },
+  
+  selisihBox: { marginTop: 10, padding: 8, backgroundColor: '#FFF3E0', borderRadius: 6, alignItems: 'center' },
+  selisihText: { color: Colors.warning, fontWeight: 'bold', fontSize: 13 },
+
+  actionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 10, borderRadius: 8, gap: 5 },
+  btnPrimary: { backgroundColor: Colors.primary },
+  btnOutline: { backgroundColor: 'transparent', borderWidth: 1, borderColor: Colors.primary },
+  btnTextWhite: { color: 'white', fontWeight: 'bold' },
+  btnTextPrimary: { color: Colors.primary, fontWeight: 'bold' },
+
+  loadingContainer: { paddingVertical: 50, alignItems: 'center' },
+  loadingText: { marginTop: 10, color: Colors.textSecondary, fontSize: 14 },
+  emptyContainer: { alignItems: 'center', marginTop: 30 },
+  emptyText: { color: Colors.textSecondary },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold' },
+  modalBody: { marginBottom: 20 },
+  
+  infoBox: { backgroundColor: '#f9f9f9', padding: 15, borderRadius: 8, marginBottom: 20, alignItems: 'center' },
+  infoTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.text },
+  infoSub: { color: Colors.textSecondary, marginTop: 5 },
+  
+  label: { fontWeight: '600', marginBottom: 10 },
+  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 15, fontSize: 18, textAlign: 'center', marginBottom: 15 },
+  previewBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 10, backgroundColor: '#f0f9ff', borderRadius: 8 },
+
+  modalFooter: { flexDirection: 'row', gap: 10 },
+  btnCancel: { flex: 1, padding: 15, borderRadius: 8, backgroundColor: '#f5f5f5', alignItems: 'center' },
+  btnCancelText: { fontWeight: 'bold', color: '#666' },
+  btnSave: { flex: 1, padding: 15, borderRadius: 8, backgroundColor: Colors.primary, alignItems: 'center' },
+  btnSaveText: { fontWeight: 'bold', color: 'white' },
+
+  // Profile
+  profileModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
+  profileMenu: { position: 'absolute', top: 90, right: 20, backgroundColor: 'white', borderRadius: 8, padding: 5, elevation: 5, minWidth: 150 },
+  profileMenuItem: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
+  profileMenuItemText: { color: Colors.error, fontWeight: 'bold' },
+});
