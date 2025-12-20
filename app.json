@@ -1,13 +1,20 @@
 {
   "expo": {
     "name": "Es Teh Favorit Indonesia",
-    "slug": "es-teh",
+    "slug": "es-teh-app",
     "version": "1.0.0",
     "orientation": "portrait",
+    
     "icon": "./assets/images/logo-esteh.png",
-    "scheme": "esteh",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "backgroundColor": "#F0F4F8", 
+    
+    "splash": {
+      "image": "./assets/images/logo-esteh.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F0F4F8"
+    },
+    
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.esteh.app"
@@ -15,13 +22,11 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo-esteh.png",
-        "backgroundColor": "#F0F4F8"
+        "backgroundColor": "#F0F4F8" 
       },
-      "package": "com.esteh.app",
-      "edgeToEdgeEnabled": true
+      "package": "com.esteh.app"
     },
     "web": {
-      "output": "static",
       "favicon": "./assets/images/logo-esteh.png"
     },
     "plugins": [
@@ -30,15 +35,11 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/logo-esteh.png",
-          "imageWidth": 150,
+          "imageWidth": 120,
           "resizeMode": "contain",
           "backgroundColor": "#F0F4F8"
         }
       ]
-    ],
-    "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
-    }
+    ]
   }
 }
