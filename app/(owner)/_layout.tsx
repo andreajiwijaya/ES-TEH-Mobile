@@ -8,25 +8,24 @@ export default function OwnerTabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: '#9E9E9E',
+        tabBarActiveTintColor: Colors.primary, // Hijau saat aktif
+        tabBarInactiveTintColor: '#B0BEC5', // Abu soft saat tidak aktif
+        tabBarShowLabel: true, 
+        
+        // Style Tab Bar Modern
         tabBarStyle: styles.tabBar,
+        tabBarItemStyle: styles.tabItem,
         tabBarLabelStyle: styles.tabLabel,
-        tabBarHideOnKeyboard: true, // Sembunyikan tab saat keyboard muncul (misal saat edit data)
+        
+        tabBarHideOnKeyboard: true,
       }}
     >
       <Tabs.Screen
         name="dashboard"
         options={{
-          title: 'Dashboard',
+          title: 'Beranda',
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconContainer, focused && styles.iconActive]}>
-              <Ionicons 
-                name={focused ? "stats-chart" : "stats-chart-outline"} 
-                size={24} 
-                color={color} 
-              />
-            </View>
+            <TabIcon focused={focused} color={color} name="stats-chart" />
           ),
         }}
       />
@@ -35,28 +34,16 @@ export default function OwnerTabsLayout() {
         options={{
           title: 'Outlet',
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconContainer, focused && styles.iconActive]}>
-              <Ionicons 
-                name={focused ? "storefront" : "storefront-outline"} 
-                size={24} 
-                color={color} 
-              />
-            </View>
+            <TabIcon focused={focused} color={color} name="storefront" />
           ),
         }}
       />
       <Tabs.Screen
         name="karyawan"
         options={{
-          title: 'Karyawan',
+          title: 'Tim', 
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconContainer, focused && styles.iconActive]}>
-              <Ionicons 
-                name={focused ? "people" : "people-outline"} 
-                size={24} 
-                color={color} 
-              />
-            </View>
+            <TabIcon focused={focused} color={color} name="people" />
           ),
         }}
       />
@@ -65,13 +52,16 @@ export default function OwnerTabsLayout() {
         options={{
           title: 'Laporan',
           tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconContainer, focused && styles.iconActive]}>
-              <Ionicons 
-                name={focused ? "document-text" : "document-text-outline"} 
-                size={24} 
-                color={color} 
-              />
-            </View>
+            <TabIcon focused={focused} color={color} name="document-text" />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Akun',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon focused={focused} color={color} name="person" />
           ),
         }}
       />
@@ -79,31 +69,54 @@ export default function OwnerTabsLayout() {
   );
 }
 
+// Komponen Helper untuk Icon dengan Efek "Green Pill"
+const TabIcon = ({ focused, color, name }: { focused: boolean; color: string; name: keyof typeof Ionicons.glyphMap }) => {
+  return (
+    <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
+      <Ionicons 
+        name={focused ? name : (name + '-outline') as any} 
+        size={22} 
+        color={color} 
+      />
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
   tabBar: {
     backgroundColor: '#FFFFFF',
-    borderTopWidth: 0,
-    elevation: 8, // Shadow untuk Android
-    shadowColor: '#000', // Shadow untuk iOS
+    borderTopWidth: 0, 
+    elevation: 10, // Shadow Android
+    shadowColor: '#000', // Shadow iOS
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    height: Platform.OS === 'ios' ? 90 : 70,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 12,
-    paddingTop: 12,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    
+    // Tinggi responsif
+    height: Platform.OS === 'ios' ? 88 : 70,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
+    paddingTop: 10,
+  },
+  tabItem: {
+    paddingVertical: 4, 
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: 4,
   },
+  
+  // Icon Styles
   iconContainer: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 20,
     marginBottom: 2,
   },
-  iconActive: {
-    // Efek visual kecil saat tab aktif (sedikit naik ke atas)
-    transform: [{ translateY: -2 }],
+  iconContainerActive: {
+    backgroundColor: '#E8F5E9', // Green Pill Background (Soft Green)
+    transform: [{ scale: 1.05 }], 
   },
 });

@@ -1,33 +1,23 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
-import { ActivityIndicator, Animated, Dimensions, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Image, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '../constants/Colors';
 
-const { width: screenWidth } = Dimensions.get('window');
-const isSmallScreen = screenWidth < 375;
-
-// Logo Component
+// Logo Component (Menggunakan Image Asli + Style Lingkaran)
 const LogoMark = () => {
   return (
     <View style={styles.logoContainer}>
-      <View style={styles.logoShapes}>
-        <View style={[styles.logoShape, styles.logoShapeRed]}>
-          <View style={styles.logoShapeInner} />
-        </View>
-        <View style={[styles.logoShape, styles.logoShapeGreen]}>
-          <View style={styles.logoShapeInner} />
-        </View>
-        <View style={[styles.logoShape, styles.logoShapeYellow]}>
-          <View style={styles.logoShapeInner} />
-        </View>
+      <View style={styles.logoCircleContainer}>
+        <Image 
+          source={require('../assets/images/logo-esteh.png')} 
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
       </View>
-      <View style={styles.logoTextContainer}>
-        <View style={styles.logoTextRow}>
-          <Text style={styles.logoTextGreen}>Es-Teh</Text>
-          <Text style={styles.logoTextRed}> Favorit</Text>
-        </View>
-        <Text style={styles.logoTextIndonesia}>INDONESIA</Text>
+      <View style={styles.textContainer}>
+        <Text style={styles.brandTitle}>Es Teh Favorit Indonesia</Text>
+        <Text style={styles.brandSubtitle}>Management System</Text>
       </View>
     </View>
   );
@@ -37,7 +27,7 @@ export default function SplashScreen() {
   const router = useRouter();
   // Animasi Value
   const opacity = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(0.9)).current;
+  const scale = useRef(new Animated.Value(0.8)).current;
   const translateY = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
@@ -61,26 +51,22 @@ export default function SplashScreen() {
       }),
     ]).start();
 
-    // 2. Definisi fungsi cek sesi (dimasukkan ke dalam useEffect agar dependency aman)
+    // 2. Cek Sesi Login
     const checkSession = async () => {
       try {
-        // Tunggu minimal 2 detik agar logo sempat terlihat (Branding)
-        const minWait = new Promise(resolve => setTimeout(resolve, 2000));
+        // Tunggu 2.5 detik agar animasi splash selesai dan user bisa lihat branding
+        const minWait = new Promise(resolve => setTimeout(resolve, 2500));
         
-        // Cek data di storage
         const [token, userDataRaw] = await Promise.all([
           AsyncStorage.getItem('@auth_token'),
           AsyncStorage.getItem('@user_data'),
-          minWait // Pastikan minimal nunggu 2 detik
+          minWait 
         ]);
   
         if (token && userDataRaw) {
-          // User sudah login, arahkan sesuai role
           const user = JSON.parse(userDataRaw);
           const role = user.role?.toLowerCase();
-  
-          console.log('Auto-login detected:', role);
-  
+          
           if (role === 'karyawan') {
             router.replace('/(employee)/transaksi' as any);
           } else if (role === 'gudang') {
@@ -88,11 +74,9 @@ export default function SplashScreen() {
           } else if (role === 'owner') {
             router.replace('/(owner)/dashboard' as any);
           } else {
-            // Fallback jika role aneh
             router.replace('/(auth)/login' as any);
           }
         } else {
-          // Belum login, ke halaman login
           router.replace('/(auth)/login' as any);
         }
       } catch (error) {
@@ -101,10 +85,9 @@ export default function SplashScreen() {
       }
     };
 
-    // Jalankan fungsi
     checkSession();
 
-  }, [opacity, scale, translateY, router]); // Dependency lengkap
+  }, [opacity, scale, translateY, router]); 
 
   return (
     <View style={styles.container}>
@@ -114,7 +97,8 @@ export default function SplashScreen() {
           transform: [
             { scale },
             { translateY }
-          ] 
+          ],
+          alignItems: 'center'
         }}
       >
         <LogoMark />
@@ -122,7 +106,6 @@ export default function SplashScreen() {
 
       <View style={styles.footerContainer}>
         <ActivityIndicator size="small" color={Colors.primary} style={styles.spinner} />
-        <Text style={styles.tagline}>Menyajikan yang terbaik setiap hari</Text>
         <Text style={styles.version}>v1.0.0</Text>
       </View>
     </View>
@@ -132,10 +115,9 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#F0F4F8',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
   },
   footerContainer: {
     position: 'absolute',
@@ -145,91 +127,52 @@ const styles = StyleSheet.create({
   spinner: {
     marginBottom: 10,
   },
-  tagline: {
-    color: Colors.textSecondary,
-    fontSize: isSmallScreen ? 12 : 13,
-    letterSpacing: 0.5,
-    marginBottom: 5,
-  },
   version: {
-    color: Colors.textSecondary,
-    fontSize: 10,
-    opacity: 0.5,
+    color: '#B0BEC5',
+    fontSize: 11,
+    fontWeight: '500',
   },
+  
   // LOGO STYLES
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 40,
   },
-  logoShapes: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+  logoCircleContainer: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'white',
     justifyContent: 'center',
-    marginBottom: isSmallScreen ? 12 : 16,
-    height: isSmallScreen ? 60 : 80,
-    position: 'relative',
+    alignItems: 'center',
+    marginBottom: 24,
+    
+    // Shadow Effect
+    elevation: 10,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
   },
-  logoShape: {
-    width: isSmallScreen ? 40 : 50,
-    height: isSmallScreen ? 55 : 70,
-    borderRadius: isSmallScreen ? 20 : 25,
-    position: 'absolute',
-    borderWidth: 3,
-    borderColor: Colors.backgroundLight,
+  logoImage: {
+    width: '70%', 
+    height: '70%', 
   },
-  logoShapeRed: {
-    backgroundColor: Colors.logoRed,
-    left: '25%',
-    transform: [{ rotate: '-15deg' }],
-    zIndex: 3,
-  },
-  logoShapeGreen: {
-    backgroundColor: Colors.logoGreen,
-    left: '50%',
-    marginLeft: isSmallScreen ? -20 : -25,
-    transform: [{ rotate: '0deg' }],
-    zIndex: 2,
-    height: isSmallScreen ? 60 : 75,
-  },
-  logoShapeYellow: {
-    backgroundColor: Colors.logoYellow,
-    left: '75%',
-    marginLeft: isSmallScreen ? -20 : -25,
-    transform: [{ rotate: '15deg' }],
-    zIndex: 1,
-    height: isSmallScreen ? 50 : 65,
-  },
-  logoShapeInner: {
-    flex: 1,
-    borderRadius: 22,
-    borderWidth: 2,
-    borderColor: Colors.backgroundLight,
-    margin: 2,
-  },
-  logoTextContainer: {
+  textContainer: {
     alignItems: 'center',
   },
-  logoTextRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
+  brandTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: Colors.primary,
+    letterSpacing: 0.5,
+    textAlign: 'center',
     marginBottom: 6,
   },
-  logoTextGreen: {
-    fontSize: isSmallScreen ? 24 : 28,
-    fontWeight: 'bold',
-    color: Colors.logoGreen,
-    letterSpacing: 1,
-  },
-  logoTextRed: {
-    fontSize: isSmallScreen ? 24 : 28,
-    fontWeight: 'bold',
-    color: Colors.logoRed,
-    letterSpacing: 1,
-  },
-  logoTextIndonesia: {
-    fontSize: isSmallScreen ? 14 : 16,
-    fontWeight: 'bold',
-    color: Colors.logoGreen,
-    letterSpacing: 2,
+  brandSubtitle: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: Colors.textSecondary,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
   },
 });

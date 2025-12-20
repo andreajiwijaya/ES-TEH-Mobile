@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -18,25 +17,20 @@ import {
   KeyboardAvoidingView
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
-import { authAPI, ownerAPI } from '../../services/api';
+import { ownerAPI } from '../../services/api';
 import { Outlet } from '../../types';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function OutletScreen() {
-  const router = useRouter();
-  
   // State
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [user, setUser] = useState<any>(null);
 
   // Modal State
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedOutlet, setSelectedOutlet] = useState<Outlet | null>(null);
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
   
   // Form Data
   const [formData, setFormData] = useState({
@@ -46,14 +40,8 @@ export default function OutletScreen() {
   });
 
   useEffect(() => {
-    loadUserData();
     loadOutlets();
   }, []);
-
-  const loadUserData = async () => {
-    const userData = await AsyncStorage.getItem('@user_data');
-    if (userData) setUser(JSON.parse(userData));
-  };
 
   const loadOutlets = async () => {
     try {
@@ -65,15 +53,22 @@ export default function OutletScreen() {
         return;
       }
       
-      if (response.data && Array.isArray(response.data)) {
-        const mappedOutlets = response.data.map((o: any) => ({
-          id: o.id,
-          nama: o.nama || 'Outlet Tanpa Nama',
-          alamat: o.alamat || '-',
-          is_active: o.is_active !== false,
-          users_count: o.users_count || 0
-        }));
-        setOutlets(mappedOutlets);
+      if (response.data) {
+        const rawData = Array.isArray(response.data) 
+          ? response.data 
+          : ((response.data as any).data || []);
+
+        if (Array.isArray(rawData)) {
+            const mappedOutlets = rawData.map((o: any) => ({
+              id: o.id,
+              nama: o.nama || 'Outlet Tanpa Nama',
+              alamat: o.alamat || '-',
+              // FIX: Menggunakan Strict Equality (===) agar ESLint happy
+              is_active: o.is_active === 1 || o.is_active === '1' || o.is_active === true,
+              users_count: o.users_count || 0
+            }));
+            setOutlets(mappedOutlets);
+        }
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Gagal memuat outlet');
@@ -88,31 +83,8 @@ export default function OutletScreen() {
     loadOutlets();
   };
 
-  const handleLogout = async () => {
-    Alert.alert(
-      'Keluar',
-      'Apakah Anda yakin ingin keluar?',
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Keluar',
-          style: 'destructive',
-          onPress: async () => {
-            await authAPI.logout();
-            router.replace('/(auth)/login');
-          },
-        },
-      ]
-    );
-    setShowProfileMenu(false);
-  };
-
   const resetForm = () => {
-    setFormData({
-      nama: '',
-      alamat: '',
-      is_active: true,
-    });
+    setFormData({ nama: '', alamat: '', is_active: true });
     setSelectedOutlet(null);
   };
 
@@ -123,7 +95,6 @@ export default function OutletScreen() {
       Alert.alert('Validasi', 'Nama dan alamat outlet harus diisi');
       return;
     }
-
     setProcessing(true);
     try {
       const response = await ownerAPI.createOutlet({
@@ -131,16 +102,13 @@ export default function OutletScreen() {
         alamat: formData.alamat,
         is_active: formData.is_active,
       });
-
-      if (response.error) {
-        Alert.alert('Gagal', response.error);
-        return;
+      if (response.error) Alert.alert('Gagal', response.error);
+      else {
+        Alert.alert('Sukses', 'Outlet berhasil ditambahkan');
+        setShowAddModal(false);
+        resetForm();
+        loadOutlets();
       }
-
-      Alert.alert('Sukses', 'Outlet berhasil ditambahkan');
-      setShowAddModal(false);
-      resetForm();
-      loadOutlets();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Gagal menambahkan outlet');
     } finally {
@@ -164,7 +132,6 @@ export default function OutletScreen() {
       Alert.alert('Validasi', 'Nama dan alamat harus diisi');
       return;
     }
-
     setProcessing(true);
     try {
       const response = await ownerAPI.updateOutlet(selectedOutlet.id, {
@@ -172,16 +139,13 @@ export default function OutletScreen() {
         alamat: formData.alamat,
         is_active: formData.is_active,
       });
-
-      if (response.error) {
-        Alert.alert('Gagal', response.error);
-        return;
+      if (response.error) Alert.alert('Gagal', response.error);
+      else {
+        Alert.alert('Sukses', 'Data outlet berhasil diperbarui');
+        setShowEditModal(false);
+        resetForm();
+        loadOutlets();
       }
-
-      Alert.alert('Sukses', 'Data outlet berhasil diperbarui');
-      setShowEditModal(false);
-      resetForm();
-      loadOutlets();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Gagal mengupdate outlet');
     } finally {
@@ -190,115 +154,100 @@ export default function OutletScreen() {
   };
 
   const handleDelete = async (id: number) => {
-    Alert.alert(
-      'Hapus Outlet',
-      'Yakin ingin menghapus outlet ini? Data terkait mungkin juga akan terhapus.',
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Hapus',
-          style: 'destructive',
-          onPress: async () => {
-            setLoading(true);
-            try {
-              const response = await ownerAPI.deleteOutlet(id);
-              if (response.error) {
-                Alert.alert('Gagal', response.error);
-                return;
-              }
+    Alert.alert('Hapus Outlet', 'Yakin ingin menghapus outlet ini?', [
+      { text: 'Batal', style: 'cancel' },
+      {
+        text: 'Hapus',
+        style: 'destructive',
+        onPress: async () => {
+          setLoading(true);
+          try {
+            const response = await ownerAPI.deleteOutlet(id);
+            if (response.error) Alert.alert('Gagal', response.error);
+            else {
               Alert.alert('Sukses', 'Outlet berhasil dihapus');
               loadOutlets();
-            } catch (error: any) {
-              Alert.alert('Error', error.message);
-            } finally {
-              setLoading(false);
             }
-          },
+          } catch (error: any) {
+            Alert.alert('Error', error.message);
+          } finally {
+            setLoading(false);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const toggleStatus = async (outlet: Outlet) => {
-    // Optimistic update
     const updatedOutlets = outlets.map(o => 
         o.id === outlet.id ? { ...o, is_active: !o.is_active } : o
     );
     setOutlets(updatedOutlets);
-
     try {
         const response = await ownerAPI.updateOutlet(outlet.id, {
             nama: outlet.nama,
             alamat: outlet.alamat,
             is_active: !outlet.is_active
         });
-        
         if (response.error) {
-            loadOutlets(); // Revert jika error
+            loadOutlets(); 
             Alert.alert('Gagal', 'Gagal mengubah status outlet');
         }
     } catch (error) {
-        console.error(error); // Log error agar variabel terpakai
-        loadOutlets(); // Revert
+        console.error(error); 
+        loadOutlets(); 
     }
   };
 
   return (
     <View style={styles.container}>
-      {/* HEADER */}
+      {/* HEADER GREEN DNA */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <View style={styles.logoContainer}>
-            <Ionicons name="storefront" size={24} color={Colors.backgroundLight} />
-            <Text style={styles.headerTitle}>Manajemen Cabang</Text>
-          </View>
-          <TouchableOpacity style={styles.userInfo} onPress={() => setShowProfileMenu(true)} activeOpacity={0.7}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {user?.username ? user.username.substring(0, 2).toUpperCase() : 'OW'}
-              </Text>
-            </View>
-            <View>
-              <Text style={styles.userName}>{user?.username || 'Owner'}</Text>
-              <Text style={styles.userRole}>Pemilik</Text>
-            </View>
-            <Ionicons name="chevron-down" size={16} color={Colors.backgroundLight} style={{ marginLeft: 6 }} />
-          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Manajemen Cabang</Text>
+          <Text style={styles.headerSubtitle}>Kelola lokasi dan operasional outlet</Text>
+        </View>
+        <View style={styles.headerIconBg}>
+          <Ionicons name="storefront" size={28} color={Colors.primary} />
         </View>
       </View>
 
       <ScrollView 
         style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
-        <View style={styles.titleSection}>
+        
+        {/* ACTION BAR */}
+        <View style={styles.actionBar}>
           <View>
-            <Text style={styles.title}>Daftar Outlet</Text>
-            <Text style={styles.subtitle}>Kelola lokasi dan status cabang</Text>
+            <Text style={styles.sectionTitle}>Daftar Outlet</Text>
+            <Text style={styles.sectionSubtitle}>{outlets.length} Cabang Terdaftar</Text>
           </View>
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => { resetForm(); setShowAddModal(true); }}
           >
-            <Ionicons name="add-circle" size={20} color={Colors.backgroundLight} />
-            <Text style={styles.addButtonText}>Tambah</Text>
+            <Ionicons name="add" size={20} color="white" />
+            <Text style={styles.addButtonText}>Cabang Baru</Text>
           </TouchableOpacity>
         </View>
 
-        {/* SUMMARY CARDS */}
-        <View style={styles.summaryCards}>
+        {/* SUMMARY CARDS (Modern Grid) */}
+        <View style={styles.summaryGrid}>
           <View style={styles.summaryCard}>
-            <Ionicons name="storefront-outline" size={32} color={Colors.primary} />
-            <Text style={styles.summaryLabel}>Total Outlet</Text>
+            <View style={[styles.summaryIcon, { backgroundColor: '#E3F2FD' }]}>
+              <Ionicons name="business" size={20} color="#1565C0" />
+            </View>
             <Text style={styles.summaryValue}>{outlets.length}</Text>
+            <Text style={styles.summaryLabel}>Total Cabang</Text>
           </View>
           <View style={styles.summaryCard}>
-            <Ionicons name="checkmark-circle-outline" size={32} color={Colors.success} />
+            <View style={[styles.summaryIcon, { backgroundColor: '#E8F5E9' }]}>
+              <Ionicons name="checkmark-circle" size={20} color="#2E7D32" />
+            </View>
+            <Text style={styles.summaryValue}>{outlets.filter(o => o.is_active).length}</Text>
             <Text style={styles.summaryLabel}>Cabang Aktif</Text>
-            <Text style={styles.summaryValue}>
-              {outlets.filter(o => o.is_active).length}
-            </Text>
           </View>
         </View>
 
@@ -315,63 +264,76 @@ export default function OutletScreen() {
               scrollEnabled={false}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
+                  <Ionicons name="storefront-outline" size={48} color="#E0E0E0" />
                   <Text style={styles.emptyText}>Belum ada outlet terdaftar.</Text>
                 </View>
               }
               renderItem={({ item }) => (
                 <View style={[styles.outletCard, !item.is_active && styles.outletCardInactive]}>
-                  <View style={styles.outletHeader}>
-                    <View style={styles.outletInfo}>
+                  
+                  {/* Card Header */}
+                  <View style={styles.cardHeader}>
+                    <View style={styles.cardTitleSection}>
                       <Text style={styles.outletName}>{item.nama}</Text>
-                      <View style={styles.outletStatusRow}>
-                          <View style={[
-                            styles.statusDot, 
-                            { backgroundColor: item.is_active ? Colors.success : Colors.error }
-                          ]} />
-                          <Text style={styles.statusText}>
-                            {item.is_active ? 'Beroperasi' : 'Tutup Sementara'}
-                          </Text>
+                      <View style={[
+                        styles.statusPill, 
+                        { backgroundColor: item.is_active ? '#E8F5E9' : '#FFEBEE' }
+                      ]}>
+                        <View style={[
+                          styles.statusDot, 
+                          { backgroundColor: item.is_active ? '#4CAF50' : '#F44336' }
+                        ]} />
+                        <Text style={[
+                          styles.statusText, 
+                          { color: item.is_active ? '#2E7D32' : '#C62828' }
+                        ]}>
+                          {item.is_active ? 'Buka' : 'Tutup'}
+                        </Text>
                       </View>
                     </View>
                     
                     <Switch
                         value={item.is_active}
                         onValueChange={() => toggleStatus(item)}
-                        trackColor={{ false: '#e0e0e0', true: Colors.primaryLight }}
+                        trackColor={{ false: '#e0e0e0', true: '#A5D6A7' }} 
                         thumbColor={item.is_active ? Colors.primary : '#f4f3f4'}
                         style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                     />
                   </View>
 
-                  <View style={styles.divider} />
-
-                  <View style={styles.outletDetails}>
-                    <View style={styles.detailRow}>
+                  {/* Card Body */}
+                  <View style={styles.cardBody}>
+                    <View style={styles.infoRow}>
                       <Ionicons name="location-outline" size={16} color={Colors.textSecondary} />
-                      <Text style={styles.detailText}>{item.alamat}</Text>
+                      <Text style={styles.infoText} numberOfLines={2}>{item.alamat}</Text>
                     </View>
-                    <View style={styles.detailRow}>
+                    <View style={styles.infoRow}>
                       <Ionicons name="people-outline" size={16} color={Colors.textSecondary} />
-                      <Text style={styles.detailText}>{item.users_count || 0} Staff Terdaftar</Text>
+                      <Text style={styles.infoText}>{item.users_count || 0} Staff Bertugas</Text>
                     </View>
                   </View>
 
-                  <View style={styles.outletActions}>
+                  {/* Card Actions */}
+                  <View style={styles.cardActions}>
                     <TouchableOpacity
-                      style={[styles.actionButton, styles.editButton]}
+                      style={styles.actionButton}
                       onPress={() => openEditModal(item)}
                     >
-                      <Ionicons name="create-outline" size={16} color={Colors.primary} />
-                      <Text style={[styles.actionButtonText, { color: Colors.primary }]}>Edit Info</Text>
+                      <Ionicons name="create-outline" size={18} color={Colors.primary} />
+                      <Text style={styles.actionTextEdit}>Edit Info</Text>
                     </TouchableOpacity>
+                    
+                    <View style={styles.verticalDivider} />
+                    
                     <TouchableOpacity
-                      style={[styles.actionButton, styles.deleteButton]}
+                      style={styles.actionButton}
                       onPress={() => handleDelete(item.id)}
                     >
-                      <Ionicons name="trash-outline" size={16} color={Colors.error} />
-                      <Text style={[styles.actionButtonText, { color: Colors.error }]}>Hapus</Text>
+                      <Ionicons name="trash-outline" size={18} color="#D32F2F" />
+                      <Text style={styles.actionTextDelete}>Hapus</Text>
                     </TouchableOpacity>
                   </View>
+
                 </View>
               )}
             />
@@ -380,21 +342,11 @@ export default function OutletScreen() {
       </ScrollView>
 
       {/* --- MODAL ADD / EDIT --- */}
-      <Modal
-        visible={showAddModal || showEditModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => { setShowAddModal(false); setShowEditModal(false); }}
-      >
-        <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.modalOverlay}
-        >
+      <Modal visible={showAddModal || showEditModal} transparent animationType="slide">
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {showAddModal ? 'Registrasi Outlet Baru' : 'Edit Informasi Outlet'}
-              </Text>
+              <Text style={styles.modalTitle}>{showAddModal ? 'Tambah Outlet Baru' : 'Edit Data Outlet'}</Text>
               <TouchableOpacity onPress={() => { setShowAddModal(false); setShowEditModal(false); }}>
                 <Ionicons name="close" size={24} color={Colors.text} />
               </TouchableOpacity>
@@ -424,50 +376,29 @@ export default function OutletScreen() {
               </View>
 
               <View style={styles.switchContainer}>
-                <Text style={styles.inputLabel}>Status Operasional</Text>
+                <View>
+                  <Text style={styles.switchLabel}>Status Operasional</Text>
+                  <Text style={styles.switchSubLabel}>Aktifkan jika outlet sudah buka</Text>
+                </View>
                 <Switch
                   value={formData.is_active}
                   onValueChange={(value) => setFormData({ ...formData, is_active: value })}
-                  trackColor={{ false: Colors.border, true: Colors.primaryLight }}
+                  trackColor={{ false: '#E0E0E0', true: '#A5D6A7' }}
                   thumbColor={formData.is_active ? Colors.primary : '#f4f3f4'}
                 />
               </View>
             </ScrollView>
 
             <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => { setShowAddModal(false); setShowEditModal(false); }}
-                disabled={processing}
-              >
-                <Text style={styles.cancelButtonText}>Batal</Text>
+              <TouchableOpacity style={styles.btnCancel} onPress={() => { setShowAddModal(false); setShowEditModal(false); }}>
+                <Text style={styles.btnCancelText}>Batal</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton, processing && styles.saveButtonDisabled]}
-                onPress={showAddModal ? handleAdd : handleUpdate}
-                disabled={processing}
-              >
-                {processing ? (
-                  <ActivityIndicator color={Colors.backgroundLight} />
-                ) : (
-                  <Text style={styles.saveButtonText}>Simpan Data</Text>
-                )}
+              <TouchableOpacity style={styles.btnSave} onPress={showAddModal ? handleAdd : handleUpdate} disabled={processing}>
+                {processing ? <ActivityIndicator color="white" /> : <Text style={styles.btnSaveText}>Simpan Data</Text>}
               </TouchableOpacity>
             </View>
           </View>
         </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Profile Menu */}
-      <Modal visible={showProfileMenu} transparent animationType="fade" onRequestClose={() => setShowProfileMenu(false)}>
-        <TouchableOpacity style={styles.profileModalOverlay} activeOpacity={1} onPress={() => setShowProfileMenu(false)}>
-          <View style={styles.profileMenu}>
-            <TouchableOpacity style={styles.profileMenuItem} onPress={handleLogout}>
-              <Ionicons name="log-out-outline" size={20} color={Colors.error} />
-              <Text style={styles.profileMenuItemText}>Keluar</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
       </Modal>
 
     </View>
@@ -475,89 +406,87 @@ export default function OutletScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  
+  // Header Green DNA
   header: {
     backgroundColor: Colors.primary,
-    paddingTop: Platform.OS === 'ios' ? 50 : 40,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+    paddingBottom: 25,
+    paddingHorizontal: 24,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8,
   },
-  headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  logoContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: Colors.backgroundLight },
-  userInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
-  avatarText: { fontWeight: 'bold', color: Colors.primary },
-  userName: { fontSize: 14, fontWeight: 'bold', color: 'white' },
-  userRole: { fontSize: 12, color: 'rgba(255,255,255,0.8)' },
+  headerContent: { flex: 1 },
+  headerTitle: { fontSize: 24, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
+  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
+  headerIconBg: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
 
-  content: { flex: 1, padding: 20 },
-  titleSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  title: { fontSize: 22, fontWeight: 'bold', color: Colors.text },
-  subtitle: { fontSize: 14, color: Colors.textSecondary },
-  
-  addButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingHorizontal: 15, paddingVertical: 10, borderRadius: 8, gap: 5 },
-  addButtonText: { color: Colors.backgroundLight, fontSize: 14, fontWeight: '600' },
+  content: { flex: 1, marginTop: 10, paddingHorizontal: 24 },
 
-  summaryCards: { flexDirection: 'row', gap: 15, marginBottom: 20 },
-  summaryCard: { flex: 1, backgroundColor: 'white', borderRadius: 12, padding: 15, alignItems: 'center', elevation: 2 },
-  summaryLabel: { fontSize: 12, color: Colors.textSecondary, marginTop: 5 },
-  summaryValue: { fontSize: 18, fontWeight: 'bold', color: Colors.text },
+  // Action Bar
+  actionBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
+  sectionSubtitle: { fontSize: 13, color: Colors.textSecondary },
+  addButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, gap: 6 },
+  addButtonText: { color: 'white', fontWeight: '700', fontSize: 13 },
+
+  // Summary Grid
+  summaryGrid: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  summaryCard: { flex: 1, backgroundColor: 'white', padding: 16, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: '#F0F0F0', elevation: 1 },
+  summaryIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  summaryValue: { fontSize: 20, fontWeight: '800', color: Colors.text },
+  summaryLabel: { fontSize: 12, color: Colors.textSecondary },
 
   loadingContainer: { paddingVertical: 50, alignItems: 'center' },
-  loadingText: { marginTop: 10, color: Colors.textSecondary, fontSize: 14 },
+  loadingText: { marginTop: 10, color: Colors.textSecondary },
   emptyContainer: { alignItems: 'center', paddingVertical: 40 },
-  emptyText: { color: Colors.textSecondary, fontSize: 16 },
+  emptyText: { marginTop: 10, color: Colors.textSecondary },
 
-  // List Item
+  // List Item (Clean Card)
   listSection: { paddingBottom: 20 },
-  outletCard: { backgroundColor: 'white', borderRadius: 12, padding: 15, marginBottom: 15, elevation: 2, borderWidth: 1, borderColor: 'transparent' },
-  outletCardInactive: { opacity: 0.8, backgroundColor: '#F9F9F9' },
+  outletCard: { backgroundColor: 'white', borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F0F0F0', elevation: 1, overflow:'hidden' },
+  outletCardInactive: { backgroundColor: '#FAFAFA', borderColor: '#EEEEEE' },
   
-  outletHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  outletInfo: { flex: 1 },
-  outletName: { fontSize: 16, fontWeight: 'bold', color: Colors.text, marginBottom: 4 },
-  outletStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { fontSize: 12, color: Colors.textSecondary },
-
-  divider: { height: 1, backgroundColor: '#F0F0F0', marginVertical: 12 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: 16, paddingBottom: 12 },
+  cardTitleSection: { flex: 1, paddingRight: 10 },
+  outletName: { fontSize: 16, fontWeight: '700', color: Colors.text, marginBottom: 6 },
   
-  outletDetails: { marginBottom: 15, gap: 8 },
-  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  detailText: { fontSize: 14, color: Colors.text },
+  statusPill: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
+  statusText: { fontSize: 11, fontWeight: '700' },
 
-  outletActions: { flexDirection: 'row', gap: 10 },
-  actionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 10, borderRadius: 8, gap: 5, borderWidth: 1 },
-  editButton: { borderColor: Colors.primary, backgroundColor: '#F0F9FF' },
-  deleteButton: { borderColor: Colors.error, backgroundColor: '#FFF0F0' },
-  actionButtonText: { fontSize: 12, fontWeight: 'bold' },
+  cardBody: { paddingHorizontal: 16, paddingBottom: 16 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  infoText: { fontSize: 13, color: Colors.textSecondary, flex: 1 },
+
+  cardActions: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#F5F5F5' },
+  actionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, gap: 6 },
+  verticalDivider: { width: 1, backgroundColor: '#F5F5F5' },
+  actionTextEdit: { fontSize: 13, fontWeight: '700', color: Colors.primary },
+  actionTextDelete: { fontSize: 13, fontWeight: '700', color: '#D32F2F' },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: Colors.backgroundLight, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.text },
-  modalBody: { marginBottom: 20 },
+  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalTitle: { fontSize: 20, fontWeight: '700', color: Colors.text },
+  modalBody: { marginBottom: 24 },
 
-  inputGroup: { marginBottom: 15 },
-  inputLabel: { fontWeight: '600', marginBottom: 8, color: Colors.text, fontSize: 14 },
-  input: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, fontSize: 16, backgroundColor: 'white' },
+  inputGroup: { marginBottom: 16 },
+  inputLabel: { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 8 },
+  input: { borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, padding: 14, fontSize: 15, backgroundColor: '#FAFAFA' },
   textArea: { minHeight: 80, textAlignVertical: 'top' },
-  
-  switchContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
 
-  modalFooter: { flexDirection: 'row', gap: 10 },
-  modalButton: { flex: 1, padding: 15, borderRadius: 8, alignItems: 'center' },
-  cancelButton: { backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#ddd' },
-  cancelButtonText: { fontWeight: 'bold', color: '#666' },
-  saveButton: { backgroundColor: Colors.primary },
-  saveButtonText: { fontWeight: 'bold', color: 'white' },
-  saveButtonDisabled: { opacity: 0.7 },
+  switchContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, backgroundColor: '#FAFAFA', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#EEEEEE' },
+  switchLabel: { fontSize: 15, fontWeight: '600', color: Colors.text },
+  switchSubLabel: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
 
-  // Profile Menu
-  profileModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'flex-start', alignItems: 'flex-end', paddingTop: 60, paddingRight: 20 },
-  profileMenu: { backgroundColor: 'white', borderRadius: 12, minWidth: 160, padding: 5, elevation: 8 },
-  profileMenuItem: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
-  profileMenuItemText: { color: Colors.error, fontWeight: 'bold' },
+  modalFooter: { flexDirection: 'row', gap: 12 },
+  btnCancel: { flex: 1, padding: 16, alignItems: 'center', borderRadius: 12, backgroundColor: '#F5F5F5' },
+  btnCancelText: { fontWeight: '700', color: '#757575' },
+  btnSave: { flex: 1, padding: 16, alignItems: 'center', borderRadius: 12, backgroundColor: Colors.primary },
+  btnSaveText: { fontWeight: '700', color: 'white' },
 });
