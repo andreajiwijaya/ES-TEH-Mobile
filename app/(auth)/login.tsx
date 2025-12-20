@@ -56,9 +56,9 @@ export default function LoginScreen() {
 
       const role = user.role?.toLowerCase();
       switch (role) {
-        case 'karyawan': router.replace('/(employee)/transaksi'); break;
-        case 'gudang': router.replace('/(warehouse)/overview'); break;
-        case 'owner': router.replace('/(owner)/dashboard'); break;
+        case 'karyawan': router.replace('/(kasir)/transaksi'); break;
+        case 'gudang': router.replace('/(gudang)/beranda'); break;
+        case 'owner': router.replace('/(owner)/beranda'); break;
         default:
           setLoading(false);
           await AsyncStorage.multiRemove(['@auth_token', '@user_data']);

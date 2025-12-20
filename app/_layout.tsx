@@ -26,9 +26,9 @@ export default function RootLayout() {
         {/* Group Routes (Modul Aplikasi) */}
         {/* Gunakan animasi 'fade' untuk perpindahan antar Role agar lebih smooth */}
         <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
-        <Stack.Screen name="(employee)" options={{ animation: 'fade' }} />
+        <Stack.Screen name="(kasir)" options={{ animation: 'fade' }} />
         <Stack.Screen name="(owner)" options={{ animation: 'fade' }} />
-        <Stack.Screen name="(warehouse)" options={{ animation: 'fade' }} />
+        <Stack.Screen name="(gudang)" options={{ animation: 'fade' }} />
       </Stack>
     </View>
   );
