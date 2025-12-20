@@ -1,94 +1,114 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Colors } from '../../constants/Colors';
 
 export default function EmployeeTabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false, // Header di-handle oleh masing-masing screen
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: '#9CA3AF', // Abu-abu soft
-        tabBarHideOnKeyboard: true, // PENTING: Sembunyikan tab saat keyboard muncul
-        tabBarStyle: {
-          backgroundColor: Colors.backgroundLight,
-          borderTopWidth: 0, // Hilangkan garis border kasar
-          elevation: 10, // Shadow untuk Android
-          shadowColor: '#000', // Shadow untuk iOS
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          height: Platform.OS === 'ios' ? 85 : 65, // Sedikit lebih tinggi agar nyaman disentuh
-          paddingBottom: Platform.OS === 'ios' ? 25 : 10,
-          paddingTop: 10,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '500',
-          marginBottom: Platform.OS === 'android' ? 5 : 0,
-        },
+        headerShown: false,
+        tabBarActiveTintColor: Colors.primary, // Hijau saat aktif
+        tabBarInactiveTintColor: '#B0BEC5', // Abu soft saat tidak aktif
+        tabBarShowLabel: true, 
+        tabBarHideOnKeyboard: true, // Keyboard tidak menutupi tab
+        
+        // Style Tab Bar Modern (Sama dengan Owner)
+        tabBarStyle: styles.tabBar,
+        tabBarItemStyle: styles.tabItem,
+        tabBarLabelStyle: styles.tabLabel,
       }}
     >
-      {/* Tab 1: Transaksi (Kasir) */}
       <Tabs.Screen
         name="transaksi"
         options={{
           title: 'Kasir',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? "fast-food" : "fast-food-outline"} 
-              size={24} 
-              color={color} 
-            />
+            <TabIcon focused={focused} color={color} name="fast-food" />
           ),
         }}
       />
-
-      {/* Tab 2: Stok Bahan */}
       <Tabs.Screen
         name="stok"
         options={{
           title: 'Stok',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? "cube" : "cube-outline"} 
-              size={24} 
-              color={color} 
-            />
+            <TabIcon focused={focused} color={color} name="cube" />
           ),
         }}
       />
-
-      {/* Tab 3: Riwayat Penjualan */}
       <Tabs.Screen
         name="riwayat"
         options={{
           title: 'Riwayat',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? "receipt" : "receipt-outline"} 
-              size={24} 
-              color={color} 
-            />
+            <TabIcon focused={focused} color={color} name="receipt" />
           ),
         }}
       />
-
-      {/* Tab 4: Pengaturan Akun */}
       <Tabs.Screen
         name="pengaturan"
         options={{
           title: 'Akun',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? "settings" : "settings-outline"} 
-              size={24} 
-              color={color} 
-            />
+            // Menggunakan icon 'person' agar konsisten dengan judul 'Akun'
+            // dan sama dengan layout Owner
+            <TabIcon focused={focused} color={color} name="person" />
           ),
         }}
       />
     </Tabs>
   );
 }
+
+// Komponen Helper untuk Icon dengan Efek "Green Pill"
+const TabIcon = ({ focused, color, name }: { focused: boolean; color: string; name: keyof typeof Ionicons.glyphMap }) => {
+  return (
+    <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
+      <Ionicons 
+        name={focused ? name : (name + '-outline') as any} 
+        size={22} 
+        color={color} 
+      />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 0, 
+    elevation: 10, // Shadow Android
+    shadowColor: '#000', // Shadow iOS
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    
+    // Tinggi responsif
+    height: Platform.OS === 'ios' ? 88 : 70,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
+    paddingTop: 10,
+  },
+  tabItem: {
+    paddingVertical: 4, 
+  },
+  tabLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  
+  // Icon Styles (Green Pill Effect)
+  iconContainer: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+    marginBottom: 2,
+  },
+  iconContainerActive: {
+    backgroundColor: '#E8F5E9', // Background Hijau Muda Soft
+    transform: [{ scale: 1.05 }], 
+  },
+});

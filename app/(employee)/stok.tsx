@@ -13,6 +13,7 @@ import {
   RefreshControl,
   Modal,
   KeyboardAvoidingView,
+  StatusBar
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { Bahan, PermintaanStok } from '../../types';
@@ -101,7 +102,6 @@ export default function StokScreen() {
   }, []);
 
   // --- INITIAL LOAD ---
-  // REVISI: Menambahkan loadAllData ke dependency array
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
@@ -257,25 +257,27 @@ export default function StokScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header Area */}
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+      
+      {/* HEADER GREEN DNA */}
       <View style={styles.header}>
-        <View style={styles.headerTop}>
+        <View style={styles.headerContent}>
           <View>
             <Text style={styles.headerTitle}>Stok Bahan</Text>
-            <Text style={styles.headerSubtitle}>Outlet Utama</Text>
+            <Text style={styles.headerSubtitle}>Kelola persediaan outlet</Text>
           </View>
-          <View style={styles.userInfo}>
-            <View style={styles.avatar}><Text style={styles.avatarText}>KS</Text></View>
+          <View style={styles.headerIconBg}>
+            <Ionicons name="cube" size={24} color={Colors.primary} />
           </View>
         </View>
 
-        {/* Tab Navigation */}
+        {/* Tab Navigation (Pill Style) */}
         <View style={styles.tabContainer}>
           <TouchableOpacity 
             style={[styles.tabButton, activeTab === 'stok' && styles.tabActive]}
             onPress={() => setActiveTab('stok')}
           >
-            <Ionicons name="cube-outline" size={18} color={activeTab === 'stok' ? Colors.primary : '#fff'} />
+            <Ionicons name="layers" size={16} color={activeTab === 'stok' ? Colors.primary : 'rgba(255,255,255,0.7)'} />
             <Text style={[styles.tabText, activeTab === 'stok' && styles.tabTextActive]}>Stok Outlet</Text>
           </TouchableOpacity>
           
@@ -283,7 +285,7 @@ export default function StokScreen() {
             style={[styles.tabButton, activeTab === 'riwayat' && styles.tabActive]}
             onPress={() => setActiveTab('riwayat')}
           >
-            <Ionicons name="time-outline" size={18} color={activeTab === 'riwayat' ? Colors.primary : '#fff'} />
+            <Ionicons name="time" size={16} color={activeTab === 'riwayat' ? Colors.primary : 'rgba(255,255,255,0.7)'} />
             <Text style={[styles.tabText, activeTab === 'riwayat' && styles.tabTextActive]}>Riwayat Request</Text>
           </TouchableOpacity>
         </View>
@@ -292,12 +294,12 @@ export default function StokScreen() {
       <ScrollView
         style={styles.content}
         contentContainerStyle={{ paddingBottom: 100 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
       >
         {/* --- CONTENT: TAB STOK --- */}
         {activeTab === 'stok' && (
           <>
-            {/* Overview Cards */}
+            {/* Overview Cards (Modern Grid) */}
             <View style={styles.overviewContainer}>
               <View style={styles.overviewCard}>
                 <View style={[styles.iconCircle, { backgroundColor: '#E3F2FD' }]}>
@@ -538,333 +540,106 @@ export default function StokScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  
+  // HEADER GREEN DNA
   header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    paddingBottom: 25,
+    paddingHorizontal: 24,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3.84,
+    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8,
   },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
+  headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  headerTitle: { fontSize: 24, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
+  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
+  headerIconBg: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
+
+  // TAB PILL
+  tabContainer: { 
+    flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 16, padding: 4 
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: Colors.backgroundLight,
+  tabButton: { 
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', 
+    paddingVertical: 10, borderRadius: 12, gap: 6 
   },
-  headerSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+  tabActive: { backgroundColor: 'white', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4 },
+  tabText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.9)' },
+  tabTextActive: { color: Colors.primary, fontWeight: '700' },
+
+  content: { flex: 1, marginTop: 10, paddingHorizontal: 24 },
+
+  // OVERVIEW CARDS
+  overviewContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
+  overviewCard: { 
+    flex: 1, backgroundColor: 'white', marginHorizontal: 4, borderRadius: 16, padding: 12, alignItems: 'center',
+    borderWidth: 1, borderColor: '#F0F0F0', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05 
   },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  iconCircle: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  overviewValue: { fontSize: 18, fontWeight: '800', color: Colors.text },
+  overviewLabel: { fontSize: 11, color: Colors.textSecondary, fontWeight: '600' },
+
+  // SEARCH BAR
+  searchContainer: { 
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', 
+    borderRadius: 12, paddingHorizontal: 15, marginBottom: 20, 
+    borderWidth: 1, borderColor: '#E0E0E0', height: 50 
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.backgroundLight,
-    justifyContent: 'center',
-    alignItems: 'center',
+  searchInput: { flex: 1, marginLeft: 10, fontSize: 15, color: Colors.text },
+
+  // CARD LIST
+  card: { 
+    backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 16,
+    elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4,
+    borderWidth: 1, borderColor: '#F0F0F0'
   },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.primary,
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: Colors.text, marginBottom: 2 },
+  cardSubtitle: { fontSize: 12, color: Colors.textSecondary },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  statusText: { fontSize: 11, fontWeight: '700' },
+  divider: { height: 1, backgroundColor: '#F0F0F0', marginVertical: 12 },
+  
+  detailsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  detailItem: { flex: 1 },
+  detailLabel: { fontSize: 12, color: Colors.textSecondary, marginBottom: 4 },
+  detailValue: { fontSize: 15, fontWeight: '700', color: Colors.text },
+
+  actionButton: { 
+    marginTop: 15, backgroundColor: '#E3F2FD', paddingVertical: 10, borderRadius: 8,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 
   },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 12,
-    padding: 4,
-  },
-  tabButton: {
-    flex: 1,
-    flexDirection: 'row',
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 10,
-    gap: 6,
-  },
-  tabActive: {
-    backgroundColor: Colors.backgroundLight,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-  },
-  tabText: {
-    color: 'rgba(255,255,255,0.9)',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  tabTextActive: {
-    color: Colors.primary,
-    fontWeight: 'bold',
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-  },
-  overviewContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  overviewCard: {
-    flex: 1,
-    marginHorizontal: 4,
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 16,
-    padding: 12,
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-  },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  overviewValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.text,
-  },
-  overviewLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    height: 50,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 10,
-    fontSize: 16,
-    color: Colors.text,
-  },
-  card: {
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: 2,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#F0F0F0',
-    marginVertical: 12,
-  },
-  detailsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  detailItem: {
-    flex: 1,
-  },
-  detailLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginBottom: 4,
-  },
-  detailValue: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  actionButton: {
-    marginTop: 15,
-    backgroundColor: '#E3F2FD',
-    paddingVertical: 10,
-    borderRadius: 8,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-  },
-  actionButtonText: {
-    color: Colors.primary,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  footerNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    justifyContent: 'flex-end',
-    gap: 4,
-  },
-  footerNoteText: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontStyle: 'italic',
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 50,
-  },
-  emptyText: {
-    marginTop: 10,
-    color: Colors.textSecondary,
-    fontSize: 16,
-  },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: Colors.backgroundLight,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    elevation: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.text,
-  },
-  modalBody: {
-    marginBottom: 24,
-  },
-  infoBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F7FA',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 20,
-  },
-  infoBoxLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  infoBoxValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.text,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 8,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    height: 50,
-  },
-  input: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.text,
-  },
-  inputSuffix: {
-    fontSize: 16,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  helperText: {
-    fontSize: 12,
-    color: Colors.primary,
-    marginTop: 8,
-    fontStyle: 'italic',
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modalButton: {
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonPrimary: {
-    backgroundColor: Colors.primary,
-  },
-  buttonDelete: {
-    backgroundColor: Colors.error,
-    width: 50,
-  },
-  buttonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
+  actionButtonText: { color: Colors.primary, fontWeight: '700', fontSize: 13 },
+
+  footerNote: { flexDirection: 'row', alignItems: 'center', marginTop: 10, justifyContent: 'flex-end', gap: 4 },
+  footerNoteText: { fontSize: 12, color: Colors.primary, fontStyle: 'italic' },
+
+  emptyState: { alignItems: 'center', justifyContent: 'center', marginTop: 50 },
+  emptyText: { marginTop: 10, color: Colors.textSecondary, fontSize: 14 },
+
+  // MODAL STYLES
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, elevation: 20 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
+  modalBody: { marginBottom: 24 },
+  
+  infoBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F7FA', padding: 12, borderRadius: 12, marginBottom: 20 },
+  infoBoxLabel: { fontSize: 12, color: Colors.textSecondary },
+  infoBoxValue: { fontSize: 15, fontWeight: '700', color: Colors.text },
+  
+  inputLabel: { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 8 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, paddingHorizontal: 15, height: 50 },
+  input: { flex: 1, fontSize: 16, fontWeight: '700', color: Colors.text },
+  inputSuffix: { fontSize: 14, color: Colors.textSecondary, fontWeight: '600' },
+  
+  helperText: { fontSize: 12, color: Colors.primary, marginTop: 8, fontStyle: 'italic' },
+  
+  modalFooter: { flexDirection: 'row', gap: 12 },
+  modalButton: { paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  buttonPrimary: { backgroundColor: Colors.primary },
+  buttonDelete: { backgroundColor: '#FFEBEE', width: 50 },
+  buttonText: { color: 'white', fontWeight: 'bold', fontSize: 15 },
 });

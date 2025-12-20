@@ -312,24 +312,24 @@ export default function TransaksiScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
       
-      {/* HEADER */}
+      {/* HEADER GREEN DNA */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <View>
+          <View style={styles.headerTextContainer}>
             <Text style={styles.headerTitle}>{isManageMode ? 'Manajemen Menu' : 'Kasir Outlet'}</Text>
             <Text style={styles.headerSubtitle}>{isManageMode ? 'Tambah, Edit & Hapus' : 'Penjualan Hari Ini'}</Text>
           </View>
           
-          <View style={[styles.modeSwitch, isManageMode ? styles.modeSwitchActive : styles.modeSwitchInactive]}>
-            <Text style={[styles.modeText, isManageMode ? {color: Colors.primary} : {color: 'white'}]}>
-              {isManageMode ? 'Admin' : 'Kasir'}
+          <View style={styles.modeSwitchContainer}>
+            <Text style={[styles.modeLabel, {color: 'rgba(255,255,255,0.9)'}]}>
+                {isManageMode ? 'Admin Mode' : 'Kasir Mode'}
             </Text>
             <Switch
               value={isManageMode}
               onValueChange={setIsManageMode}
-              trackColor={{ false: 'rgba(255,255,255,0.3)', true: 'rgba(0,0,0,0.1)' }}
+              trackColor={{ false: 'rgba(255,255,255,0.3)', true: 'rgba(255,255,255,0.3)' }}
               thumbColor={'white'}
-              style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+              ios_backgroundColor="rgba(255,255,255,0.1)"
             />
           </View>
         </View>
@@ -339,7 +339,7 @@ export default function TransaksiScreen() {
       <View style={styles.content}>
         {!isManageMode && (
           <View style={styles.categoryContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingHorizontal: 15}}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingHorizontal: 20}}>
               {categories.map((cat, index) => (
                 <TouchableOpacity
                   key={index}
@@ -438,7 +438,7 @@ export default function TransaksiScreen() {
             </View>
             <View style={styles.cartBarRight}>
               <Text style={styles.checkoutText}>Bayar</Text>
-              <Ionicons name="arrow-forward" size={20} color="white" />
+              <Ionicons name="arrow-forward" size={18} color="white" />
             </View>
           </TouchableOpacity>
         </View>
@@ -451,7 +451,7 @@ export default function TransaksiScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{editingProduct ? 'Edit Menu' : 'Tambah Menu Baru'}</Text>
               <TouchableOpacity onPress={() => setShowProductModal(false)} style={styles.closeBtn}>
-                <Ionicons name="close" size={24} color="#333" />
+                <Ionicons name="close" size={24} color={Colors.text} />
               </TouchableOpacity>
             </View>
 
@@ -461,44 +461,50 @@ export default function TransaksiScreen() {
                   <Image source={{ uri: formImage.uri }} style={styles.uploadedImage} />
                 ) : (
                   <View style={styles.uploadPlaceholderContent}>
-                    <Ionicons name="camera" size={40} color={Colors.primary} />
-                    <Text style={styles.uploadText}>Ketuk untuk upload foto</Text>
+                    <Ionicons name="camera" size={32} color={Colors.primary} />
+                    <Text style={styles.uploadText}>Upload Foto Menu</Text>
                   </View>
                 )}
                 <View style={styles.uploadIconBadge}>
-                  <Ionicons name="create" size={12} color="white" />
+                  <Ionicons name="pencil" size={12} color="white" />
                 </View>
               </TouchableOpacity>
 
-              <Text style={styles.label}>Nama Menu</Text>
-              <TextInput 
-                style={styles.input} 
-                value={formName} 
-                onChangeText={setFormName} 
-                placeholder="Contoh: Es Teh Leci Jumbo" 
-              />
-
-              <Text style={styles.label}>Kategori</Text>
-              <View style={styles.catSelectRow}>
-                {['Minuman', 'Makanan', 'Topping'].map(cat => (
-                  <TouchableOpacity 
-                    key={cat} 
-                    style={[styles.catSelectOption, formCategory === cat && styles.catSelectActive]}
-                    onPress={() => setFormCategory(cat)}
-                  >
-                    <Text style={[styles.catSelectText, formCategory === cat && styles.catSelectTextActive]}>{cat}</Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Nama Menu</Text>
+                <TextInput 
+                    style={styles.input} 
+                    value={formName} 
+                    onChangeText={setFormName} 
+                    placeholder="Contoh: Es Teh Leci Jumbo" 
+                />
               </View>
 
-              <Text style={styles.label}>Harga (Rp)</Text>
-              <TextInput 
-                style={styles.input} 
-                value={formPrice} 
-                onChangeText={setFormPrice} 
-                keyboardType="numeric" 
-                placeholder="0" 
-              />
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Kategori</Text>
+                <View style={styles.catSelectRow}>
+                    {['Minuman', 'Makanan', 'Topping'].map(cat => (
+                    <TouchableOpacity 
+                        key={cat} 
+                        style={[styles.catSelectOption, formCategory === cat && styles.catSelectActive]}
+                        onPress={() => setFormCategory(cat)}
+                    >
+                        <Text style={[styles.catSelectText, formCategory === cat && styles.catSelectTextActive]}>{cat}</Text>
+                    </TouchableOpacity>
+                    ))}
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Harga (Rp)</Text>
+                <TextInput 
+                    style={styles.input} 
+                    value={formPrice} 
+                    onChangeText={setFormPrice} 
+                    keyboardType="numeric" 
+                    placeholder="0" 
+                />
+              </View>
 
               <TouchableOpacity 
                 style={[styles.saveButton, processing && styles.disabledBtn]} 
@@ -523,7 +529,7 @@ export default function TransaksiScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Detail Pesanan</Text>
               <TouchableOpacity onPress={() => setShowCheckoutModal(false)} style={styles.closeBtn}>
-                <Ionicons name="close" size={24} color="#333" />
+                <Ionicons name="close" size={24} color={Colors.text} />
               </TouchableOpacity>
             </View>
 
@@ -564,7 +570,7 @@ export default function TransaksiScreen() {
                   style={[styles.payMethodCard, selectedPayment === 'tunai' && styles.payMethodActive]}
                   onPress={() => { setSelectedPayment('tunai'); setPaymentProof(null); }}
                 >
-                  <Ionicons name="cash" size={24} color={selectedPayment === 'tunai' ? Colors.primary : '#888'} />
+                  <Ionicons name="cash" size={22} color={selectedPayment === 'tunai' ? Colors.primary : '#888'} />
                   <Text style={[styles.payMethodText, selectedPayment === 'tunai' && styles.payMethodTextActive]}>Tunai</Text>
                 </TouchableOpacity>
 
@@ -572,7 +578,7 @@ export default function TransaksiScreen() {
                   style={[styles.payMethodCard, selectedPayment === 'qris' && styles.payMethodActive]}
                   onPress={() => setSelectedPayment('qris')}
                 >
-                  <Ionicons name="qr-code" size={24} color={selectedPayment === 'qris' ? Colors.primary : '#888'} />
+                  <Ionicons name="qr-code" size={22} color={selectedPayment === 'qris' ? Colors.primary : '#888'} />
                   <Text style={[styles.payMethodText, selectedPayment === 'qris' && styles.payMethodTextActive]}>QRIS</Text>
                 </TouchableOpacity>
               </View>
@@ -620,32 +626,27 @@ export default function TransaksiScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
   
-  // Header
+  // HEADER GREEN DNA
   header: {
     backgroundColor: Colors.primary,
-    paddingTop: Platform.OS === 'ios' ? 50 : 40,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+    paddingBottom: 25,
+    paddingHorizontal: 24,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
-    elevation: 4,
-    shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity:0.2, shadowRadius:4
+    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8,
   },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: 'white' },
-  headerSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 2 },
-  modeSwitch: { 
-    flexDirection: 'row', alignItems: 'center', 
-    backgroundColor: 'rgba(255,255,255,0.2)', 
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 
-  },
-  modeSwitchActive: { backgroundColor: 'white' },
-  modeSwitchInactive: { backgroundColor: 'rgba(255,255,255,0.2)' },
-  modeText: { fontSize: 12, fontWeight: '700', marginRight: 8 },
+  headerTextContainer: { flex: 1 },
+  headerTitle: { fontSize: 24, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
+  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
+  
+  modeSwitchContainer: { alignItems: 'flex-end' },
+  modeLabel: { fontSize: 10, fontWeight: '600', marginBottom: 4 },
 
   // Content
-  content: { flex: 1 },
-  categoryContainer: { paddingVertical: 15 },
+  content: { flex: 1, marginTop: 10 },
+  categoryContainer: { paddingVertical: 10, marginBottom: 5 },
   catPill: {
     paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
     backgroundColor: 'white', marginRight: 10, borderWidth: 1, borderColor: '#eee'
@@ -655,7 +656,7 @@ const styles = StyleSheet.create({
   catTextActive: { color: 'white' },
 
   // Grid
-  gridContainer: { paddingHorizontal: 15, paddingTop: 5 },
+  gridContainer: { paddingHorizontal: 20, paddingTop: 5 },
   rowWrapper: { justifyContent: 'space-between' },
   centerState: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 },
   loadingText: { marginTop: 10, color: '#888' },
@@ -663,14 +664,15 @@ const styles = StyleSheet.create({
 
   // Card
   card: {
-    width: (screenWidth / 2) - 22,
+    width: (screenWidth - 55) / 2, // Perhitungan lebar card agar pas 2 kolom
     backgroundColor: 'white', borderRadius: 16,
     marginBottom: 15,
-    shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity:0.05, shadowRadius:4, elevation: 3
+    shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity:0.03, shadowRadius:4, elevation: 2,
+    borderWidth: 1, borderColor: '#F0F0F0'
   },
   imageWrapper: {
-    height: 140, borderTopLeftRadius: 16, borderTopRightRadius: 16,
-    backgroundColor: '#eee', overflow: 'hidden', position: 'relative'
+    height: 130, borderTopLeftRadius: 16, borderTopRightRadius: 16,
+    backgroundColor: '#F5F5F5', overflow: 'hidden', position: 'relative'
   },
   cardImage: { width: '100%', height: '100%' },
   imagePlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
@@ -679,10 +681,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)', padding: 6, borderRadius: 20
   },
   cardContent: { padding: 12 },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: '#333', marginBottom: 2, height: 40 },
-  cardCategory: { fontSize: 11, color: '#888', marginBottom: 6 },
+  cardTitle: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: 2, height: 38 },
+  cardCategory: { fontSize: 11, color: Colors.textSecondary, marginBottom: 6 },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardPrice: { fontSize: 15, fontWeight: 'bold', color: Colors.primary },
+  cardPrice: { fontSize: 14, fontWeight: '800', color: Colors.primary },
   addBtnSmall: {
     backgroundColor: Colors.primary, width: 24, height: 24, borderRadius: 12,
     justifyContent: 'center', alignItems: 'center'
@@ -690,7 +692,7 @@ const styles = StyleSheet.create({
 
   // FAB
   fab: {
-    position: 'absolute', bottom: 30, right: 20,
+    position: 'absolute', bottom: 30, right: 24,
     width: 56, height: 56, borderRadius: 28,
     backgroundColor: Colors.primary,
     justifyContent: 'center', alignItems: 'center',
@@ -699,103 +701,103 @@ const styles = StyleSheet.create({
 
   // Cart Bar
   cartBarContainer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    padding: 20, backgroundColor: 'transparent'
+    position: 'absolute', bottom: 20, left: 24, right: 24,
   },
   cartBar: {
     backgroundColor: Colors.primary, borderRadius: 16, padding: 16,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    shadowColor: '#000', shadowOffset: {width:0, height:4}, shadowOpacity:0.2, shadowRadius:6, elevation: 8
+    shadowColor: '#000', shadowOffset: {width:0, height:4}, shadowOpacity:0.2, shadowRadius:8, elevation: 8
   },
   cartBarLeft: { flexDirection: 'row', alignItems: 'center' },
-  cartIconBadge: { position: 'relative', marginRight: 15, backgroundColor: 'white', padding: 8, borderRadius: 12 },
+  cartIconBadge: { position: 'relative', marginRight: 15, backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 },
   badgeCount: {
     position: 'absolute', top: -5, right: -5,
-    backgroundColor: Colors.error, borderRadius: 10, width: 20, height: 20,
-    justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'white'
+    backgroundColor: Colors.error, borderRadius: 10, width: 18, height: 18,
+    justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: Colors.primary
   },
-  badgeText: { color: 'white', fontSize: 10, fontWeight: 'bold' },
-  cartTotalLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 11 },
-  cartTotalValue: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  cartBarRight: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
-  checkoutText: { color: 'white', fontWeight: 'bold', marginRight: 6 },
+  badgeText: { color: 'white', fontSize: 9, fontWeight: 'bold' },
+  cartTotalLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 10 },
+  cartTotalValue: { color: 'white', fontSize: 16, fontWeight: '800' },
+  cartBarRight: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  checkoutText: { color: 'white', fontWeight: 'bold', marginRight: 6, fontSize: 12 },
 
   // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContainer: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '85%', overflow: 'hidden' },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 20, borderBottomWidth: 1, borderBottomColor: '#eee'
+    padding: 24, borderBottomWidth: 1, borderBottomColor: '#F0F0F0'
   },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
   closeBtn: { padding: 4 },
-  modalScroll: { padding: 20 },
+  modalScroll: { padding: 24 },
   
   // Image Upload Style
   imageUploadArea: {
-    height: 180, borderRadius: 16, backgroundColor: '#F5F7FA',
-    borderWidth: 2, borderColor: '#E0E0E0', borderStyle: 'dashed',
-    justifyContent: 'center', alignItems: 'center', marginBottom: 20,
+    height: 160, borderRadius: 16, backgroundColor: '#FAFAFA',
+    borderWidth: 1, borderColor: '#E0E0E0', borderStyle: 'dashed',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 24,
     position: 'relative'
   },
   uploadedImage: { width: '100%', height: '100%', borderRadius: 14 },
   uploadPlaceholderContent: { alignItems: 'center' },
-  uploadText: { marginTop: 10, color: '#888', fontWeight: '600' },
+  uploadText: { marginTop: 10, color: Colors.textSecondary, fontWeight: '600', fontSize: 13 },
   uploadIconBadge: { position: 'absolute', bottom: 10, right: 10, backgroundColor: Colors.primary, padding: 6, borderRadius: 20 },
 
   // Form Inputs
-  label: { fontSize: 14, fontWeight: '700', color: '#333', marginBottom: 8, marginTop: 5 },
+  inputGroup: { marginBottom: 16 },
+  label: { fontSize: 13, fontWeight: '600', color: Colors.text, marginBottom: 8 },
   input: {
-    borderWidth: 1, borderColor: '#ddd', borderRadius: 12,
-    padding: 14, fontSize: 16, backgroundColor: '#fff', marginBottom: 15
+    borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12,
+    padding: 14, fontSize: 15, backgroundColor: '#FAFAFA'
   },
-  catSelectRow: { flexDirection: 'row', gap: 10, marginBottom: 15 },
+  catSelectRow: { flexDirection: 'row', gap: 10 },
   catSelectOption: {
     flex: 1, paddingVertical: 12, borderRadius: 12,
-    borderWidth: 1, borderColor: '#ddd', alignItems: 'center'
+    borderWidth: 1, borderColor: '#E0E0E0', alignItems: 'center', backgroundColor: '#FAFAFA'
   },
-  catSelectActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  catSelectText: { color: '#666', fontWeight: '600' },
-  catSelectTextActive: { color: 'white' }, // FIX: Renamed from catTextActive to avoid duplicate
+  catSelectActive: { backgroundColor: '#E8F5E9', borderColor: Colors.primary },
+  catSelectText: { color: Colors.textSecondary, fontWeight: '600', fontSize: 13 },
+  catSelectTextActive: { color: Colors.primary }, 
   
   // Cart Items
-  cartScroll: { padding: 20 },
+  cartScroll: { padding: 24 },
   cartItemRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0'
+    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F5F5F5'
   },
-  itemRowName: { fontSize: 15, fontWeight: '600', color: '#333' },
-  itemRowPrice: { fontSize: 13, color: '#888', marginTop: 2 },
-  qtyControl: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F7FA', borderRadius: 8, padding: 4 },
-  qtyBtn: { padding: 6 },
-  qtyValue: { width: 30, textAlign: 'center', fontWeight: 'bold' },
+  itemRowName: { fontSize: 14, fontWeight: '600', color: Colors.text },
+  itemRowPrice: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
+  qtyControl: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', borderRadius: 8, padding: 4 },
+  qtyBtn: { padding: 8 },
+  qtyValue: { width: 30, textAlign: 'center', fontWeight: 'bold', fontSize: 13 },
   trashBtn: { marginLeft: 15, padding: 8, backgroundColor: '#FFEBEE', borderRadius: 8 },
 
   // Payment Section
-  paymentContainer: { padding: 20, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: '#eee' },
-  paymentSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  paymentLabel: { fontSize: 16, fontWeight: 'bold', color: '#333' },
-  paymentValue: { fontSize: 20, fontWeight: 'bold', color: Colors.primary },
+  paymentContainer: { padding: 24, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: '#F0F0F0' },
+  paymentSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  paymentLabel: { fontSize: 16, fontWeight: 'bold', color: Colors.text },
+  paymentValue: { fontSize: 20, fontWeight: '800', color: Colors.primary },
   
-  paymentMethodsRow: { flexDirection: 'row', gap: 12, marginBottom: 15 },
+  paymentMethodsRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
   payMethodCard: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#ddd', gap: 8
+    padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E0E0E0', gap: 8, backgroundColor: '#FAFAFA'
   },
-  payMethodActive: { borderColor: Colors.primary, backgroundColor: '#F0F9FF' },
-  payMethodText: { fontWeight: '600', color: '#666' },
+  payMethodActive: { borderColor: Colors.primary, backgroundColor: '#E8F5E9' },
+  payMethodText: { fontWeight: '600', color: Colors.textSecondary, fontSize: 13 },
   payMethodTextActive: { color: Colors.primary },
 
-  proofContainer: { marginBottom: 15 },
+  proofContainer: { marginBottom: 20 },
   proofUploadBtn: {
     padding: 14, borderRadius: 12, borderWidth: 1, borderColor: Colors.primary,
-    borderStyle: 'dashed', backgroundColor: '#F0F9FF', alignItems: 'center'
+    borderStyle: 'dashed', backgroundColor: '#E8F5E9', alignItems: 'center'
   },
 
   // Buttons
-  saveButton: { backgroundColor: Colors.primary, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 10, marginBottom: 40 },
-  saveButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+  saveButton: { backgroundColor: Colors.primary, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 10 },
+  saveButtonText: { color: 'white', fontWeight: 'bold', fontSize: 15 },
   finalPayBtn: { backgroundColor: Colors.primary, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 5 },
-  finalPayText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+  finalPayText: { color: 'white', fontWeight: 'bold', fontSize: 15 },
   disabledBtn: { opacity: 0.6 },
 });

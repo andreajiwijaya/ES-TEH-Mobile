@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -15,11 +14,11 @@ import {
   ActivityIndicator,
   RefreshControl,
   KeyboardAvoidingView,
+  StatusBar
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { Bahan } from '../../types';
-import { gudangAPI, authAPI } from '../../services/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { gudangAPI } from '../../services/api';
 
 // Interface Lokal
 interface StockOpnameItem {
@@ -33,9 +32,7 @@ interface StockOpnameItem {
 }
 
 export default function StokOpnameScreen() {
-  const router = useRouter();
-  
-  // State
+  // State Data & UI
   const [searchQuery, setSearchQuery] = useState('');
   const [stockOpnameItems, setStockOpnameItems] = useState<StockOpnameItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<StockOpnameItem[]>([]);
@@ -43,22 +40,13 @@ export default function StokOpnameScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [user, setUser] = useState<any>(null);
 
-  // Modal Record
+  // Modal Record State
   const [showRecordModal, setShowRecordModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<StockOpnameItem | null>(null);
   const [inputStokFisik, setInputStokFisik] = useState('');
 
-  // Profile
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
-
   // --- LOAD DATA ---
-  const loadUserData = async () => {
-    const userData = await AsyncStorage.getItem('@user_data');
-    if (userData) setUser(JSON.parse(userData));
-  };
-
   const loadStok = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     try {
@@ -94,7 +82,6 @@ export default function StokOpnameScreen() {
   }, []);
 
   useEffect(() => {
-    loadUserData();
     loadStok();
   }, [loadStok]);
 
@@ -118,7 +105,6 @@ export default function StokOpnameScreen() {
 
   const handleOpenRecord = (item: StockOpnameItem) => {
     setSelectedItem(item);
-    // Jika sudah ada data sebelumnya, tampilkan
     setInputStokFisik(item.stok_fisik !== null ? item.stok_fisik.toString() : '');
     setShowRecordModal(true);
   };
@@ -133,11 +119,8 @@ export default function StokOpnameScreen() {
     }
 
     const selisih = fisik - selectedItem.stok_sistem;
-    
-    // FIX 1: Berikan tipe eksplisit agar TypeScript tidak menganggap ini string biasa
     const status: 'sesuai' | 'selisih' = selisih === 0 ? 'sesuai' : 'selisih';
 
-    // Update state lokal
     const updatedItems = stockOpnameItems.map(item => 
       item.id === selectedItem.id 
         ? { ...item, stok_fisik: fisik, selisih, status } 
@@ -145,7 +128,6 @@ export default function StokOpnameScreen() {
     );
 
     setStockOpnameItems(updatedItems);
-    // Update filtered items juga agar UI langsung berubah
     if (searchQuery.trim() !== '') {
         const updatedFiltered = updatedItems.filter(item => 
             item.bahan.nama.toLowerCase().includes(searchQuery.toLowerCase())
@@ -160,7 +142,6 @@ export default function StokOpnameScreen() {
     setInputStokFisik('');
   };
 
-  // Fungsi Finalisasi (Simpan ke Server - Mockup karena endpoint belum ada)
   const handleFinalize = async () => {
     const itemsToUpdate = stockOpnameItems.filter(item => item.status !== 'pending');
     
@@ -179,14 +160,11 @@ export default function StokOpnameScreen() {
           onPress: async () => {
             setProcessing(true);
             try {
-              // TODO: Panggil API simpan opname di sini jika sudah ada endpointnya.
-              // Untuk sekarang kita simulasi sukses saja.
+              // Simulasi API call (karena endpoint finalize belum ada di backend Bapak)
               await new Promise(resolve => setTimeout(resolve, 1500));
-              
               Alert.alert('Sukses', 'Hasil stok opname berhasil disimpan.');
-              loadStok(true); // Reset form
+              loadStok(true); 
             } catch (error) {
-              // FIX 2: Gunakan variabel error agar ESLint senang
               console.log('Error finalize:', error);
               Alert.alert('Gagal', 'Terjadi kesalahan saat menyimpan.');
             } finally {
@@ -198,103 +176,89 @@ export default function StokOpnameScreen() {
     );
   };
 
-  const handleLogout = async () => {
-    Alert.alert('Logout', 'Yakin ingin keluar?', [
-      { text: 'Batal' },
-      { text: 'Keluar', style: 'destructive', onPress: async () => {
-          await authAPI.logout();
-          router.replace('/(auth)/login');
-      }}
-    ]);
-  };
-
   // --- STATISTIK ---
   const totalRecorded = stockOpnameItems.filter(i => i.status !== 'pending').length;
   const totalSelisih = stockOpnameItems.filter(i => i.status === 'selisih').length;
 
   return (
     <View style={styles.container}>
-      {/* HEADER */}
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+      
+      {/* HEADER GREEN DNA */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <View style={styles.logoContainer}>
-            <Ionicons name="cube" size={24} color={Colors.backgroundLight} />
-            <Text style={styles.headerTitle}>Gudang Pusat</Text>
+          <View>
+            <Text style={styles.headerTitle}>Stok Opname</Text>
+            <Text style={styles.headerSubtitle}>Pencatatan & Penyesuaian Stok Fisik</Text>
           </View>
-          <TouchableOpacity
-            style={styles.userInfo}
-            onPress={() => setShowProfileMenu(true)}
-          >
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {user?.username ? user.username.substring(0,2).toUpperCase() : 'GD'}
-              </Text>
-            </View>
-            <View>
-              <Text style={styles.userName}>{user?.username || 'Staff'}</Text>
-              <Text style={styles.userRole}>Logistik</Text>
-            </View>
-            <Ionicons name="chevron-down" size={16} color={Colors.backgroundLight} style={{marginLeft: 5}} />
-          </TouchableOpacity>
+          <View style={styles.headerIconBg}>
+            <Ionicons name="clipboard" size={24} color={Colors.primary} />
+          </View>
         </View>
       </View>
 
       <ScrollView 
         style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
-        <View style={styles.titleSection}>
-          <View>
-            <Text style={styles.title}>Stok Opname</Text>
-            <Text style={styles.subtitle}>Pencatatan & Penyesuaian Stok Fisik</Text>
-          </View>
-          {totalRecorded > 0 && (
-            <TouchableOpacity style={styles.finalizeButton} onPress={handleFinalize} disabled={processing}>
-               {processing ? <ActivityIndicator color="white" size="small"/> : (
-                   <>
-                    <Ionicons name="save-outline" size={18} color="white" />
-                    <Text style={styles.finalizeButtonText}>Simpan</Text>
-                   </>
-               )}
-            </TouchableOpacity>
-          )}
+        {/* ACTION BAR */}
+        <View style={styles.actionBar}>
+            <View>
+                <Text style={styles.sectionTitle}>Progress Opname</Text>
+            </View>
+            {totalRecorded > 0 && (
+                <TouchableOpacity style={styles.finalizeButton} onPress={handleFinalize} disabled={processing}>
+                    {processing ? <ActivityIndicator color="white" size="small"/> : (
+                        <>
+                            <Ionicons name="save-outline" size={16} color="white" />
+                            <Text style={styles.finalizeButtonText}>Simpan Hasil</Text>
+                        </>
+                    )}
+                </TouchableOpacity>
+            )}
         </View>
 
-        {/* SUMMARY */}
+        {/* SUMMARY CARDS */}
         <View style={styles.summaryCards}>
           <View style={styles.summaryCard}>
-            <Ionicons name="clipboard-outline" size={28} color={Colors.primary} />
-            <Text style={styles.summaryLabel}>Total Item</Text>
+            <View style={[styles.iconCircle, { backgroundColor: '#E3F2FD' }]}>
+                <Ionicons name="layers" size={20} color={Colors.primary} />
+            </View>
             <Text style={styles.summaryValue}>{stockOpnameItems.length}</Text>
+            <Text style={styles.summaryLabel}>Total Item</Text>
           </View>
           <View style={styles.summaryCard}>
-            <Ionicons name="checkmark-done-outline" size={28} color={Colors.success} />
+            <View style={[styles.iconCircle, { backgroundColor: '#E8F5E9' }]}>
+                <Ionicons name="checkmark-done" size={20} color={Colors.success} />
+            </View>
+            <Text style={[styles.summaryValue, {color: Colors.success}]}>{totalRecorded}</Text>
             <Text style={styles.summaryLabel}>Sudah Cek</Text>
-            <Text style={styles.summaryValue}>{totalRecorded}</Text>
           </View>
           <View style={styles.summaryCard}>
-            <Ionicons name="alert-circle-outline" size={28} color={Colors.warning} />
-            <Text style={styles.summaryLabel}>Selisih</Text>
+            <View style={[styles.iconCircle, { backgroundColor: '#FFEBEE' }]}>
+                <Ionicons name="alert-circle" size={20} color={Colors.warning} />
+            </View>
             <Text style={[styles.summaryValue, {color: totalSelisih > 0 ? Colors.error : Colors.text}]}>
                 {totalSelisih}
             </Text>
+            <Text style={styles.summaryLabel}>Selisih</Text>
           </View>
         </View>
 
-        {/* SEARCH */}
+        {/* SEARCH BAR */}
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={20} color={Colors.textSecondary} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Cari bahan..."
+            placeholder="Cari nama bahan..."
             placeholderTextColor={Colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
         </View>
 
-        {/* LIST */}
+        {/* LIST ITEM */}
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={Colors.primary} />
@@ -308,6 +272,7 @@ export default function StokOpnameScreen() {
               scrollEnabled={false}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
+                  <Ionicons name="search-outline" size={48} color="#ccc" />
                   <Text style={styles.emptyText}>Tidak ada data stok.</Text>
                 </View>
               }
@@ -317,11 +282,11 @@ export default function StokOpnameScreen() {
                     <Text style={styles.cardTitle}>{item.bahan.nama}</Text>
                     <View style={[
                         styles.statusBadge, 
-                        { backgroundColor: item.status === 'pending' ? '#eee' : (item.status === 'sesuai' ? Colors.success+'20' : Colors.error+'20') }
+                        { backgroundColor: item.status === 'pending' ? '#F5F5F5' : (item.status === 'sesuai' ? '#E8F5E9' : '#FFEBEE') }
                     ]}>
                         <Text style={[
                             styles.statusText,
-                            { color: item.status === 'pending' ? '#888' : (item.status === 'sesuai' ? Colors.success : Colors.error) }
+                            { color: item.status === 'pending' ? '#9E9E9E' : (item.status === 'sesuai' ? Colors.success : Colors.error) }
                         ]}>
                             {item.status === 'pending' ? 'Belum Cek' : item.status.toUpperCase()}
                         </Text>
@@ -330,16 +295,16 @@ export default function StokOpnameScreen() {
 
                   <View style={styles.cardBody}>
                     <View style={styles.stockRow}>
-                        <View style={{flex:1}}>
+                        <View style={styles.stockCol}>
                             <Text style={styles.stockLabel}>Sistem</Text>
                             <Text style={styles.stockValue}>{item.stok_sistem} <Text style={styles.unit}>{item.bahan.satuan}</Text></Text>
                         </View>
                         
-                        <Ionicons name="arrow-forward" size={20} color="#ccc" style={{marginHorizontal:10}} />
+                        <Ionicons name="arrow-forward" size={18} color="#E0E0E0" />
                         
-                        <View style={{flex:1, alignItems:'flex-end'}}>
+                        <View style={[styles.stockCol, {alignItems:'flex-end'}]}>
                             <Text style={styles.stockLabel}>Fisik</Text>
-                            <Text style={[styles.stockValue, item.stok_fisik === null && {color:'#ccc', fontSize:14}]}>
+                            <Text style={[styles.stockValue, item.stok_fisik === null && {color:'#BDBDBD', fontSize:14}]}>
                                 {item.stok_fisik !== null ? item.stok_fisik : '-'} 
                                 {item.stok_fisik !== null && <Text style={styles.unit}> {item.bahan.satuan}</Text>}
                             </Text>
@@ -348,6 +313,7 @@ export default function StokOpnameScreen() {
 
                     {item.selisih !== 0 && (
                         <View style={styles.selisihBox}>
+                            <Ionicons name="alert-circle" size={16} color={Colors.warning} />
                             <Text style={styles.selisihText}>
                                 Selisih: {item.selisih > 0 ? '+' : ''}{item.selisih} {item.bahan.satuan}
                             </Text>
@@ -361,7 +327,7 @@ export default function StokOpnameScreen() {
                   >
                     <Ionicons name="create-outline" size={18} color={item.status === 'pending' ? 'white' : Colors.primary} />
                     <Text style={item.status === 'pending' ? styles.btnTextWhite : styles.btnTextPrimary}>
-                        {item.status === 'pending' ? 'Catat Stok' : 'Edit Hasil'}
+                        {item.status === 'pending' ? 'Catat Stok Fisik' : 'Edit Hasil'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -385,11 +351,14 @@ export default function StokOpnameScreen() {
             {selectedItem && (
                 <View style={styles.modalBody}>
                     <View style={styles.infoBox}>
-                        <Text style={styles.infoTitle}>{selectedItem.bahan.nama}</Text>
-                        <Text style={styles.infoSub}>Stok Sistem: {selectedItem.stok_sistem} {selectedItem.bahan.satuan}</Text>
+                        <Ionicons name="cube-outline" size={24} color={Colors.primary} />
+                        <View style={{marginLeft: 10}}>
+                            <Text style={styles.infoTitle}>{selectedItem.bahan.nama}</Text>
+                            <Text style={styles.infoSub}>Sistem: {selectedItem.stok_sistem} {selectedItem.bahan.satuan}</Text>
+                        </View>
                     </View>
 
-                    <Text style={styles.label}>Jumlah Fisik Saat Ini:</Text>
+                    <Text style={styles.label}>Jumlah Fisik Saat Ini</Text>
                     <TextInput 
                         style={styles.input}
                         keyboardType="numeric"
@@ -401,8 +370,8 @@ export default function StokOpnameScreen() {
 
                     {inputStokFisik !== '' && (
                         <View style={styles.previewBox}>
-                            <Text style={{color: Colors.textSecondary}}>Preview Selisih:</Text>
-                            <Text style={{fontWeight:'bold', fontSize:16, color: (parseInt(inputStokFisik) - selectedItem.stok_sistem) === 0 ? Colors.success : Colors.error}}>
+                            <Text style={{color: Colors.textSecondary, fontSize: 12}}>Selisih:</Text>
+                            <Text style={{fontWeight:'800', fontSize:16, color: (parseInt(inputStokFisik) - selectedItem.stok_sistem) === 0 ? Colors.success : Colors.error}}>
                                 {(parseInt(inputStokFisik) - selectedItem.stok_sistem) > 0 ? '+' : ''}
                                 {parseInt(inputStokFisik) - selectedItem.stok_sistem} {selectedItem.bahan.satuan}
                             </Text>
@@ -412,27 +381,12 @@ export default function StokOpnameScreen() {
             )}
 
             <View style={styles.modalFooter}>
-                <TouchableOpacity style={styles.btnCancel} onPress={() => setShowRecordModal(false)}>
-                    <Text style={styles.btnCancelText}>Batal</Text>
-                </TouchableOpacity>
                 <TouchableOpacity style={styles.btnSave} onPress={handleSaveRecord}>
-                    <Text style={styles.btnSaveText}>Simpan</Text>
+                    <Text style={styles.btnSaveText}>Simpan Data</Text>
                 </TouchableOpacity>
             </View>
           </View>
         </KeyboardAvoidingView>
-      </Modal>
-
-      {/* PROFILE MENU */}
-      <Modal visible={showProfileMenu} transparent animationType="fade" onRequestClose={() => setShowProfileMenu(false)}>
-        <TouchableOpacity style={styles.profileModalOverlay} activeOpacity={1} onPress={() => setShowProfileMenu(false)}>
-          <View style={styles.profileMenu}>
-            <TouchableOpacity style={styles.profileMenuItem} onPress={handleLogout}>
-              <Ionicons name="log-out-outline" size={20} color={Colors.error} />
-              <Text style={styles.profileMenuItemText}>Keluar</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
       </Modal>
 
     </View>
@@ -440,91 +394,92 @@ export default function StokOpnameScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  
+  // HEADER GREEN DNA
   header: {
     backgroundColor: Colors.primary,
-    paddingTop: Platform.OS === 'ios' ? 50 : 40,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+    paddingBottom: 25,
+    paddingHorizontal: 24,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8,
   },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  logoContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: Colors.backgroundLight },
-  userInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
-  avatarText: { fontWeight: 'bold', color: Colors.primary },
-  userName: { fontSize: 14, fontWeight: 'bold', color: 'white' },
-  userRole: { fontSize: 12, color: 'rgba(255,255,255,0.8)' },
+  headerTitle: { fontSize: 24, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
+  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
+  headerIconBg: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
 
-  content: { flex: 1, padding: 20 },
-  titleSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  title: { fontSize: 22, fontWeight: 'bold', color: Colors.text },
-  subtitle: { fontSize: 14, color: Colors.textSecondary },
+  content: { flex: 1, padding: 24, marginTop: 10 },
   
-  finalizeButton: { flexDirection: 'row', backgroundColor: Colors.success, paddingHorizontal: 15, paddingVertical: 10, borderRadius: 8, gap: 5, alignItems: 'center' },
-  finalizeButtonText: { color: 'white', fontWeight: 'bold' },
+  actionBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: Colors.text },
+  
+  finalizeButton: { flexDirection: 'row', backgroundColor: Colors.success, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, gap: 6, alignItems: 'center' },
+  finalizeButtonText: { color: 'white', fontWeight: '700', fontSize: 12 },
 
-  summaryCards: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  summaryCard: { flex: 1, backgroundColor: 'white', borderRadius: 12, padding: 15, alignItems: 'center', elevation: 2 },
-  summaryLabel: { fontSize: 12, color: Colors.textSecondary, marginTop: 5 },
-  summaryValue: { fontSize: 20, fontWeight: 'bold', color: Colors.text },
+  // Summary Cards
+  summaryCards: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  summaryCard: { flex: 1, backgroundColor: 'white', borderRadius: 16, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#F0F0F0', elevation: 2 },
+  iconCircle: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  summaryLabel: { fontSize: 11, color: Colors.textSecondary, marginTop: 4, fontWeight: '600' },
+  summaryValue: { fontSize: 18, fontWeight: '800', color: Colors.text },
 
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f5f5f5', borderRadius: 8, paddingHorizontal: 10, marginBottom: 15 },
+  // Search
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 12, paddingHorizontal: 15, marginBottom: 20, borderWidth: 1, borderColor: '#E0E0E0', height: 50 },
   searchIcon: { marginRight: 10 },
-  searchInput: { flex: 1, paddingVertical: 10, fontSize: 14 },
+  searchInput: { flex: 1, fontSize: 14, color: Colors.text },
 
+  // List
   listSection: { marginBottom: 20 },
-  card: { backgroundColor: 'white', borderRadius: 12, padding: 15, marginBottom: 15, elevation: 2, borderWidth: 1, borderColor: 'transparent' },
-  cardWarning: { borderColor: Colors.warning },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  cardTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.text },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  statusText: { fontSize: 11, fontWeight: 'bold' },
-
-  cardBody: { marginBottom: 15 },
-  stockRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  stockLabel: { fontSize: 12, color: Colors.textSecondary, marginBottom: 2 },
-  stockValue: { fontSize: 16, fontWeight: 'bold', color: Colors.text },
-  unit: { fontSize: 12, fontWeight: 'normal', color: Colors.textSecondary },
+  card: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 16, elevation: 2, borderWidth: 1, borderColor: '#F0F0F0' },
+  cardWarning: { borderColor: '#FFCCBC', backgroundColor: '#FFFBE6' },
   
-  selisihBox: { marginTop: 10, padding: 8, backgroundColor: '#FFF3E0', borderRadius: 6, alignItems: 'center' },
-  selisihText: { color: Colors.warning, fontWeight: 'bold', fontSize: 13 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: Colors.text },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  statusText: { fontSize: 10, fontWeight: '800' },
 
-  actionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 10, borderRadius: 8, gap: 5 },
+  cardBody: { marginBottom: 16 },
+  stockRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  stockCol: { flex: 1 },
+  stockLabel: { fontSize: 11, color: Colors.textSecondary, marginBottom: 4, fontWeight: '600' },
+  stockValue: { fontSize: 15, fontWeight: '800', color: Colors.text },
+  unit: { fontSize: 11, fontWeight: '500', color: Colors.textSecondary },
+  
+  selisihBox: { marginTop: 12, padding: 8, backgroundColor: '#FFF3E0', borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  selisihText: { color: '#E65100', fontWeight: '700', fontSize: 12 },
+
+  actionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: 12, gap: 6 },
   btnPrimary: { backgroundColor: Colors.primary },
-  btnOutline: { backgroundColor: 'transparent', borderWidth: 1, borderColor: Colors.primary },
-  btnTextWhite: { color: 'white', fontWeight: 'bold' },
-  btnTextPrimary: { color: Colors.primary, fontWeight: 'bold' },
+  btnOutline: { backgroundColor: 'white', borderWidth: 1, borderColor: Colors.primary },
+  btnTextWhite: { color: 'white', fontWeight: '700', fontSize: 13 },
+  btnTextPrimary: { color: Colors.primary, fontWeight: '700', fontSize: 13 },
 
+  // Loading & Empty
   loadingContainer: { paddingVertical: 50, alignItems: 'center' },
-  loadingText: { marginTop: 10, color: Colors.textSecondary, fontSize: 14 },
+  loadingText: { marginTop: 10, color: Colors.textSecondary, fontSize: 13 },
   emptyContainer: { alignItems: 'center', marginTop: 30 },
-  emptyText: { color: Colors.textSecondary },
+  emptyText: { color: Colors.textSecondary, fontSize: 14, marginTop: 10 },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 18, fontWeight: 'bold' },
-  modalBody: { marginBottom: 20 },
+  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, elevation: 20 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
   
-  infoBox: { backgroundColor: '#f9f9f9', padding: 15, borderRadius: 8, marginBottom: 20, alignItems: 'center' },
-  infoTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.text },
-  infoSub: { color: Colors.textSecondary, marginTop: 5 },
+  modalBody: { marginBottom: 24 },
+  infoBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F7FA', padding: 16, borderRadius: 12, marginBottom: 20 },
+  infoTitle: { fontSize: 16, fontWeight: '700', color: Colors.text },
+  infoSub: { color: Colors.textSecondary, fontSize: 13, marginTop: 2 },
   
-  label: { fontWeight: '600', marginBottom: 10 },
-  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 15, fontSize: 18, textAlign: 'center', marginBottom: 15 },
-  previewBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 10, backgroundColor: '#f0f9ff', borderRadius: 8 },
+  label: { fontWeight: '700', marginBottom: 10, fontSize: 14, color: Colors.text },
+  input: { borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, padding: 16, fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 16, backgroundColor: '#FAFAFA' },
+  
+  previewBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, backgroundColor: '#F0F9FF', borderRadius: 12 },
 
-  modalFooter: { flexDirection: 'row', gap: 10 },
-  btnCancel: { flex: 1, padding: 15, borderRadius: 8, backgroundColor: '#f5f5f5', alignItems: 'center' },
-  btnCancelText: { fontWeight: 'bold', color: '#666' },
-  btnSave: { flex: 1, padding: 15, borderRadius: 8, backgroundColor: Colors.primary, alignItems: 'center' },
-  btnSaveText: { fontWeight: 'bold', color: 'white' },
-
-  // Profile
-  profileModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
-  profileMenu: { position: 'absolute', top: 90, right: 20, backgroundColor: 'white', borderRadius: 8, padding: 5, elevation: 5, minWidth: 150 },
-  profileMenuItem: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
-  profileMenuItemText: { color: Colors.error, fontWeight: 'bold' },
+  modalFooter: { flexDirection: 'row' },
+  btnSave: { flex: 1, padding: 16, borderRadius: 14, backgroundColor: Colors.primary, alignItems: 'center' },
+  btnSaveText: { fontWeight: '700', color: 'white', fontSize: 15 },
 });

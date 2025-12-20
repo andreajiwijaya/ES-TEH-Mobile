@@ -17,10 +17,10 @@ import { Colors } from '../../constants/Colors';
 import { User, Outlet } from '../../types';
 import { authAPI } from '../../services/api'; 
 
-export default function PengaturanScreen() {
+export default function WarehouseProfileScreen() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [outlet, setOutlet] = useState<Outlet | null>(null);
+  const [assignment, setAssignment] = useState<Outlet | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
@@ -35,11 +35,11 @@ export default function PengaturanScreen() {
         setUser(parsedUser);
 
         if (parsedUser.outlet) {
-            setOutlet(parsedUser.outlet);
+            setAssignment(parsedUser.outlet);
         } else if (parsedUser.outlet_id) {
-            setOutlet({
+            setAssignment({
                 id: parsedUser.outlet_id,
-                nama: `Outlet #${parsedUser.outlet_id}`,
+                nama: `Gudang #${parsedUser.outlet_id}`,
                 alamat: '-',
                 is_active: true
             });
@@ -75,6 +75,7 @@ export default function PengaturanScreen() {
     );
   };
 
+  // Helper Component
   const InfoItem = ({ icon, label, value, isLast = false }: { icon: any, label: string, value: string, isLast?: boolean }) => (
     <View style={[styles.infoItem, isLast && styles.infoItemLast]}>
       <View style={styles.infoIconContainer}>
@@ -94,8 +95,8 @@ export default function PengaturanScreen() {
       {/* Header Background */}
       <View style={styles.headerBackground}>
         <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>Pengaturan Akun</Text>
-            <Text style={styles.headerSubtitle}>Kelola profil dan sesi anda</Text>
+            <Text style={styles.headerTitle}>Profil Staff Gudang</Text>
+            <Text style={styles.headerSubtitle}>Kelola data diri dan sesi</Text>
         </View>
       </View>
 
@@ -104,18 +105,16 @@ export default function PengaturanScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Kartu Profil Utama */}
+        {/* Kartu Profil */}
         <View style={styles.profileCard}>
           <View style={styles.avatarContainer}>
             <Text style={styles.avatarText}>
-              {user?.username?.substring(0, 2).toUpperCase() || 'KS'}
+              {user?.username?.substring(0, 2).toUpperCase() || 'GD'}
             </Text>
           </View>
-          <Text style={styles.profileName}>{user?.username || 'Pengguna'}</Text>
+          <Text style={styles.profileName}>{user?.username || 'Staff Gudang'}</Text>
           <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>
-              {user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Karyawan'}
-            </Text>
+            <Text style={styles.roleText}>STAFF GUDANG</Text>
           </View>
         </View>
 
@@ -130,9 +129,10 @@ export default function PengaturanScreen() {
             />
             <InfoItem 
                 icon="id-card-outline" 
-                label="User ID" 
+                label="ID Staff" 
                 value={user?.id?.toString() || '-'} 
             />
+            {/* PERBAIKAN: Mengganti Email (error) menjadi Role Akses (aman) */}
             <InfoItem 
                 icon="shield-checkmark-outline" 
                 label="Role Akses" 
@@ -142,19 +142,19 @@ export default function PengaturanScreen() {
           </View>
         </View>
 
-        {/* Section: Informasi Outlet */}
+        {/* Section: Informasi Lokasi */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>LOKASI BERTUGAS</Text>
           <View style={styles.card}>
             <InfoItem 
-                icon="storefront-outline" 
-                label="Nama Outlet" 
-                value={outlet?.nama || '-'} 
+                icon="business-outline" 
+                label="Nama Gudang / Outlet" 
+                value={assignment?.nama || 'Gudang Pusat'} 
             />
             <InfoItem 
                 icon="location-outline" 
                 label="Alamat" 
-                value={outlet?.alamat || '-'} 
+                value={assignment?.alamat || '-'} 
                 isLast
             />
           </View>

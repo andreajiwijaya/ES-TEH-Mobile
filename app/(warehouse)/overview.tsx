@@ -1,30 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  FlatList,
   TextInput,
-  Modal,
   Alert,
-  Dimensions,
   Platform,
   ActivityIndicator,
   RefreshControl,
+  StatusBar,
+  TouchableOpacity
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
-import { Bahan } from '../../types'; // Fix: Hapus StokGudang
-import { gudangAPI, authAPI } from '../../services/api';
+import { Bahan } from '../../types'; 
+import { gudangAPI } from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const { width: screenWidth } = Dimensions.get('window');
-const isSmallScreen = screenWidth < 375;
-
-// Definisi Interface Lokal
+// Interface
 interface StockItem {
   id: string;
   bahan_id: number;
@@ -34,70 +28,47 @@ interface StockItem {
 }
 
 export default function WarehouseOverviewScreen() {
-  const router = useRouter();
-  
   // State
   const [searchQuery, setSearchQuery] = useState('');
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [user, setUser] = useState<any>(null);
 
-  // Load User Data Local
+  // Load User
   const loadUserData = async () => {
     const userData = await AsyncStorage.getItem('@user_data');
     if (userData) setUser(JSON.parse(userData));
   };
 
-  // Load Stok Data dari API
+  // Load Stok
   const loadStok = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     try {
-      // API 33: GET /gudang/stok
       const response = await gudangAPI.getStok();
-      
-      if (response.error) {
-        Alert.alert('Error', response.error);
-        return;
-      }
-      
-      if (response.data) {
-        const stokData = Array.isArray(response.data) ? response.data : [];
-        
-        // Mapping data
-        const mappedItems: StockItem[] = stokData.map((item: any) => {
+      if (response.data && Array.isArray(response.data)) {
+        const mappedItems: StockItem[] = response.data.map((item: any) => {
           const stok = Number(item.stok) || 0;
           const minStok = Number(item.bahan?.stok_minimum_gudang) || 0;
           
           let status: 'Aman' | 'Menipis' | 'Kritis' = 'Aman';
-          if (stok <= 0) {
-            status = 'Kritis';
-          } else if (stok <= minStok * 0.3) {
-            status = 'Kritis';
-          } else if (stok <= minStok) {
-            status = 'Menipis';
-          }
+          if (stok <= 0) status = 'Kritis';
+          else if (stok <= minStok * 0.3) status = 'Kritis';
+          else if (stok <= minStok) status = 'Menipis';
 
           return {
             id: `stok-${item.bahan_id}`,
             bahan_id: Number(item.bahan_id),
             stok: stok,
-            bahan: item.bahan || { 
-              id: item.bahan_id, 
-              nama: 'Unknown', 
-              satuan: 'Unit', 
-              stok_minimum_gudang: minStok, 
-              stok_minimum_outlet: 0 
-            },
+            bahan: item.bahan || { nama: 'Unknown', satuan: 'Unit', stok_minimum_gudang: minStok, stok_minimum_outlet: 0 },
             status: status,
           };
         });
-
         setStockItems(mappedItems);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Gagal memuat stok');
+      Alert.alert('Gagal Memuat', 'Terjadi kesalahan saat mengambil data stok.');
+      console.log(error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -114,304 +85,255 @@ export default function WarehouseOverviewScreen() {
     loadStok(true);
   };
 
-  const handleLogout = async () => {
-    Alert.alert(
-      'Keluar',
-      'Apakah Anda yakin ingin keluar?',
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Keluar',
-          style: 'destructive',
-          onPress: async () => {
-            await authAPI.logout();
-            router.replace('/(auth)/login');
-          },
-        },
-      ]
-    );
-    setShowProfileMenu(false);
-  };
-
-  // Logic Filter
+  // Filter & Stats
   const filteredItems = stockItems.filter(item =>
     item.bahan.nama.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  // Helper UI
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Aman': return Colors.success;
-      case 'Menipis': return Colors.warning;
-      case 'Kritis': return Colors.error;
-      default: return Colors.textSecondary;
-    }
-  };
 
   const totalSKU = stockItems.length;
   const lowStockCount = stockItems.filter(item => item.status === 'Menipis').length;
   const criticalCount = stockItems.filter(item => item.status === 'Kritis').length;
 
+  // Helper UI
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Aman': return Colors.success;
+      case 'Menipis': return '#FB8C00'; // Orange Deep
+      case 'Kritis': return '#E53935'; // Red Deep
+      default: return Colors.textSecondary;
+    }
+  };
+
   return (
     <View style={styles.container}>
-      {/* HEADER */}
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+      
+      {/* --- HEADER SECTION (ULTIMATE DESIGN) --- */}
       <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.logoContainer}>
-            <Ionicons name="cube" size={24} color={Colors.backgroundLight} />
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.welcomeText}>Halo, {user?.username || 'Staff'}</Text>
             <Text style={styles.headerTitle}>Gudang Pusat</Text>
           </View>
-          <TouchableOpacity
-            style={styles.userInfo}
-            onPress={() => setShowProfileMenu(true)}
-          >
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {user?.username ? user.username.substring(0, 2).toUpperCase() : 'GD'}
-              </Text>
-            </View>
-            <View>
-              <Text style={styles.userName}>{user?.username || 'Staff'}</Text>
-              <Text style={styles.userRole}>Logistik</Text>
-            </View>
-            <Ionicons name="chevron-down" size={16} color={Colors.backgroundLight} style={{marginLeft: 5}} />
-          </TouchableOpacity>
+          <View style={styles.headerIconBg}>
+            <Ionicons name="notifications" size={20} color={Colors.primary} />
+          </View>
+        </View>
+
+        {/* FLOATING SEARCH BAR */}
+        <View style={styles.searchWrapper}>
+          <Ionicons name="search" size={20} color="#BDBDBD" />
+          <TextInput 
+            style={styles.searchInput}
+            placeholder="Cari nama bahan baku..."
+            placeholderTextColor="#BDBDBD"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
         </View>
       </View>
 
       <ScrollView 
         style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
+        contentContainerStyle={{ paddingBottom: 120 }}
       >
-        <View style={styles.titleSection}>
-          <View>
-            <Text style={styles.title}>Stok Gudang Pusat</Text>
-            <Text style={styles.subtitle}>
-              Pantau pergerakan bahan baku secara real-time
-            </Text>
-          </View>
-        </View>
-
-        {/* OVERVIEW CARDS */}
-        <View style={styles.overviewCards}>
-          <View style={styles.overviewCard}>
-            <Ionicons name="cube-outline" size={32} color={Colors.primary} />
-            <Text style={styles.overviewLabel}>Total SKU</Text>
-            <Text style={styles.overviewValue}>{totalSKU}</Text>
-          </View>
-
-          <View style={styles.overviewCard}>
-            <Ionicons name="warning-outline" size={32} color={Colors.warning} />
-            <Text style={styles.overviewLabel}>Stok Menipis</Text>
-            <Text style={styles.overviewValue}>{lowStockCount}</Text>
-          </View>
-
-          <View style={styles.overviewCard}>
-            <Ionicons name="alert-circle-outline" size={32} color={Colors.error} />
-            <Text style={styles.overviewLabel}>Kritis</Text>
-            <Text style={styles.overviewValue}>{criticalCount}</Text>
-          </View>
-        </View>
-
-        {/* INVENTORY LIST */}
-        <View style={styles.inventorySection}>
-          <Text style={styles.sectionTitle}>Inventaris Bahan Baku</Text>
-
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color={Colors.textSecondary} style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Cari bahan..."
-              placeholderTextColor={Colors.textSecondary}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-          </View>
-
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={Colors.primary} />
-              <Text style={styles.loadingText}>Memuat stok...</Text>
+        {/* --- STATS GRID --- */}
+        <View style={styles.statsContainer}>
+          {/* Primary Card (Solid Green) */}
+          <View style={[styles.statCard, styles.statCardPrimary]}>
+            <View style={styles.statIconCircleWhite}>
+              <Ionicons name="layers" size={20} color={Colors.primary} />
             </View>
-          ) : (
-            <>
-              {/* MOBILE CARD VIEW */}
-              {isSmallScreen ? (
-                <FlatList
-                  data={filteredItems}
-                  keyExtractor={item => item.id}
-                  scrollEnabled={false}
-                  renderItem={({ item }) => (
-                    <View style={styles.stockCardMobile}>
-                      <View style={styles.stockCardHeaderMobile}>
-                        <Text style={styles.stockNameMobile}>{item.bahan.nama}</Text>
-                        <View style={[styles.statusBadgeMobile, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-                          <Text style={[styles.statusTextMobile, { color: getStatusColor(item.status) }]}>
-                            {item.status}
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.stockDetailsMobile}>
-                        <View style={styles.stockDetailRowMobile}>
-                          <Text style={styles.stockDetailLabelMobile}>Stok:</Text>
-                          <Text style={[styles.stockDetailValueMobile, {color: Colors.primary}]}>
-                            {item.stok} {item.bahan.satuan}
-                          </Text>
-                        </View>
-                        <View style={styles.stockDetailRowMobile}>
-                          <Text style={styles.stockDetailLabelMobile}>Min. Stok:</Text>
-                          <Text style={styles.stockDetailValueMobile}>
-                            {item.bahan.stok_minimum_gudang} {item.bahan.satuan}
-                          </Text>
-                        </View>
-                      </View>
+            <View>
+              <Text style={styles.statValueWhite}>{totalSKU}</Text>
+              <Text style={styles.statLabelWhite}>Total SKU</Text>
+            </View>
+          </View>
+
+          {/* Warning Card (Outlined) */}
+          <View style={[styles.statCard, styles.statCardWarning]}>
+            <View style={[styles.statIconCircle, { backgroundColor: '#FFF3E0' }]}>
+              <Ionicons name="warning" size={20} color="#FB8C00" />
+            </View>
+            <View>
+              <Text style={[styles.statValue, { color: '#FB8C00' }]}>{lowStockCount}</Text>
+              <Text style={styles.statLabel}>Menipis</Text>
+            </View>
+          </View>
+
+          {/* Critical Card (Outlined) */}
+          <View style={[styles.statCard, styles.statCardCritical]}>
+            <View style={[styles.statIconCircle, { backgroundColor: '#FFEBEE' }]}>
+              <Ionicons name="alert-circle" size={20} color="#E53935" />
+            </View>
+            <View>
+              <Text style={[styles.statValue, { color: '#E53935' }]}>{criticalCount}</Text>
+              <Text style={styles.statLabel}>Kritis</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* --- INVENTORY LIST --- */}
+        <View style={styles.listHeader}>
+          <Text style={styles.sectionTitle}>Inventaris Gudang</Text>
+          <TouchableOpacity onPress={() => loadStok(true)}>
+            <Ionicons name="refresh-circle" size={28} color={Colors.primary} />
+          </TouchableOpacity>
+        </View>
+
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={styles.loadingText}>Sinkronisasi data...</Text>
+          </View>
+        ) : (
+          <View>
+            {filteredItems.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="search-outline" size={50} color="#E0E0E0" />
+                <Text style={styles.emptyText}>Bahan tidak ditemukan</Text>
+              </View>
+            ) : (
+              filteredItems.map((item) => (
+                <View key={item.id} style={styles.itemCard}>
+                  {/* Left Side: Icon & Name */}
+                  <View style={styles.itemLeft}>
+                    <View style={[styles.itemIconBg, { backgroundColor: item.status === 'Aman' ? '#E8F5E9' : '#FFEBEE' }]}>
+                      <Ionicons 
+                        name="cube-outline" 
+                        size={22} 
+                        color={item.status === 'Aman' ? Colors.success : Colors.error} 
+                      />
                     </View>
-                  )}
-                />
-              ) : (
-                /* TABLE VIEW (TABLET/LARGE PHONE) */
-                <>
-                  <View style={styles.tableHeader}>
-                    <Text style={[styles.tableHeaderText, { flex: 2 }]}>Nama Bahan</Text>
-                    <Text style={[styles.tableHeaderText, { flex: 1 }]}>Stok</Text>
-                    <Text style={[styles.tableHeaderText, { flex: 1 }]}>Min</Text>
-                    <Text style={[styles.tableHeaderText, { flex: 0.8 }]}>Unit</Text>
-                    <Text style={[styles.tableHeaderText, { flex: 1 }]}>Status</Text>
+                    <View style={{flex: 1}}>
+                      <Text style={styles.itemName} numberOfLines={1}>{item.bahan.nama}</Text>
+                      <Text style={styles.itemMinStok}>
+                        Min: {item.bahan.stok_minimum_gudang} {item.bahan.satuan}
+                      </Text>
+                    </View>
                   </View>
 
-                  <FlatList
-                    data={filteredItems}
-                    keyExtractor={item => item.id}
-                    scrollEnabled={false}
-                    ListEmptyComponent={
-                        <Text style={styles.emptyText}>Data tidak ditemukan</Text>
-                    }
-                    renderItem={({ item }) => (
-                      <View style={styles.tableRow}>
-                        <Text style={[styles.tableCell, { flex: 2, fontWeight: '600' }]}>
-                          {item.bahan.nama}
-                        </Text>
-                        <Text style={[styles.tableCell, { flex: 1, color: Colors.primary, fontWeight:'bold' }]}>{item.stok}</Text>
-                        <Text style={[styles.tableCell, { flex: 1 }]}>{item.bahan.stok_minimum_gudang}</Text>
-                        <Text style={[styles.tableCell, { flex: 0.8 }]}>{item.bahan.satuan}</Text>
-                        <View style={[styles.statusBadge, { flex: 1, backgroundColor: getStatusColor(item.status) + '20', alignSelf:'flex-start' }]}>
-                          <Text style={[styles.statusText, { color: getStatusColor(item.status), fontSize:10 }]}>
-                            {item.status}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-                  />
-                </>
-              )}
-            </>
-          )}
-        </View>
-      </ScrollView>
-
-      {/* PROFILE MENU */}
-      <Modal visible={showProfileMenu} transparent animationType="fade" onRequestClose={() => setShowProfileMenu(false)}>
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowProfileMenu(false)}
-        >
-          <View style={styles.profileMenu}>
-            <View style={styles.profileMenuHeader}>
-              <View style={styles.profileMenuAvatar}>
-                <Text style={styles.profileMenuAvatarText}>
-                    {user?.username ? user.username.substring(0, 2).toUpperCase() : 'GD'}
-                </Text>
-              </View>
-              <View>
-                <Text style={styles.profileMenuName}>{user?.username || 'Staff'}</Text>
-                <Text style={styles.profileMenuRole}>Logistik</Text>
-              </View>
-            </View>
-            <View style={styles.profileMenuDivider} />
-            <TouchableOpacity
-              style={styles.profileMenuItem}
-              onPress={handleLogout}
-            >
-              <Ionicons name="log-out-outline" size={20} color={Colors.error} />
-              <Text style={styles.profileMenuItemText}>Keluar</Text>
-            </TouchableOpacity>
+                  {/* Right Side: Qty & Status */}
+                  <View style={styles.itemRight}>
+                    <Text style={styles.itemQty}>
+                        {item.stok} <Text style={styles.itemUnit}>{item.bahan.satuan}</Text>
+                    </Text>
+                    <View style={[styles.statusPill, { backgroundColor: getStatusColor(item.status) }]}>
+                      <Text style={styles.statusPillText}>{item.status}</Text>
+                    </View>
+                  </View>
+                </View>
+              ))
+            )}
           </View>
-        </TouchableOpacity>
-      </Modal>
+        )}
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#FAFAFA' }, 
+  
+  // HEADER
   header: {
     backgroundColor: Colors.primary,
-    paddingTop: Platform.OS === 'ios' ? 50 : 40,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+    paddingHorizontal: 24,
+    paddingBottom: 35, 
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    elevation: 0, 
+    zIndex: 1,
   },
-  headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  logoContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: Colors.backgroundLight },
-  userInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
-  avatarText: { fontWeight: 'bold', color: Colors.primary },
-  userName: { fontSize: 14, fontWeight: 'bold', color: 'white' },
-  userRole: { fontSize: 12, color: 'rgba(255,255,255,0.8)' },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
+  welcomeText: { fontSize: 14, color: 'rgba(255,255,255,0.85)', fontWeight: '600', marginBottom: 2 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
+  headerIconBg: { 
+    width: 40, height: 40, borderRadius: 12, 
+    backgroundColor: 'rgba(255,255,255,0.2)', 
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)'
+  },
 
-  content: { flex: 1, padding: 20 },
-  titleSection: { marginBottom: 20 },
-  title: { fontSize: 22, fontWeight: 'bold', color: Colors.text, marginBottom: 5 },
-  subtitle: { fontSize: 14, color: Colors.textSecondary },
+  // FLOATING SEARCH BAR
+  searchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 54,
+    marginBottom: -27, 
+    
+    // Shadow Ultimate
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  searchInput: { flex: 1, marginLeft: 12, fontSize: 15, color: Colors.text, fontWeight: '600' },
 
-  // Overview Cards
-  overviewCards: { flexDirection: 'row', gap: 10, marginBottom: 20, flexWrap: 'wrap' },
-  overviewCard: { flex: 1, minWidth: '30%', backgroundColor: 'white', borderRadius: 12, padding: 15, alignItems: 'center', elevation: 2 },
-  overviewLabel: { fontSize: 12, color: Colors.textSecondary, marginTop: 8 },
-  overviewValue: { fontSize: 18, fontWeight: 'bold', color: Colors.text, marginTop: 4 },
+  // CONTENT
+  content: { flex: 1, marginTop: 35, paddingHorizontal: 24 }, 
 
-  // Inventory
-  inventorySection: { backgroundColor: 'white', borderRadius: 12, padding: 15, paddingBottom: 30, elevation: 2 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.text, marginBottom: 15 },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f5f5f5', borderRadius: 8, paddingHorizontal: 10, marginBottom: 15 },
-  searchIcon: { marginRight: 10 },
-  searchInput: { flex: 1, paddingVertical: 10, fontSize: 14 },
+  // STATS GRID
+  statsContainer: { flexDirection: 'row', gap: 12, marginBottom: 30 },
+  statCard: { 
+    flex: 1, borderRadius: 20, padding: 14, 
+    justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3,
+    minHeight: 100,
+  },
+  statCardPrimary: { backgroundColor: Colors.primary },
+  statCardWarning: { backgroundColor: 'white', borderWidth: 1, borderColor: '#FFE0B2' },
+  statCardCritical: { backgroundColor: 'white', borderWidth: 1, borderColor: '#FFCDD2' },
 
-  // Table
-  tableHeader: { flexDirection: 'row', paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: '#eee', marginBottom: 5 },
-  tableHeaderText: { fontSize: 12, fontWeight: 'bold', color: Colors.textSecondary, textTransform: 'uppercase' },
-  tableRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  tableCell: { fontSize: 13, color: Colors.text },
+  // Stat Icons & Text
+  statIconCircleWhite: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  statIconCircle: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  
+  statValueWhite: { fontSize: 20, fontWeight: '800', color: 'white' },
+  statLabelWhite: { fontSize: 11, color: 'rgba(255,255,255,0.9)', fontWeight: '600', marginTop: 2 },
+  
+  statValue: { fontSize: 20, fontWeight: '800', color: Colors.text },
+  statLabel: { fontSize: 11, color: Colors.textSecondary, fontWeight: '600', marginTop: 2 },
 
-  // Mobile Card
-  stockCardMobile: { backgroundColor: '#f9f9f9', borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#eee' },
-  stockCardHeaderMobile: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  stockNameMobile: { fontSize: 15, fontWeight: 'bold', color: Colors.text, flex: 1 },
-  statusBadgeMobile: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  statusTextMobile: { fontSize: 11, fontWeight: 'bold' },
-  stockDetailsMobile: { gap: 4 },
-  stockDetailRowMobile: { flexDirection: 'row', justifyContent: 'space-between' },
-  stockDetailLabelMobile: { fontSize: 13, color: Colors.textSecondary },
-  stockDetailValueMobile: { fontSize: 13, fontWeight: '600' },
+  // LIST HEADER
+  listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: Colors.text, letterSpacing: 0.5 },
 
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  statusText: { fontSize: 11, fontWeight: 'bold' },
+  // ITEM CARD (ULTIMATE)
+  itemCard: {
+    backgroundColor: 'white',
+    borderRadius: 20, 
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    shadowColor: '#90A4AE', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2
+  },
+  itemLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
+  itemIconBg: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  itemName: { fontSize: 15, fontWeight: '700', color: Colors.text, marginBottom: 3 },
+  itemMinStok: { fontSize: 11, color: Colors.textSecondary, fontWeight: '500' },
+  
+  itemRight: { alignItems: 'flex-end' },
+  itemQty: { fontSize: 16, fontWeight: '800', color: Colors.text, marginBottom: 5 },
+  itemUnit: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
+  
+  statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  statusPillText: { color: 'white', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
 
-  loadingContainer: { paddingVertical: 50, alignItems: 'center' },
-  loadingText: { marginTop: 10, color: Colors.textSecondary, fontSize: 14 },
-  emptyText: { textAlign: 'center', color: Colors.textSecondary, marginTop: 20 },
-
-  // Profile Menu
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
-  profileMenu: { position: 'absolute', top: 90, right: 20, backgroundColor: 'white', borderRadius: 8, padding: 5, elevation: 5, minWidth: 160 },
-  profileMenuHeader: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
-  profileMenuAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.primaryLight, justifyContent: 'center', alignItems: 'center' },
-  profileMenuAvatarText: { fontWeight: 'bold', color: Colors.primary },
-  profileMenuName: { fontWeight: 'bold', fontSize: 14 },
-  profileMenuRole: { fontSize: 11, color: Colors.textSecondary },
-  profileMenuDivider: { height: 1, backgroundColor: '#eee' },
-  profileMenuItem: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
-  profileMenuItemText: { color: Colors.error, fontWeight: 'bold', fontSize: 14 },
+  loadingContainer: { marginTop: 50, alignItems: 'center' },
+  loadingText: { marginTop: 12, color: Colors.textSecondary, fontWeight: '500' },
+  emptyContainer: { alignItems: 'center', marginTop: 60 },
+  emptyText: { marginTop: 15, color: Colors.textSecondary, fontWeight: '600', fontSize: 15 },
 });

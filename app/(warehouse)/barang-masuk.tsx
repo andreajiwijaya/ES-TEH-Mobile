@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -15,11 +14,11 @@ import {
   ActivityIndicator,
   RefreshControl,
   KeyboardAvoidingView,
+  StatusBar
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { BarangMasuk, Bahan } from '../../types';
-import { gudangAPI, authAPI } from '../../services/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { gudangAPI } from '../../services/api';
 
 // Interface Lokal untuk UI
 interface IncomingGoodsItem extends BarangMasuk {
@@ -27,12 +26,9 @@ interface IncomingGoodsItem extends BarangMasuk {
 }
 
 export default function BarangMasukScreen() {
-  const router = useRouter();
-  
   // --- STATE ---
   const [incomingGoods, setIncomingGoods] = useState<IncomingGoodsItem[]>([]);
   const [bahanList, setBahanList] = useState<Bahan[]>([]);
-  const [user, setUser] = useState<any>(null);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -49,14 +45,7 @@ export default function BarangMasukScreen() {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<IncomingGoodsItem | null>(null);
 
-  // Profile Menu
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
-
   // --- HELPER FUNCTIONS ---
-  const loadUserData = async () => {
-    const userData = await AsyncStorage.getItem('@user_data');
-    if (userData) setUser(JSON.parse(userData));
-  };
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
@@ -103,9 +92,8 @@ export default function BarangMasukScreen() {
 
   // --- USE EFFECT ---
   useEffect(() => {
-    loadUserData();
     loadData();
-  }, [loadData]); // FIX: Dependency added
+  }, [loadData]); 
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -201,16 +189,6 @@ export default function BarangMasukScreen() {
     ]);
   };
 
-  const handleLogout = async () => {
-    Alert.alert('Logout', 'Yakin ingin keluar?', [
-      { text: 'Batal' },
-      { text: 'Keluar', style: 'destructive', onPress: async () => {
-          await authAPI.logout();
-          router.replace('/(auth)/login');
-      }}
-    ]);
-  };
-
   const resetForm = () => {
     setSelectedBahan(null);
     setJumlah('');
@@ -229,48 +207,32 @@ export default function BarangMasukScreen() {
 
   return (
     <View style={styles.container}>
-      {/* HEADER */}
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+      
+      {/* HEADER GREEN DNA */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <View style={styles.logoContainer}>
-            <Ionicons name="cube" size={24} color={Colors.backgroundLight} />
-            <Text style={styles.headerTitle}>Gudang Pusat</Text>
+          <View>
+            <Text style={styles.headerTitle}>Barang Masuk</Text>
+            <Text style={styles.headerSubtitle}>Catat penerimaan stok dari supplier</Text>
           </View>
-          <TouchableOpacity
-            style={styles.userInfo}
-            onPress={() => setShowProfileMenu(true)}
-          >
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {user?.username ? user.username.substring(0,2).toUpperCase() : 'GD'}
-              </Text>
-            </View>
-            <View>
-              <Text style={styles.userName}>{user?.username || 'Staff'}</Text>
-              <Text style={styles.userRole}>Logistik</Text>
-            </View>
-            <Ionicons name="chevron-down" size={16} color={Colors.backgroundLight} style={{marginLeft: 5}} />
-          </TouchableOpacity>
+          <View style={styles.headerIconBg}>
+            <Ionicons name="arrow-down-circle" size={24} color={Colors.primary} />
+          </View>
         </View>
       </View>
 
       <ScrollView 
         style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
-        <View style={styles.titleSection}>
-          <View>
-            <Text style={styles.title}>Barang Masuk</Text>
-            <Text style={styles.subtitle}>Catat penerimaan stok dari supplier</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => { resetForm(); setShowAddModal(true); }}
-          >
-            <Ionicons name="add" size={20} color={Colors.backgroundLight} />
-            <Text style={styles.addButtonText}>Catat Baru</Text>
-          </TouchableOpacity>
+        {/* Action Button */}
+        <View style={styles.actionContainer}>
+            <TouchableOpacity style={styles.addButton} onPress={() => { resetForm(); setShowAddModal(true); }}>
+                <Ionicons name="add-circle" size={22} color="white" />
+                <Text style={styles.addButtonText}>Catat Penerimaan Baru</Text>
+            </TouchableOpacity>
         </View>
 
         {loading ? (
@@ -283,8 +245,9 @@ export default function BarangMasukScreen() {
             {/* SUMMARY CARDS */}
             <View style={styles.summaryCards}>
               <View style={styles.summaryCard}>
-                <Ionicons name="arrow-down-circle" size={32} color={Colors.success} />
-                <Text style={styles.summaryLabel}>Masuk Hari Ini</Text>
+                <View style={[styles.iconCircle, { backgroundColor: '#E8F5E9' }]}>
+                    <Ionicons name="arrow-down" size={20} color={Colors.success} />
+                </View>
                 <Text style={styles.summaryValue}>
                   {incomingGoods.filter(item => {
                     const today = new Date();
@@ -292,13 +255,16 @@ export default function BarangMasukScreen() {
                     return itemDate.getDate() === today.getDate() &&
                            itemDate.getMonth() === today.getMonth() &&
                            itemDate.getFullYear() === today.getFullYear();
-                  }).length} <Text style={{fontSize:12, fontWeight:'normal'}}>Transaksi</Text>
+                  }).length}
                 </Text>
+                <Text style={styles.summaryLabel}>Masuk Hari Ini</Text>
               </View>
               <View style={styles.summaryCard}>
-                <Ionicons name="calendar-outline" size={32} color={Colors.primary} />
+                <View style={[styles.iconCircle, { backgroundColor: '#E3F2FD' }]}>
+                    <Ionicons name="calendar" size={20} color={Colors.primary} />
+                </View>
+                <Text style={styles.summaryValue}>{incomingGoods.length}</Text>
                 <Text style={styles.summaryLabel}>Total Bulan Ini</Text>
-                <Text style={styles.summaryValue}>{incomingGoods.length} <Text style={{fontSize:12, fontWeight:'normal'}}>Transaksi</Text></Text>
               </View>
             </View>
 
@@ -312,6 +278,7 @@ export default function BarangMasukScreen() {
                 scrollEnabled={false}
                 ListEmptyComponent={
                   <View style={styles.emptyContainer}>
+                    <Ionicons name="cube-outline" size={48} color="#ccc" />
                     <Text style={styles.emptyText}>Tidak ada data barang masuk.</Text>
                   </View>
                 }
@@ -319,14 +286,16 @@ export default function BarangMasukScreen() {
                   <View style={styles.goodsCard}>
                     <View style={styles.goodsHeader}>
                       <View>
-                        <Text style={styles.goodsId}>ID #{item.id}</Text>
+                        <Text style={styles.goodsId}>ID Masuk #{item.id}</Text>
                         <Text style={styles.goodsDate}>{formatDate(item.tanggal.toString())}</Text>
                       </View>
                       <View style={styles.goodsStatus}>
-                        <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+                        <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
                         <Text style={styles.goodsStatusText}>Success</Text>
                       </View>
                     </View>
+
+                    <View style={styles.divider} />
 
                     <View style={styles.goodsDetails}>
                       <View style={styles.goodsDetailRow}>
@@ -337,7 +306,7 @@ export default function BarangMasukScreen() {
                       <View style={styles.goodsDetailRow}>
                         <Ionicons name="layers-outline" size={16} color={Colors.textSecondary} />
                         <Text style={styles.goodsDetailLabel}>Jumlah:</Text>
-                        <Text style={[styles.goodsDetailValue, {color: Colors.primary, fontWeight:'bold'}]}>
+                        <Text style={styles.goodsHighlight}>
                           {item.jumlah} {item.bahan.satuan}
                         </Text>
                       </View>
@@ -350,11 +319,11 @@ export default function BarangMasukScreen() {
 
                     <View style={styles.goodsActions}>
                         <TouchableOpacity style={styles.actionButton} onPress={() => handleOpenUpdate(item)}>
-                            <Ionicons name="create-outline" size={18} color={Colors.warning} />
+                            <Ionicons name="create-outline" size={16} color={Colors.warning} />
                             <Text style={[styles.actionButtonText, {color: Colors.warning}]}>Edit</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.actionButton, {borderColor: Colors.error}]} onPress={() => handleDelete(item.id)}>
-                            <Ionicons name="trash-outline" size={18} color={Colors.error} />
+                        <TouchableOpacity style={[styles.actionButton, styles.deleteBtn]} onPress={() => handleDelete(item.id)}>
+                            <Ionicons name="trash-outline" size={16} color={Colors.error} />
                             <Text style={[styles.actionButtonText, {color: Colors.error}]}>Hapus</Text>
                         </TouchableOpacity>
                     </View>
@@ -484,7 +453,7 @@ export default function BarangMasukScreen() {
                         <Text style={{fontSize:12, color: Colors.textSecondary}}>Satuan: {bahan.satuan}</Text>
                       </View>
                       {selectedBahan?.id === bahan.id && (
-                        <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
+                        <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
                       )}
                     </TouchableOpacity>
                   ))
@@ -494,110 +463,93 @@ export default function BarangMasukScreen() {
         </View>
       </Modal>
 
-      {/* PROFILE MENU */}
-      <Modal visible={showProfileMenu} transparent animationType="fade" onRequestClose={() => setShowProfileMenu(false)}>
-        <TouchableOpacity
-          style={styles.profileModalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowProfileMenu(false)}
-        >
-          <View style={styles.profileMenu}>
-            <TouchableOpacity style={styles.profileMenuItem} onPress={handleLogout}>
-              <Ionicons name="log-out-outline" size={20} color={Colors.error} />
-              <Text style={styles.profileMenuItemText}>Keluar</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  
+  // HEADER GREEN DNA
   header: {
     backgroundColor: Colors.primary,
-    paddingTop: Platform.OS === 'ios' ? 50 : 40,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+    paddingBottom: 25,
+    paddingHorizontal: 24,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8,
   },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  logoContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: Colors.backgroundLight },
-  userInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
-  avatarText: { fontWeight: 'bold', color: Colors.primary },
-  userName: { fontSize: 14, fontWeight: 'bold', color: 'white' },
-  userRole: { fontSize: 12, color: 'rgba(255,255,255,0.8)' },
+  headerTitle: { fontSize: 24, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
+  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
+  headerIconBg: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
 
-  content: { flex: 1, padding: 20 },
-  titleSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  title: { fontSize: 22, fontWeight: 'bold', color: Colors.text },
-  subtitle: { fontSize: 14, color: Colors.textSecondary },
+  content: { flex: 1, padding: 24, marginTop: 10 },
   
-  addButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingHorizontal: 15, paddingVertical: 10, borderRadius: 8, gap: 8 },
-  addButtonText: { color: Colors.backgroundLight, fontSize: 14, fontWeight: '600' },
+  actionContainer: { marginBottom: 20 },
+  addButton: { flexDirection: 'row', backgroundColor: Colors.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 8, elevation: 2 },
+  addButtonText: { color: 'white', fontWeight: 'bold', fontSize: 15 },
 
   loadingContainer: { paddingVertical: 50, alignItems: 'center' },
-  loadingText: { marginTop: 10, color: Colors.textSecondary },
+  loadingText: { marginTop: 10, color: Colors.textSecondary, fontSize: 13 },
   
   // Summary Cards
-  summaryCards: { flexDirection: 'row', gap: 15, marginBottom: 20 },
-  summaryCard: { flex: 1, backgroundColor: 'white', borderRadius: 12, padding: 15, alignItems: 'center', elevation: 2 },
-  summaryLabel: { fontSize: 12, color: Colors.textSecondary, marginTop: 5, marginBottom: 2 },
-  summaryValue: { fontSize: 18, fontWeight: 'bold', color: Colors.text },
+  summaryCards: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  summaryCard: { flex: 1, backgroundColor: 'white', borderRadius: 16, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#F0F0F0', elevation: 2 },
+  iconCircle: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  summaryLabel: { fontSize: 11, color: Colors.textSecondary, marginTop: 4, fontWeight: '600' },
+  summaryValue: { fontSize: 18, fontWeight: '800', color: Colors.text },
 
   // List
   listSection: { marginBottom: 20 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.text, marginBottom: 15 },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: Colors.text, marginBottom: 15 },
   emptyContainer: { alignItems: 'center', paddingVertical: 40 },
-  emptyText: { color: Colors.textSecondary },
+  emptyText: { color: Colors.textSecondary, marginTop: 10, fontSize: 14 },
 
-  goodsCard: { backgroundColor: 'white', borderRadius: 12, padding: 15, marginBottom: 15, elevation: 2 },
-  goodsHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  goodsId: { fontWeight: 'bold', fontSize: 16 },
-  goodsDate: { fontSize: 12, color: Colors.textSecondary },
-  goodsStatus: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  goodsStatusText: { fontSize: 12, fontWeight: '600', color: Colors.success },
+  goodsCard: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 16, elevation: 2, borderWidth: 1, borderColor: '#F0F0F0' },
+  
+  goodsHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, alignItems: 'center' },
+  goodsId: { fontWeight: '700', fontSize: 15, color: Colors.text },
+  goodsDate: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  goodsStatus: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E8F5E9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  goodsStatusText: { fontSize: 11, fontWeight: '700', color: Colors.success },
 
-  goodsDetails: { marginBottom: 15 },
-  goodsDetailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  goodsDetailLabel: { fontSize: 14, color: Colors.textSecondary, width: 80, marginLeft: 5 },
-  goodsDetailValue: { fontSize: 14, fontWeight: '500', color: Colors.text, flex: 1 },
+  divider: { height: 1, backgroundColor: '#F5F5F5', marginBottom: 12 },
+
+  goodsDetails: { marginBottom: 16 },
+  goodsDetailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
+  goodsDetailLabel: { fontSize: 13, color: Colors.textSecondary, width: 70 },
+  goodsDetailValue: { fontSize: 13, fontWeight: '600', color: Colors.text, flex: 1 },
+  goodsHighlight: { fontSize: 14, fontWeight: '700', color: Colors.primary },
 
   goodsActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
-  actionButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: '#ddd', gap: 5 },
-  actionButtonText: { fontSize: 12, fontWeight: 'bold' },
+  actionButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, gap: 5, backgroundColor: '#FFF8E1' },
+  actionButtonText: { fontSize: 12, fontWeight: '700' },
+  deleteBtn: { backgroundColor: '#FFEBEE' },
 
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: Colors.backgroundLight, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '90%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.text },
-  modalBody: { marginBottom: 20 },
+  modalContent: { backgroundColor: Colors.backgroundLight, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%', elevation: 5 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
+  modalBody: { marginBottom: 24 },
 
   inputGroup: { marginBottom: 20 },
-  inputLabel: { fontWeight: '600', marginBottom: 8, color: Colors.text },
-  input: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, fontSize: 16, backgroundColor: 'white' },
-  selectButton: { flexDirection: 'row', justifyContent: 'space-between', padding: 12, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, backgroundColor: 'white' },
-  selectButtonText: { fontSize: 16, color: Colors.text },
+  inputLabel: { fontWeight: '600', marginBottom: 8, color: Colors.text, fontSize: 14 },
+  input: { borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, padding: 14, fontSize: 16, backgroundColor: '#FAFAFA' },
+  selectButton: { flexDirection: 'row', justifyContent: 'space-between', padding: 14, borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, backgroundColor: '#FAFAFA' },
+  selectButtonText: { fontSize: 15, color: Colors.text },
 
-  modalFooter: { flexDirection: 'row', gap: 10 },
-  modalButton: { flex: 1, padding: 15, borderRadius: 8, alignItems: 'center' },
-  cancelButton: { backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#ddd' },
-  cancelButtonText: { fontWeight: 'bold', color: '#666' },
+  modalFooter: { flexDirection: 'row', gap: 12 },
+  modalButton: { flex: 1, padding: 16, borderRadius: 12, alignItems: 'center' },
+  cancelButton: { backgroundColor: '#F5F5F5' },
+  cancelButtonText: { fontWeight: '700', color: '#757575', fontSize: 15 },
   saveButton: { backgroundColor: Colors.primary },
-  saveButtonText: { fontWeight: 'bold', color: 'white' },
+  saveButtonText: { fontWeight: '700', color: 'white', fontSize: 15 },
   saveButtonDisabled: { opacity: 0.7 },
 
-  bahanOption: { flexDirection: 'row', justifyContent: 'space-between', padding: 15, borderBottomWidth: 1, borderBottomColor: '#eee', alignItems: 'center' },
-  bahanOptionSelected: { backgroundColor: '#f0f9ff' },
-  bahanOptionText: { fontSize: 16, fontWeight: '500' },
-
-  // Profile Menu
-  profileModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
-  profileMenu: { position: 'absolute', top: 90, right: 20, backgroundColor: 'white', borderRadius: 8, padding: 5, elevation: 5, minWidth: 150 },
-  profileMenuItem: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
-  profileMenuItemText: { color: Colors.error, fontWeight: 'bold' },
+  bahanOption: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', alignItems: 'center' },
+  bahanOptionSelected: { backgroundColor: '#E3F2FD' },
+  bahanOptionText: { fontSize: 15, fontWeight: '600', color: Colors.text },
 });

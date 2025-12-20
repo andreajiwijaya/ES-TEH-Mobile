@@ -11,6 +11,7 @@ import {
   Alert,
   RefreshControl,
   Modal,
+  StatusBar
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { Transaksi } from '../../types';
@@ -44,7 +45,6 @@ export default function RiwayatScreen() {
       const response = await karyawanAPI.getTransaksi();
       
       if (response.data && Array.isArray(response.data)) {
-        // Mapping data agar aman
         const mappedData: TransactionWithItems[] = response.data.map((tx: any) => ({
           id: tx.id,
           outlet_id: tx.outlet_id,
@@ -52,7 +52,6 @@ export default function RiwayatScreen() {
           tanggal: tx.tanggal,
           total: Number(tx.total) || 0,
           metode_bayar: tx.metode_bayar || 'tunai',
-          // Handle items jika ada, jika tidak kosongkan array
           items: Array.isArray(tx.items) 
             ? tx.items.map((item: any) => ({
                 produk_nama: item.produk?.nama || 'Produk dihapus',
@@ -62,7 +61,6 @@ export default function RiwayatScreen() {
             : []
         }));
 
-        // Sort dari yang terbaru
         mappedData.sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
         setTransactions(mappedData);
       }
@@ -90,7 +88,6 @@ export default function RiwayatScreen() {
     setActionLoading(false);
 
     if (res.data) {
-      // Cast ke any dulu untuk akses properti dengan aman
       const tx = res.data as any;
       
       const detailTx: TransactionWithItems = {
@@ -125,7 +122,7 @@ export default function RiwayatScreen() {
     }
 
     setActionLoading(true);
-    // Dummy items payload
+    // Dummy items payload (Backend butuh items walau cuma update payment)
     const dummyItemsPayload = selectedTx.items.map(() => ({ produk_id: 1, quantity: 1 })); 
 
     const res = await karyawanAPI.updateTransaksi(selectedTx.id, {
@@ -140,7 +137,7 @@ export default function RiwayatScreen() {
     } else {
       Alert.alert('Sukses', `Pembayaran diubah menjadi ${newMethod.toUpperCase()}`);
       setModalVisible(false);
-      loadTransactions(true); // Refresh list
+      loadTransactions(true); 
     }
   };
 
@@ -166,7 +163,7 @@ export default function RiwayatScreen() {
             } else {
               Alert.alert('Sukses', 'Transaksi berhasil dibatalkan (VOID).');
               setModalVisible(false);
-              loadTransactions(true); // Refresh list
+              loadTransactions(true); 
             }
           }
         }
@@ -183,8 +180,7 @@ export default function RiwayatScreen() {
     }).format(date);
   };
 
-  const getPaymentIcon = (method: string) => method === 'tunai' ? 'wallet-outline' : 'qr-code-outline';
-  
+  const getPaymentIcon = (method: string) => method === 'tunai' ? 'wallet' : 'qr-code';
   const getPaymentLabel = (method: string) => method === 'tunai' ? 'Tunai' : 'QRIS';
 
   // Filter Logic
@@ -211,41 +207,49 @@ export default function RiwayatScreen() {
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+      
+      {/* HEADER GREEN DNA */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Riwayat Penjualan</Text>
-          <View style={styles.userInfo}>
-            <View style={styles.avatar}><Text style={styles.avatarText}>KS</Text></View>
-            <View>
-              <Text style={styles.userName}>Kasir Outlet</Text>
-              <Text style={styles.userRole}>Sedang Bertugas</Text>
-            </View>
+          <View>
+            <Text style={styles.headerTitle}>Riwayat Penjualan</Text>
+            <Text style={styles.headerSubtitle}>Laporan transaksi harian</Text>
+          </View>
+          <View style={styles.headerIconBg}>
+            <Ionicons name="receipt" size={24} color={Colors.primary} />
           </View>
         </View>
       </View>
 
       <ScrollView 
         style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
         contentContainerStyle={{paddingBottom: 100}}
       >
-        {/* Summary Cards */}
+        {/* Summary Cards (Modern Grid) */}
         <View style={styles.summaryCards}>
           <View style={styles.summaryCard}>
-            <Ionicons name="receipt-outline" size={24} color={Colors.primary} />
-            <Text style={styles.summaryLabel}>Total Transaksi</Text>
+            <View style={[styles.iconCircle, { backgroundColor: '#E3F2FD' }]}>
+                <Ionicons name="receipt" size={20} color={Colors.primary} />
+            </View>
             <Text style={styles.summaryValue}>{totalCount}</Text>
+            <Text style={styles.summaryLabel}>Total Transaksi</Text>
           </View>
           <View style={styles.summaryCard}>
-            <Ionicons name="cash-outline" size={24} color={Colors.success} />
-            <Text style={styles.summaryLabel}>Total Pendapatan</Text>
-            <Text style={styles.summaryValue}>Rp {totalRevenue.toLocaleString('id-ID')}</Text>
+            <View style={[styles.iconCircle, { backgroundColor: '#E8F5E9' }]}>
+                <Ionicons name="wallet" size={20} color={Colors.success} />
+            </View>
+            <Text style={[styles.summaryValue, {color: Colors.success}]}>
+                Rp {(totalRevenue / 1000).toFixed(0)}k
+            </Text>
+            <Text style={styles.summaryLabel}>Total Omset</Text>
           </View>
         </View>
 
-        {/* Filter Tabs */}
+        {/* Filter Tabs (Pill Style) */}
         <View style={styles.filterContainer}>
-          <Text style={styles.filterLabel}>Filter Periode:</Text>
+          <Text style={styles.filterLabel}>Periode Laporan:</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScrollView}>
             <View style={styles.filterButtons}>
               {['today', 'week', 'month', 'all'].map((filter) => (
@@ -272,6 +276,7 @@ export default function RiwayatScreen() {
             </View>
           ) : filteredTransactions.length === 0 ? (
             <View style={styles.emptyContainer}>
+              <Ionicons name="documents-outline" size={48} color="#ccc" />
               <Text style={styles.emptyText}>Tidak ada transaksi pada periode ini.</Text>
             </View>
           ) : (
@@ -291,7 +296,7 @@ export default function RiwayatScreen() {
                       Rp {item.total.toLocaleString('id-ID')}
                     </Text>
                     <View style={styles.paymentMethod}>
-                      <Ionicons name={getPaymentIcon(item.metode_bayar)} size={14} color={Colors.textSecondary} />
+                      <Ionicons name={getPaymentIcon(item.metode_bayar)} size={12} color={Colors.textSecondary} />
                       <Text style={styles.paymentMethodText}>
                         {getPaymentLabel(item.metode_bayar)}
                       </Text>
@@ -299,11 +304,13 @@ export default function RiwayatScreen() {
                   </View>
                 </View>
 
+                <View style={styles.divider} />
+
                 <View style={styles.transactionItems}>
                   {item.items.slice(0, 2).map((orderItem, index) => (
                     <View key={index} style={styles.transactionItem}>
                       <Text style={styles.transactionItemName}>
-                        {orderItem.produk_nama} <Text style={{fontWeight:'bold'}}>x{orderItem.quantity}</Text>
+                        {orderItem.produk_nama} <Text style={{fontWeight:'700', color: Colors.primary}}>x{orderItem.quantity}</Text>
                       </Text>
                       <Text style={styles.transactionItemPrice}>
                         Rp {orderItem.subtotal.toLocaleString('id-ID')}
@@ -311,16 +318,15 @@ export default function RiwayatScreen() {
                     </View>
                   ))}
                   {item.items.length > 2 && (
-                    <Text style={{fontSize: 12, color: Colors.textSecondary, marginTop: 4}}>
+                    <Text style={{fontSize: 12, color: Colors.textSecondary, marginTop: 6, fontStyle:'italic'}}>
                       + {item.items.length - 2} item lainnya...
                     </Text>
                   )}
                 </View>
 
-                {/* Tombol Visual (Agar user tau bisa diklik) */}
                 <View style={styles.detailButton}>
-                  <Text style={styles.detailButtonText}>Lihat Detail & Aksi</Text>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+                  <Text style={styles.detailButtonText}>Lihat Detail</Text>
+                  <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
                 </View>
               </TouchableOpacity>
             ))
@@ -329,7 +335,7 @@ export default function RiwayatScreen() {
       </ScrollView>
 
       {/* --- MODAL DETAIL & AKSI --- */}
-      <Modal visible={modalVisible} transparent animationType="slide">
+      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -340,7 +346,7 @@ export default function RiwayatScreen() {
             </View>
 
             {actionLoading ? (
-              <ActivityIndicator size="large" color={Colors.primary} style={{marginVertical: 20}} />
+              <ActivityIndicator size="large" color={Colors.primary} style={{marginVertical: 40}} />
             ) : (
               <>
                 <ScrollView style={styles.modalBody}>
@@ -373,7 +379,7 @@ export default function RiwayatScreen() {
                   <View style={styles.paymentInfo}>
                     <Text style={styles.label}>Metode Pembayaran:</Text>
                     <View style={styles.paymentTag}>
-                      <Ionicons name={getPaymentIcon(selectedTx?.metode_bayar || 'tunai')} size={16} color="white" />
+                      <Ionicons name={getPaymentIcon(selectedTx?.metode_bayar || 'tunai')} size={14} color="white" />
                       <Text style={styles.paymentTagText}>
                         {getPaymentLabel(selectedTx?.metode_bayar || 'tunai').toUpperCase()}
                       </Text>
@@ -420,115 +426,126 @@ export default function RiwayatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  
+  // HEADER GREEN DNA
   header: {
     backgroundColor: Colors.primary,
-    paddingTop: Platform.OS === 'ios' ? 50 : 40,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+    paddingBottom: 25,
+    paddingHorizontal: 24,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8,
   },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: Colors.backgroundLight },
-  userInfo: { flexDirection: 'row', alignItems: 'center' },
-  avatar: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.backgroundLight,
-    justifyContent: 'center', alignItems: 'center', marginRight: 10
-  },
-  avatarText: { fontSize: 14, fontWeight: 'bold', color: Colors.primary },
-  userName: { fontSize: 14, fontWeight: '600', color: Colors.backgroundLight },
-  userRole: { fontSize: 12, color: Colors.backgroundLight, opacity: 0.8 },
-  
-  content: { flex: 1, padding: 20 },
-  summaryCards: { flexDirection: 'row', gap: 15, marginBottom: 20 },
+  headerTitle: { fontSize: 24, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
+  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
+  headerIconBg: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
+
+  content: { flex: 1, marginTop: 10, paddingHorizontal: 24 },
+
+  // Summary Cards
+  summaryCards: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   summaryCard: {
-    flex: 1, backgroundColor: Colors.backgroundLight, borderRadius: 12, padding: 15,
-    alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity:0.1, shadowRadius:4
+    flex: 1, backgroundColor: 'white', borderRadius: 16, padding: 16,
+    alignItems: 'center', borderWidth: 1, borderColor: '#F0F0F0', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05
   },
-  summaryLabel: { fontSize: 12, color: Colors.textSecondary, marginTop: 10, marginBottom: 5 },
-  summaryValue: { fontSize: 18, fontWeight: 'bold', color: Colors.text },
+  iconCircle: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+  summaryLabel: { fontSize: 12, color: Colors.textSecondary, marginTop: 4 },
+  summaryValue: { fontSize: 18, fontWeight: '800', color: Colors.text },
   
+  // Filter Tabs
   filterContainer: { marginBottom: 20 },
-  filterLabel: { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 10 },
+  filterLabel: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: 10 },
   filterScrollView: { paddingBottom: 4 },
   filterButtons: { flexDirection: 'row', gap: 10 },
   filterButton: {
-    paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: Colors.backgroundLight, borderWidth: 1, borderColor: Colors.border
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: 'white', borderWidth: 1, borderColor: '#E0E0E0'
   },
-  filterButtonActive: { backgroundColor: Colors.primaryLight, borderColor: Colors.primary },
-  filterButtonText: { fontSize: 12, color: Colors.textSecondary },
-  filterButtonTextActive: { color: Colors.primaryDark, fontWeight: '600' },
+  filterButtonActive: { backgroundColor: '#E8F5E9', borderColor: Colors.primary },
+  filterButtonText: { fontSize: 13, color: Colors.textSecondary, fontWeight: '600' },
+  filterButtonTextActive: { color: Colors.primary, fontWeight: '700' },
   
   // List Styles
   listContainer: { paddingBottom: 100 }, 
   loadingContainer: { paddingVertical: 50, alignItems: 'center' },
   loadingText: { marginTop: 10, color: Colors.textSecondary, fontSize: 14 },
   emptyContainer: { paddingVertical: 50, alignItems: 'center' },
-  emptyText: { color: Colors.textSecondary, fontSize: 16 },
+  emptyText: { color: Colors.textSecondary, fontSize: 14, marginTop: 10 },
   
   // Card
   transactionCard: {
-    backgroundColor: Colors.backgroundLight, borderRadius: 12, padding: 15, marginBottom: 15,
-    elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2
+    backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 15,
+    borderWidth: 1, borderColor: '#F0F0F0',
+    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4
   },
   transactionHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-    marginBottom: 15, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: Colors.border
+    marginBottom: 12
   },
-  transactionId: { fontSize: 16, fontWeight: 'bold', color: Colors.text, marginBottom: 4 },
+  transactionId: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: 2 },
   transactionDate: { fontSize: 12, color: Colors.textSecondary },
   transactionTotal: { alignItems: 'flex-end' },
-  transactionTotalText: { fontSize: 18, fontWeight: 'bold', color: Colors.primaryDark, marginBottom: 4 },
+  transactionTotalText: { fontSize: 16, fontWeight: '800', color: Colors.primary, marginBottom: 4 },
   paymentMethod: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  paymentMethodText: { fontSize: 12, color: Colors.textSecondary },
+  paymentMethodText: { fontSize: 11, color: Colors.textSecondary, fontWeight: '600' },
   
-  transactionItems: { marginBottom: 15 },
-  transactionItem: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  transactionItemName: { fontSize: 14, color: Colors.text },
-  transactionItemPrice: { fontSize: 14, fontWeight: '600', color: Colors.text },
+  divider: { height: 1, backgroundColor: '#F0F0F0', marginBottom: 12 },
+
+  transactionItems: { marginBottom: 12 },
+  transactionItem: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  transactionItemName: { fontSize: 13, color: Colors.text },
+  transactionItemPrice: { fontSize: 13, fontWeight: '600', color: Colors.text },
   
   detailButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    padding: 10, borderRadius: 8, borderWidth: 1, borderColor: Colors.primary, gap: 8
+    padding: 8, borderRadius: 8, backgroundColor: '#F5F7FA', gap: 4, marginTop: 4
   },
-  detailButtonText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
+  detailButtonText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
 
   // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: {
-    backgroundColor: Colors.backgroundLight, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24,
     padding: 24, elevation: 20
   },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20
   },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: Colors.text },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
   modalBody: { maxHeight: 400, marginBottom: 20 },
+  
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  label: { fontSize: 14, color: Colors.textSecondary },
+  label: { fontSize: 13, color: Colors.textSecondary },
   value: { fontSize: 14, fontWeight: '600', color: Colors.text },
-  divider: { height: 1, backgroundColor: Colors.border, marginVertical: 12 },
-  sectionTitle: { fontSize: 14, fontWeight: 'bold', marginBottom: 10 },
-  itemRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  itemName: { fontSize: 14, flex: 1 },
-  itemQty: { fontWeight: 'bold' },
-  itemPrice: { fontSize: 14, fontWeight: '600' },
+  sectionTitle: { fontSize: 14, fontWeight: '700', marginBottom: 10, color: Colors.text },
+  
+  itemRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  itemName: { fontSize: 13, flex: 1, color: Colors.text },
+  itemQty: { fontWeight: '700', color: Colors.primary },
+  itemPrice: { fontSize: 13, fontWeight: '600', color: Colors.text },
+  
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 5 },
-  totalLabel: { fontSize: 16, fontWeight: 'bold' },
-  totalBig: { fontSize: 20, fontWeight: 'bold', color: Colors.primary },
+  totalLabel: { fontSize: 16, fontWeight: '700', color: Colors.text },
+  totalBig: { fontSize: 18, fontWeight: '800', color: Colors.primary },
+  
   paymentInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15 },
   paymentTag: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary,
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6
   },
-  paymentTagText: { color: 'white', fontWeight: 'bold', fontSize: 12, marginLeft: 5 },
+  paymentTagText: { color: 'white', fontWeight: '700', fontSize: 11, marginLeft: 5 },
   
-  modalActions: { padding: 20, backgroundColor: '#F9F9F9', borderRadius: 16 },
-  actionTitle: { fontSize: 12, fontWeight: 'bold', color: Colors.textSecondary, marginBottom: 10, textTransform: 'uppercase' },
+  modalActions: { padding: 16, backgroundColor: '#FAFAFA', borderRadius: 16 },
+  actionTitle: { fontSize: 11, fontWeight: '700', color: Colors.textSecondary, marginBottom: 10, textTransform: 'uppercase' },
   actionGrid: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  actionBtn: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 12, borderRadius: 8 },
-  btnOutline: { borderWidth: 1, borderColor: Colors.primary, backgroundColor: 'white', gap: 6 },
-  btnOutlineText: { color: Colors.primary, fontWeight: 'bold', fontSize: 12 },
-  btnDelete: { backgroundColor: '#FFEBEE', borderWidth: 1, borderColor: '#FFCDD2', gap: 6 },
-  btnDeleteText: { color: Colors.error, fontWeight: 'bold', fontSize: 13 },
+  actionBtn: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 12, borderRadius: 12 },
+  
+  btnOutline: { borderWidth: 1, borderColor: '#E0E0E0', backgroundColor: 'white', gap: 6 },
+  btnOutlineText: { color: Colors.primary, fontWeight: '700', fontSize: 12 },
+  
+  btnDelete: { backgroundColor: '#FFEBEE', gap: 6 },
+  btnDeleteText: { color: '#D32F2F', fontWeight: '700', fontSize: 13 },
 });
