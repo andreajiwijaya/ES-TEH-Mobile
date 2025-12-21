@@ -75,11 +75,11 @@ export default function SplashScreen() {
           const role = user.role?.toLowerCase();
           
           if (role === 'karyawan') {
-            router.replace('/(employee)/transaksi' as any);
+            router.replace('/(kasir)/transaksi' as any);
           } else if (role === 'gudang') {
-            router.replace('/(warehouse)/overview' as any);
+            router.replace('/(gudang)/beranda' as any);
           } else if (role === 'owner') {
-            router.replace('/(owner)/dashboard' as any);
+            router.replace('/(owner)/beranda' as any);
           } else {
             router.replace('/(auth)/login' as any);
           }

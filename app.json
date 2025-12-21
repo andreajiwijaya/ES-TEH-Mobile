@@ -3,6 +3,7 @@
     "name": "Es Teh Favorit Indonesia",
     "slug": "es-teh-app",
     "version": "1.0.0",
+    "scheme": "estehpos",
     "orientation": "portrait",
     
     "icon": "./assets/images/logo-esteh.png",

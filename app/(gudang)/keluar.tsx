@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react'; // FIX: useEffect dihapus
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import {
   KeyboardAvoidingView,
   StatusBar
 } from 'react-native';
+import { useFocusEffect } from 'expo-router'; // FIX: Tambahkan import ini
 import { Colors } from '../../constants/Colors';
 import { BarangKeluar, PermintaanStok } from '../../types';
 import { gudangAPI } from '../../services/api';
@@ -40,6 +41,8 @@ export default function BarangKeluarScreen() {
   const [selectedItem, setSelectedItem] = useState<BarangKeluar | null>(null);
   const [buktiFoto, setBuktiFoto] = useState<any>(null);
   const [updateJumlah, setUpdateJumlah] = useState('');
+
+  // --- HELPER FUNCTIONS ---
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
@@ -70,9 +73,13 @@ export default function BarangKeluarScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]); 
+  // --- USE FOCUS EFFECT (FIX) ---
+  // Menjamin data permintaan yang sudah di-Approve di menu 'Request' langsung sinkron
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -413,10 +420,9 @@ export default function BarangKeluarScreen() {
   );
 }
 
+// ... styles tetap sama seperti sebelumnya ...
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
-  
-  // HEADER GREEN DNA
   header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
@@ -430,57 +436,42 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 24, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
   headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
   headerIconBg: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
-
   content: { flex: 1, padding: 24, marginTop: 10 },
-  
   actionContainer: { marginBottom: 20 },
   addButton: { flexDirection: 'row', backgroundColor: Colors.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 8, elevation: 2 },
   addButtonText: { color: 'white', fontWeight: 'bold', fontSize: 15 },
-
   loadingContainer: { marginTop: 50, alignItems: 'center' },
   loadingText: { marginTop: 10, color: Colors.textSecondary },
   emptyContainer: { alignItems: 'center', marginTop: 50 },
   emptyText: { color: Colors.textSecondary, marginTop: 10 },
-
-  // Card List
   listContainer: { paddingBottom: 20 },
   card: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 16, elevation: 2, borderWidth: 1, borderColor: '#F0F0F0' },
-  
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   cardId: { fontWeight: '700', fontSize: 15, color: Colors.text },
   cardDate: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  
   divider: { height: 1, backgroundColor: '#F5F5F5', marginBottom: 12 },
-
   cardBody: { marginBottom: 16 },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   infoLabel: { fontSize: 13, color: Colors.textSecondary, width: 60 },
   infoText: { color: Colors.text, fontSize: 13, fontWeight: '600', flex: 1 },
   infoHighlight: { color: Colors.primary, fontSize: 14, fontWeight: '700' },
-
   cardFooter: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', padding: 8, borderRadius: 8, backgroundColor: '#F5F7FA', gap: 6 },
   actionBtnText: { color: Colors.primary, fontSize: 12, fontWeight: '700' },
   deleteBtn: { backgroundColor: '#FFEBEE' },
-
-  // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 },
   modalContent: { backgroundColor: 'white', borderRadius: 20, padding: 24, elevation: 5 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
-  
   label: { fontWeight: '600', marginBottom: 8, color: Colors.text, fontSize: 14 },
   selectBtn: { flexDirection: 'row', justifyContent: 'space-between', padding: 14, borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, marginBottom: 24, backgroundColor: '#FAFAFA' },
   selectBtnText: { color: Colors.text, fontSize: 14 },
-  
   input: { borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, padding: 14, fontSize: 16, marginBottom: 24, backgroundColor: '#FAFAFA' },
   uploadBox: { height: 140, borderWidth: 1, borderColor: Colors.primary, borderStyle: 'dashed', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 24, backgroundColor: '#E8F5E9' },
-  
   saveBtn: { backgroundColor: Colors.primary, padding: 16, borderRadius: 12, alignItems: 'center' },
   saveBtnText: { color: 'white', fontWeight: 'bold', fontSize: 15 },
   disabledBtn: { opacity: 0.6 },
-
   permintaanItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
   closeBtn: { padding: 16, alignItems: 'center', marginTop: 10 },
 });

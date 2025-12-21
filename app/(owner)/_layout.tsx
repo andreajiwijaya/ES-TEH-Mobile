@@ -21,7 +21,7 @@ export default function OwnerTabsLayout() {
       }}
     >
       <Tabs.Screen
-        name="dashboard"
+        name="beranda"
         options={{
           title: 'Beranda',
           tabBarIcon: ({ color, focused }) => (
@@ -30,7 +30,7 @@ export default function OwnerTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="outlet"
+        name="cabang"
         options={{
           title: 'Outlet',
           tabBarIcon: ({ color, focused }) => (
@@ -39,7 +39,7 @@ export default function OwnerTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="karyawan"
+        name="pegawai"
         options={{
           title: 'Tim', 
           tabBarIcon: ({ color, focused }) => (
@@ -57,7 +57,7 @@ export default function OwnerTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="akun"
         options={{
           title: 'Akun',
           tabBarIcon: ({ color, focused }) => (

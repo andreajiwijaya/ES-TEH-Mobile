@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react'; // FIX: useEffect dihapus karena diganti useFocusEffect
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   StatusBar
 } from 'react-native';
+import { useFocusEffect } from 'expo-router'; // FIX: Tambahkan import ini
 import { Colors } from '../../constants/Colors';
 import { BarangMasuk, Bahan } from '../../types';
 import { gudangAPI } from '../../services/api';
@@ -90,10 +91,13 @@ export default function BarangMasukScreen() {
     }
   }, []);
 
-  // --- USE EFFECT ---
-  useEffect(() => {
-    loadData();
-  }, [loadData]); 
+  // --- USE FOCUS EFFECT (FIX) ---
+  // Ini akan memicu reload data otomatis setiap kali layar ini tampil/fokus
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -467,10 +471,9 @@ export default function BarangMasukScreen() {
   );
 }
 
+// ... styles tetap sama seperti sebelumnya ...
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
-  
-  // HEADER GREEN DNA
   header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
@@ -484,63 +487,47 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 24, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
   headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
   headerIconBg: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
-
   content: { flex: 1, padding: 24, marginTop: 10 },
-  
   actionContainer: { marginBottom: 20 },
   addButton: { flexDirection: 'row', backgroundColor: Colors.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 8, elevation: 2 },
   addButtonText: { color: 'white', fontWeight: 'bold', fontSize: 15 },
-
   loadingContainer: { paddingVertical: 50, alignItems: 'center' },
   loadingText: { marginTop: 10, color: Colors.textSecondary, fontSize: 13 },
-  
-  // Summary Cards
   summaryCards: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   summaryCard: { flex: 1, backgroundColor: 'white', borderRadius: 16, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#F0F0F0', elevation: 2 },
   iconCircle: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
   summaryLabel: { fontSize: 11, color: Colors.textSecondary, marginTop: 4, fontWeight: '600' },
   summaryValue: { fontSize: 18, fontWeight: '800', color: Colors.text },
-
-  // List
   listSection: { marginBottom: 20 },
   sectionTitle: { fontSize: 16, fontWeight: '800', color: Colors.text, marginBottom: 15 },
   emptyContainer: { alignItems: 'center', paddingVertical: 40 },
   emptyText: { color: Colors.textSecondary, marginTop: 10, fontSize: 14 },
-
   goodsCard: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 16, elevation: 2, borderWidth: 1, borderColor: '#F0F0F0' },
-  
   goodsHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, alignItems: 'center' },
   goodsId: { fontWeight: '700', fontSize: 15, color: Colors.text },
   goodsDate: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
   goodsStatus: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E8F5E9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   goodsStatusText: { fontSize: 11, fontWeight: '700', color: Colors.success },
-
   divider: { height: 1, backgroundColor: '#F5F5F5', marginBottom: 12 },
-
   goodsDetails: { marginBottom: 16 },
   goodsDetailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
   goodsDetailLabel: { fontSize: 13, color: Colors.textSecondary, width: 70 },
   goodsDetailValue: { fontSize: 13, fontWeight: '600', color: Colors.text, flex: 1 },
   goodsHighlight: { fontSize: 14, fontWeight: '700', color: Colors.primary },
-
   goodsActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
   actionButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, gap: 5, backgroundColor: '#FFF8E1' },
   actionButtonText: { fontSize: 12, fontWeight: '700' },
   deleteBtn: { backgroundColor: '#FFEBEE' },
-
-  // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: Colors.backgroundLight, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%', elevation: 5 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
   modalBody: { marginBottom: 24 },
-
   inputGroup: { marginBottom: 20 },
   inputLabel: { fontWeight: '600', marginBottom: 8, color: Colors.text, fontSize: 14 },
   input: { borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, padding: 14, fontSize: 16, backgroundColor: '#FAFAFA' },
   selectButton: { flexDirection: 'row', justifyContent: 'space-between', padding: 14, borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, backgroundColor: '#FAFAFA' },
   selectButtonText: { fontSize: 15, color: Colors.text },
-
   modalFooter: { flexDirection: 'row', gap: 12 },
   modalButton: { flex: 1, padding: 16, borderRadius: 12, alignItems: 'center' },
   cancelButton: { backgroundColor: '#F5F5F5' },
@@ -548,7 +535,6 @@ const styles = StyleSheet.create({
   saveButton: { backgroundColor: Colors.primary },
   saveButtonText: { fontWeight: '700', color: 'white', fontSize: 15 },
   saveButtonDisabled: { opacity: 0.7 },
-
   bahanOption: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', alignItems: 'center' },
   bahanOptionSelected: { backgroundColor: '#E3F2FD' },
   bahanOptionText: { fontSize: 15, fontWeight: '600', color: Colors.text },

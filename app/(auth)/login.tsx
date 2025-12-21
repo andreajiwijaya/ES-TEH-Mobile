@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
   Image,
+  StatusBar
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
@@ -51,14 +52,22 @@ export default function LoginScreen() {
         return;
       }
 
+      // Simpan sesi
       await AsyncStorage.setItem('@auth_token', token);
       await AsyncStorage.setItem('@user_data', JSON.stringify(user));
 
+      // LOGIKA NAVIGASI (Sesuai Struktur Folder Baru)
       const role = user.role?.toLowerCase();
       switch (role) {
-        case 'karyawan': router.replace('/(kasir)/transaksi'); break;
-        case 'gudang': router.replace('/(gudang)/beranda'); break;
-        case 'owner': router.replace('/(owner)/beranda'); break;
+        case 'karyawan': 
+            router.replace('/(kasir)/transaksi'); 
+            break;
+        case 'gudang': 
+            router.replace('/(gudang)/beranda'); 
+            break;
+        case 'owner': 
+            router.replace('/(owner)/beranda'); 
+            break;
         default:
           setLoading(false);
           await AsyncStorage.multiRemove(['@auth_token', '@user_data']);
@@ -77,6 +86,8 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
+      <StatusBar barStyle="dark-content" backgroundColor="#F0F4F8" />
+      
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -94,7 +105,6 @@ export default function LoginScreen() {
           </View>
           
           <Text style={styles.brandTitle}>Es Teh Favorit Indonesia</Text>
-          {/* GANTI TEKS DI SINI */}
           <Text style={styles.brandSubtitle}>Integrated Business App</Text>
         </View>
 
@@ -213,9 +223,9 @@ const styles = StyleSheet.create({
   },
   brandSubtitle: {
     fontSize: 16,
-    fontWeight: '500', // Sedikit lebih tipis biar elegan
+    fontWeight: '500', 
     color: Colors.textSecondary,
-    letterSpacing: 1.2, // Kasih jarak antar huruf biar "mahal"
+    letterSpacing: 1.2, 
   },
 
   // CARD

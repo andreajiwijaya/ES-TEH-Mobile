@@ -47,7 +47,7 @@ export default function EmployeeTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="pengaturan"
+        name="akun"
         options={{
           title: 'Akun',
           tabBarIcon: ({ color, focused }) => (

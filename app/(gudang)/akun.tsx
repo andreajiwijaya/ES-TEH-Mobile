@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useRouter, useFocusEffect } from 'expo-router'; // FIX: Tambahkan useFocusEffect
+import React, { useState, useCallback } from 'react';
 import {
   Alert,
   Platform,
@@ -23,32 +23,34 @@ export default function WarehouseProfileScreen() {
   const [assignment, setAssignment] = useState<Outlet | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  // FIX: Menggunakan useFocusEffect agar data profil selalu refresh saat tab dibuka
+  useFocusEffect(
+    useCallback(() => {
+      const loadProfile = async () => {
+        try {
+          const rawUser = await AsyncStorage.getItem('@user_data');
+          if (rawUser) {
+            const parsedUser: User = JSON.parse(rawUser);
+            setUser(parsedUser);
 
-  const loadProfile = async () => {
-    try {
-      const rawUser = await AsyncStorage.getItem('@user_data');
-      if (rawUser) {
-        const parsedUser: User = JSON.parse(rawUser);
-        setUser(parsedUser);
-
-        if (parsedUser.outlet) {
-            setAssignment(parsedUser.outlet);
-        } else if (parsedUser.outlet_id) {
-            setAssignment({
-                id: parsedUser.outlet_id,
-                nama: `Gudang #${parsedUser.outlet_id}`,
-                alamat: '-',
-                is_active: true
-            });
+            if (parsedUser.outlet) {
+                setAssignment(parsedUser.outlet);
+            } else if (parsedUser.outlet_id) {
+                setAssignment({
+                    id: parsedUser.outlet_id,
+                    nama: `Gudang #${parsedUser.outlet_id}`,
+                    alamat: '-',
+                    is_active: true
+                });
+            }
+          }
+        } catch (error) {
+          console.error('Gagal memuat profil', error);
         }
-      }
-    } catch (error) {
-      console.error('Gagal memuat profil', error);
-    }
-  };
+      };
+      loadProfile();
+    }, [])
+  );
 
   const handleLogout = async () => {
     Alert.alert(
@@ -75,13 +77,13 @@ export default function WarehouseProfileScreen() {
     );
   };
 
-  // Helper Component
+  // Helper UI Component
   const InfoItem = ({ icon, label, value, isLast = false }: { icon: any, label: string, value: string, isLast?: boolean }) => (
-    <View style={[styles.infoItem, isLast && styles.infoItemLast]}>
-      <View style={styles.infoIconContainer}>
-        <Ionicons name={icon} size={20} color={Colors.primary} />
+    <View style={[styles.infoItem, isLast && { borderBottomWidth: 0 }]}>
+      <View style={styles.infoIconBg}>
+        <Ionicons name={icon} size={18} color={Colors.primary} />
       </View>
-      <View style={styles.infoTextContainer}>
+      <View style={{ flex: 1 }}>
         <Text style={styles.infoLabel}>{label}</Text>
         <Text style={styles.infoValue}>{value}</Text>
       </View>
@@ -92,20 +94,18 @@ export default function WarehouseProfileScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
       
-      {/* Header Background */}
-      <View style={styles.headerBackground}>
-        <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>Profil Staff Gudang</Text>
-            <Text style={styles.headerSubtitle}>Kelola data diri dan sesi</Text>
-        </View>
+      {/* HEADER SECTION */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Profil Staff</Text>
+        <Text style={styles.headerSubtitle}>Kelola akun dan informasi gudang</Text>
       </View>
 
       <ScrollView 
-        style={styles.scrollView} 
-        contentContainerStyle={styles.scrollContent}
+        style={styles.content}
+        contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Kartu Profil */}
+        {/* PROFILE CARD */}
         <View style={styles.profileCard}>
           <View style={styles.avatarContainer}>
             <Text style={styles.avatarText}>
@@ -114,240 +114,78 @@ export default function WarehouseProfileScreen() {
           </View>
           <Text style={styles.profileName}>{user?.username || 'Staff Gudang'}</Text>
           <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>STAFF GUDANG</Text>
+            <Text style={styles.roleText}>{user?.role?.replace('_', ' ').toUpperCase() || 'STAFF'}</Text>
           </View>
         </View>
 
-        {/* Section: Informasi Akun */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>INFORMASI PRIBADI</Text>
-          <View style={styles.card}>
-            <InfoItem 
-                icon="person-outline" 
-                label="Username" 
-                value={user?.username || '-'} 
-            />
-            <InfoItem 
-                icon="id-card-outline" 
-                label="ID Staff" 
-                value={user?.id?.toString() || '-'} 
-            />
-            {/* PERBAIKAN: Mengganti Email (error) menjadi Role Akses (aman) */}
-            <InfoItem 
-                icon="shield-checkmark-outline" 
-                label="Role Akses" 
-                value={user?.role?.toUpperCase() || '-'} 
-                isLast
-            />
-          </View>
+        {/* ACCOUNT INFO SECTION */}
+        <Text style={styles.sectionTitle}>Detail Informasi</Text>
+        <View style={styles.card}>
+          <InfoItem icon="person-outline" label="Username" value={user?.username || '-'} />
+          <InfoItem icon="id-card-outline" label="ID Staff" value={`ID-${user?.id || '000'}`} />
+          <InfoItem icon="business-outline" label="Penempatan" value={assignment?.nama || 'Gudang Pusat'} isLast />
         </View>
 
-        {/* Section: Informasi Lokasi */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>LOKASI BERTUGAS</Text>
-          <View style={styles.card}>
-            <InfoItem 
-                icon="business-outline" 
-                label="Nama Gudang / Outlet" 
-                value={assignment?.nama || 'Gudang Pusat'} 
-            />
-            <InfoItem 
-                icon="location-outline" 
-                label="Alamat" 
-                value={assignment?.alamat || '-'} 
-                isLast
-            />
-          </View>
-        </View>
-
-        {/* Tombol Logout */}
+        {/* LOGOUT BUTTON */}
         <TouchableOpacity 
-            style={styles.logoutButton} 
+            style={styles.logoutBtn} 
             onPress={handleLogout}
             disabled={isLoggingOut}
         >
             {isLoggingOut ? (
-                <ActivityIndicator color={Colors.error} />
+                <ActivityIndicator color="#D32F2F" />
             ) : (
                 <>
-                    <Ionicons name="log-out-outline" size={20} color={Colors.error} />
+                    <Ionicons name="log-out-outline" size={20} color="#D32F2F" />
                     <Text style={styles.logoutText}>Keluar Aplikasi</Text>
                 </>
             )}
         </TouchableOpacity>
 
-        <Text style={styles.versionText}>Es Teh POS App v1.0.0</Text>
+        <Text style={styles.versionText}>Es Teh POS • v1.0.0</Text>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  headerBackground: {
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  header: {
     backgroundColor: Colors.primary,
-    height: 180,
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingHorizontal: 24,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    paddingBottom: 60,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
     alignItems: 'center',
   },
-  headerContent: {
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.backgroundLight,
-    marginBottom: 4,
-    letterSpacing: 0.5,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.9)',
-  },
-  scrollView: {
-    flex: 1,
-    marginTop: -60,
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-  },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: 'white' },
+  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
+  content: { flex: 1, marginTop: -40, paddingHorizontal: 24 },
   profileCard: {
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 24,
-    alignItems: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: 20,
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    backgroundColor: 'white', borderRadius: 24, padding: 24, alignItems: 'center',
+    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10,
+    marginBottom: 25
   },
   avatarContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#E8F5E9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 4,
-    borderColor: Colors.backgroundLight,
-    elevation: 2,
+    width: 70, height: 70, borderRadius: 35, backgroundColor: '#E8F5E9',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 15,
+    borderWidth: 3, borderColor: '#F8F9FA'
   },
-  avatarText: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: Colors.primary,
+  avatarText: { fontSize: 24, fontWeight: '800', color: Colors.primary },
+  profileName: { fontSize: 18, fontWeight: '800', color: '#333', marginBottom: 6 },
+  roleBadge: { backgroundColor: '#E8F5E9', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 },
+  roleText: { fontSize: 10, fontWeight: '800', color: Colors.primary, letterSpacing: 1 },
+  sectionTitle: { fontSize: 12, fontWeight: '700', color: '#AAA', marginBottom: 10, marginLeft: 5, textTransform: 'uppercase' },
+  card: { backgroundColor: 'white', borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#F0F0F0' },
+  infoItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F8F9FA' },
+  infoIconBg: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F5F7FA', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+  infoLabel: { fontSize: 10, color: '#999', fontWeight: '600', marginBottom: 2 },
+  infoValue: { fontSize: 14, color: '#444', fontWeight: '700' },
+  logoutBtn: { 
+    flexDirection: 'row', backgroundColor: '#FFEBEE', borderRadius: 18, padding: 16, 
+    justifyContent: 'center', alignItems: 'center', marginTop: 25, borderWidth: 1, borderColor: '#FFCDD2' 
   },
-  profileName: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.text,
-    marginBottom: 8,
-  },
-  roleBadge: {
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  roleText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  sectionContainer: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: Colors.textSecondary,
-    marginBottom: 12,
-    marginLeft: 4,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  card: {
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
-  },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  infoItemLast: {
-    borderBottomWidth: 0,
-  },
-  infoIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: '#F5F7FA',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  infoTextContainer: {
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    marginBottom: 2,
-    fontWeight: '600',
-  },
-  infoValue: {
-    fontSize: 15,
-    color: Colors.text,
-    fontWeight: '700',
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    backgroundColor: '#FFEBEE',
-    borderRadius: 16,
-    padding: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#FFCDD2',
-  },
-  logoutText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#D32F2F',
-    marginLeft: 8,
-  },
-  versionText: {
-    textAlign: 'center',
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '500',
-    opacity: 0.6,
-    marginBottom: 20,
-  },
+  logoutText: { fontSize: 14, fontWeight: '700', color: '#D32F2F', marginLeft: 8 },
+  versionText: { textAlign: 'center', color: '#CCC', fontSize: 11, marginTop: 20, fontWeight: '600' },
 });

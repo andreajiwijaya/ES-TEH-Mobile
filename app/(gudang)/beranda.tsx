@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,12 +13,12 @@ import {
   StatusBar,
   TouchableOpacity
 } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router'; 
 import { Colors } from '../../constants/Colors';
 import { Bahan } from '../../types'; 
 import { gudangAPI } from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Interface
 interface StockItem {
   id: string;
   bahan_id: number;
@@ -28,20 +28,19 @@ interface StockItem {
 }
 
 export default function WarehouseOverviewScreen() {
-  // State
+  const router = useRouter();
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [user, setUser] = useState<any>(null);
 
-  // Load User
   const loadUserData = async () => {
     const userData = await AsyncStorage.getItem('@user_data');
     if (userData) setUser(JSON.parse(userData));
   };
 
-  // Load Stok
   const loadStok = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     try {
@@ -67,25 +66,27 @@ export default function WarehouseOverviewScreen() {
         setStockItems(mappedItems);
       }
     } catch (error: any) {
-      Alert.alert('Gagal Memuat', 'Terjadi kesalahan saat mengambil data stok.');
       console.log(error);
+      Alert.alert('Gagal Memuat', 'Terjadi kesalahan saat mengambil data stok.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => {
-    loadUserData();
-    loadStok();
-  }, [loadStok]);
+  // Sync Otomatis saat layar difokuskan
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData();
+      loadStok();
+    }, [loadStok])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
     loadStok(true);
   };
 
-  // Filter & Stats
   const filteredItems = stockItems.filter(item =>
     item.bahan.nama.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -94,12 +95,11 @@ export default function WarehouseOverviewScreen() {
   const lowStockCount = stockItems.filter(item => item.status === 'Menipis').length;
   const criticalCount = stockItems.filter(item => item.status === 'Kritis').length;
 
-  // Helper UI
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Aman': return Colors.success;
-      case 'Menipis': return '#FB8C00'; // Orange Deep
-      case 'Kritis': return '#E53935'; // Red Deep
+      case 'Menipis': return '#FB8C00'; 
+      case 'Kritis': return '#E53935'; 
       default: return Colors.textSecondary;
     }
   };
@@ -108,7 +108,7 @@ export default function WarehouseOverviewScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
       
-      {/* --- HEADER SECTION (ULTIMATE DESIGN) --- */}
+      {/* --- HEADER --- */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View>
@@ -120,7 +120,6 @@ export default function WarehouseOverviewScreen() {
           </View>
         </View>
 
-        {/* FLOATING SEARCH BAR */}
         <View style={styles.searchWrapper}>
           <Ionicons name="search" size={20} color="#BDBDBD" />
           <TextInput 
@@ -137,38 +136,49 @@ export default function WarehouseOverviewScreen() {
         style={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
       >
+        {/* --- QUICK ACCESS (RE-DESIGNED) --- */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Akses Cepat</Text>
+          <View style={styles.shortcutGrid}>
+            <TouchableOpacity 
+              style={styles.shortcutBtn} 
+              onPress={() => router.push('/(gudang)/bahan')}
+            >
+              <View style={[styles.shortcutIcon, {backgroundColor: '#E8F5E9'}]}>
+                <Ionicons name="cube" size={24} color={Colors.primary} />
+              </View>
+              <Text style={styles.shortcutText}>Bahan</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.shortcutBtn} 
+              onPress={() => router.push('/(gudang)/opname')}
+            >
+              <View style={[styles.shortcutIcon, {backgroundColor: '#FFF3E0'}]}>
+                <Ionicons name="clipboard" size={24} color="#FB8C00" />
+              </View>
+              <Text style={styles.shortcutText}>Opname</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* --- STATS GRID --- */}
-        <View style={styles.statsContainer}>
-          {/* Primary Card (Solid Green) */}
-          <View style={[styles.statCard, styles.statCardPrimary]}>
-            <View style={styles.statIconCircleWhite}>
-              <Ionicons name="layers" size={20} color={Colors.primary} />
-            </View>
-            <View>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Status Stok</Text>
+          <View style={styles.statsContainer}>
+            <View style={[styles.statCard, styles.statCardPrimary]}>
               <Text style={styles.statValueWhite}>{totalSKU}</Text>
               <Text style={styles.statLabelWhite}>Total SKU</Text>
             </View>
-          </View>
 
-          {/* Warning Card (Outlined) */}
-          <View style={[styles.statCard, styles.statCardWarning]}>
-            <View style={[styles.statIconCircle, { backgroundColor: '#FFF3E0' }]}>
-              <Ionicons name="warning" size={20} color="#FB8C00" />
-            </View>
-            <View>
+            <View style={[styles.statCard, styles.statCardWarning]}>
               <Text style={[styles.statValue, { color: '#FB8C00' }]}>{lowStockCount}</Text>
               <Text style={styles.statLabel}>Menipis</Text>
             </View>
-          </View>
 
-          {/* Critical Card (Outlined) */}
-          <View style={[styles.statCard, styles.statCardCritical]}>
-            <View style={[styles.statIconCircle, { backgroundColor: '#FFEBEE' }]}>
-              <Ionicons name="alert-circle" size={20} color="#E53935" />
-            </View>
-            <View>
+            <View style={[styles.statCard, styles.statCardCritical]}>
               <Text style={[styles.statValue, { color: '#E53935' }]}>{criticalCount}</Text>
               <Text style={styles.statLabel}>Kritis</Text>
             </View>
@@ -176,164 +186,111 @@ export default function WarehouseOverviewScreen() {
         </View>
 
         {/* --- INVENTORY LIST --- */}
-        <View style={styles.listHeader}>
-          <Text style={styles.sectionTitle}>Inventaris Gudang</Text>
-          <TouchableOpacity onPress={() => loadStok(true)}>
-            <Ionicons name="refresh-circle" size={28} color={Colors.primary} />
-          </TouchableOpacity>
-        </View>
-
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingText}>Sinkronisasi data...</Text>
+        <View style={styles.section}>
+          <View style={styles.listHeader}>
+            <Text style={styles.sectionTitle}>Inventaris Gudang</Text>
+            <TouchableOpacity onPress={() => loadStok(true)}>
+              <Ionicons name="refresh-circle" size={24} color={Colors.primary} />
+            </TouchableOpacity>
           </View>
-        ) : (
-          <View>
-            {filteredItems.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="search-outline" size={50} color="#E0E0E0" />
-                <Text style={styles.emptyText}>Bahan tidak ditemukan</Text>
-              </View>
-            ) : (
-              filteredItems.map((item) => (
-                <View key={item.id} style={styles.itemCard}>
-                  {/* Left Side: Icon & Name */}
-                  <View style={styles.itemLeft}>
-                    <View style={[styles.itemIconBg, { backgroundColor: item.status === 'Aman' ? '#E8F5E9' : '#FFEBEE' }]}>
-                      <Ionicons 
-                        name="cube-outline" 
-                        size={22} 
-                        color={item.status === 'Aman' ? Colors.success : Colors.error} 
-                      />
-                    </View>
-                    <View style={{flex: 1}}>
-                      <Text style={styles.itemName} numberOfLines={1}>{item.bahan.nama}</Text>
-                      <Text style={styles.itemMinStok}>
-                        Min: {item.bahan.stok_minimum_gudang} {item.bahan.satuan}
-                      </Text>
-                    </View>
-                  </View>
 
-                  {/* Right Side: Qty & Status */}
-                  <View style={styles.itemRight}>
-                    <Text style={styles.itemQty}>
-                        {item.stok} <Text style={styles.itemUnit}>{item.bahan.satuan}</Text>
-                    </Text>
-                    <View style={[styles.statusPill, { backgroundColor: getStatusColor(item.status) }]}>
-                      <Text style={styles.statusPillText}>{item.status}</Text>
-                    </View>
-                  </View>
+          {loading ? (
+            <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 20 }} />
+          ) : (
+            <View>
+              {filteredItems.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="search-outline" size={40} color="#E0E0E0" />
+                  <Text style={styles.emptyText}>Data tidak ditemukan</Text>
                 </View>
-              ))
-            )}
-          </View>
-        )}
+              ) : (
+                filteredItems.map((item) => (
+                  <View key={item.id} style={styles.itemCard}>
+                    <View style={styles.itemLeft}>
+                      <View style={[styles.itemIconBg, { backgroundColor: item.status === 'Aman' ? '#F1F8E9' : '#FFEBEE' }]}>
+                        <Ionicons 
+                          name="beaker-outline" 
+                          size={20} 
+                          color={item.status === 'Aman' ? Colors.success : Colors.error} 
+                        />
+                      </View>
+                      <View>
+                        <Text style={styles.itemName}>{item.bahan.nama}</Text>
+                        <Text style={styles.itemMinStok}>Min: {item.bahan.stok_minimum_gudang} {item.bahan.satuan}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.itemRight}>
+                      <Text style={styles.itemQty}>{item.stok} {item.bahan.satuan}</Text>
+                      <View style={[styles.statusPill, { backgroundColor: getStatusColor(item.status) }]}>
+                        <Text style={styles.statusPillText}>{item.status}</Text>
+                      </View>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' }, 
-  
-  // HEADER
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
   header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
     paddingHorizontal: 24,
     paddingBottom: 35, 
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    elevation: 0, 
-    zIndex: 1,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
-  welcomeText: { fontSize: 14, color: 'rgba(255,255,255,0.85)', fontWeight: '600', marginBottom: 2 },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
-  headerIconBg: { 
-    width: 40, height: 40, borderRadius: 12, 
-    backgroundColor: 'rgba(255,255,255,0.2)', 
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)'
-  },
-
-  // FLOATING SEARCH BAR
+  welcomeText: { fontSize: 14, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
+  headerTitle: { fontSize: 24, fontWeight: '800', color: 'white' },
+  headerIconBg: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
   searchWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    height: 54,
-    marginBottom: -27, 
-    
-    // Shadow Ultimate
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 15,
+    paddingHorizontal: 16, height: 50, marginBottom: -60, elevation: 4, shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4,
   },
-  searchInput: { flex: 1, marginLeft: 12, fontSize: 15, color: Colors.text, fontWeight: '600' },
-
-  // CONTENT
-  content: { flex: 1, marginTop: 35, paddingHorizontal: 24 }, 
-
-  // STATS GRID
-  statsContainer: { flexDirection: 'row', gap: 12, marginBottom: 30 },
-  statCard: { 
-    flex: 1, borderRadius: 20, padding: 14, 
-    justifyContent: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3,
-    minHeight: 100,
+  searchInput: { flex: 1, marginLeft: 10, fontSize: 14, fontWeight: '500' },
+  content: { flex: 1, marginTop: 40 },
+  section: { paddingHorizontal: 24, marginBottom: 25 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#333', marginBottom: 15 },
+  shortcutGrid: { flexDirection: 'row', gap: 15 },
+  shortcutBtn: { 
+    flex: 1, backgroundColor: 'white', padding: 15, borderRadius: 20, alignItems: 'center',
+    borderWidth: 1, borderColor: '#F0F0F0', elevation: 2
   },
+  shortcutIcon: { width: 50, height: 50, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+  shortcutText: { fontSize: 14, fontWeight: '700', color: '#444' },
+  statsContainer: { flexDirection: 'row', gap: 10 },
+  statCard: { flex: 1, borderRadius: 18, padding: 15, elevation: 2 },
   statCardPrimary: { backgroundColor: Colors.primary },
   statCardWarning: { backgroundColor: 'white', borderWidth: 1, borderColor: '#FFE0B2' },
   statCardCritical: { backgroundColor: 'white', borderWidth: 1, borderColor: '#FFCDD2' },
-
-  // Stat Icons & Text
-  statIconCircleWhite: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  statIconCircle: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  
   statValueWhite: { fontSize: 20, fontWeight: '800', color: 'white' },
-  statLabelWhite: { fontSize: 11, color: 'rgba(255,255,255,0.9)', fontWeight: '600', marginTop: 2 },
-  
-  statValue: { fontSize: 20, fontWeight: '800', color: Colors.text },
-  statLabel: { fontSize: 11, color: Colors.textSecondary, fontWeight: '600', marginTop: 2 },
-
-  // LIST HEADER
-  listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: Colors.text, letterSpacing: 0.5 },
-
-  // ITEM CARD (ULTIMATE)
+  statLabelWhite: { fontSize: 11, color: 'rgba(255,255,255,0.9)', fontWeight: '600' },
+  statValue: { fontSize: 20, fontWeight: '800' },
+  statLabel: { fontSize: 11, color: '#777', fontWeight: '600' },
+  listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   itemCard: {
-    backgroundColor: 'white',
-    borderRadius: 20, 
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
-    shadowColor: '#90A4AE', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2
+    backgroundColor: 'white', borderRadius: 18, padding: 15, marginBottom: 12,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    borderWidth: 1, borderColor: '#F0F0F0'
   },
-  itemLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
-  itemIconBg: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  itemName: { fontSize: 15, fontWeight: '700', color: Colors.text, marginBottom: 3 },
-  itemMinStok: { fontSize: 11, color: Colors.textSecondary, fontWeight: '500' },
-  
+  itemLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  itemIconBg: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  itemName: { fontSize: 15, fontWeight: '700', color: '#333' },
+  itemMinStok: { fontSize: 11, color: '#999', marginTop: 2 },
   itemRight: { alignItems: 'flex-end' },
-  itemQty: { fontSize: 16, fontWeight: '800', color: Colors.text, marginBottom: 5 },
-  itemUnit: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
-  
+  itemQty: { fontSize: 15, fontWeight: '800', color: '#333', marginBottom: 4 },
   statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   statusPillText: { color: 'white', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-
-  loadingContainer: { marginTop: 50, alignItems: 'center' },
-  loadingText: { marginTop: 12, color: Colors.textSecondary, fontWeight: '500' },
-  emptyContainer: { alignItems: 'center', marginTop: 60 },
-  emptyText: { marginTop: 15, color: Colors.textSecondary, fontWeight: '600', fontSize: 15 },
+  emptyContainer: { alignItems: 'center', paddingVertical: 30 },
+  emptyText: { marginTop: 10, color: '#AAA', fontWeight: '600' },
+  loadingText: { marginTop: 10, color: '#777' }
 });
