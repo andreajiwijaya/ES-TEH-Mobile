@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,19 +7,18 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Platform,
   ActivityIndicator,
   Alert,
   RefreshControl,
   Modal,
-  KeyboardAvoidingView,
-  StatusBar
+  StatusBar,
+  Platform
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
-import { Bahan, PermintaanStok } from '../../types';
-import { karyawanAPI } from '../../services/api';
+import { Bahan, PermintaanStok, BarangKeluar } from '../../types';
+import { karyawanAPI, gudangAPI } from '../../services/api';
 
-// Interface Lokal untuk UI Stok
 interface StockItem {
   id: string; 
   outlet_id: number;
@@ -30,510 +29,362 @@ interface StockItem {
 }
 
 export default function StokScreen() {
-  // --- STATE MANAGEMENT ---
-  const [activeTab, setActiveTab] = useState<'stok' | 'riwayat'>('stok');
-  
-  // State Data
+  const [activeTab, setActiveTab] = useState<'stok' | 'terima' | 'riwayat'>('stok');
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [requestHistory, setRequestHistory] = useState<PermintaanStok[]>([]);
-  const [filteredStock, setFilteredStock] = useState<StockItem[]>([]);
-  
-  // State UI
+  const [incomingShipments, setIncomingShipments] = useState<BarangKeluar[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // State Modal
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedStockItem, setSelectedStockItem] = useState<StockItem | null>(null);
   const [selectedRequestItem, setSelectedRequestItem] = useState<PermintaanStok | null>(null);
   const [inputQuantity, setInputQuantity] = useState('');
   const [modalType, setModalType] = useState<'create' | 'edit'>('create');
 
-  // --- API INTEGRATION FUNCTIONS ---
-
-  // 1. Load Data Utama (API 52 & 47)
   const loadAllData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     try {
-      const [stokRes, reqRes] = await Promise.all([
-        karyawanAPI.getStokOutlet(),      // API 52
-        karyawanAPI.getPermintaanStok()   // API 47
+      const [stokRes, reqRes, incomingRes] = await Promise.all([
+        karyawanAPI.getStokOutlet(),
+        karyawanAPI.getPermintaanStok(),
+        gudangAPI.getBarangKeluar()
       ]);
 
-      // Handle Response Stok
       if (stokRes.data && Array.isArray(stokRes.data)) {
-        const mappedStok: StockItem[] = stokRes.data.map((item: any) => {
+        const mappedStok: StockItem[] = (stokRes.data as any[]).map((item: any) => {
           const stok = Number(item.stok) || 0;
           const min = Number(item.bahan?.stok_minimum_outlet) || 0;
           let status: 'Aman' | 'Menipis' | 'Kritis' = 'Aman';
-          
-          if (stok <= 0) status = 'Kritis';
-          else if (stok <= min * 0.3) status = 'Kritis';
+          if (stok <= 0 || stok <= min * 0.3) status = 'Kritis';
           else if (stok <= min) status = 'Menipis';
-
           return {
             id: `${item.outlet_id}-${item.bahan_id}`,
             outlet_id: item.outlet_id,
             bahan_id: item.bahan_id,
-            stok: stok,
+            stok,
             bahan: item.bahan || { nama: 'Unknown', satuan: 'Unit' },
             status
           };
         });
         setStockItems(mappedStok);
-        setFilteredStock(mappedStok);
       }
 
-      // Handle Response Riwayat Request
       if (reqRes.data && Array.isArray(reqRes.data)) {
-        const sortedHistory = reqRes.data.sort((a: any, b: any) => b.id - a.id);
-        setRequestHistory(sortedHistory);
+        setRequestHistory((reqRes.data as PermintaanStok[]).sort((a, b) => b.id - a.id));
       }
-
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'Gagal memuat data stok dan riwayat.');
+      
+      if (incomingRes.data && Array.isArray(incomingRes.data)) {
+        setIncomingShipments((incomingRes.data as BarangKeluar[]).filter(i => i.status !== 'received'));
+      }
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Gagal sinkronisasi data.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  // --- INITIAL LOAD ---
-  useEffect(() => {
-    loadAllData();
-  }, [loadAllData]);
+  useFocusEffect(useCallback(() => { loadAllData(); }, [loadAllData]));
 
-  // Filter logika pencarian
-  useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setFilteredStock(stockItems);
-    } else {
-      const filtered = stockItems.filter(item => 
-        item.bahan.nama.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      setFilteredStock(filtered);
-    }
-  }, [searchQuery, stockItems]);
+  const filteredStock = stockItems.filter(item => 
+    item.bahan.nama.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadAllData(true);
+  const handleConfirmReceipt = async (id: number) => {
+    Alert.alert('Konfirmasi', 'Barang sudah sampai dan sesuai?', [
+      { text: 'Batal', style: 'cancel' },
+      { text: 'Ya, Terima', onPress: async () => {
+        setActionLoading(true);
+        try {
+          const res = await (karyawanAPI as any).terimaBarangKeluar(id); 
+          if (res.error) throw new Error(res.error);
+          Alert.alert('Sukses', 'Stok outlet telah bertambah.');
+          loadAllData(true);
+        } catch (err: any) {
+          Alert.alert('Gagal', err.message);
+        } finally {
+          setActionLoading(false);
+        }
+      }}
+    ]);
   };
 
-  // 2. Handle Buka Modal Request Baru (Persiapan API 49)
-  const openCreateRequest = (item: StockItem) => {
-    const recommendedQty = Math.max(0, Math.ceil(item.bahan.stok_minimum_outlet * 1.5) - item.stok);
-    
-    setSelectedStockItem(item);
-    setSelectedRequestItem(null);
-    setInputQuantity(recommendedQty > 0 ? recommendedQty.toString() : '');
-    setModalType('create');
-    setModalVisible(true);
-  };
-
-  // 3. Handle Buka Modal Edit Request (API 48 - Detail)
-  const openEditRequest = async (req: PermintaanStok) => {
-    if (req.status !== 'pending') {
-      Alert.alert('Info', 'Hanya permintaan dengan status "Pending" yang dapat diedit atau dibatalkan.');
-      return;
-    }
-
-    setActionLoading(true);
-    // Hit API 48 (Detail)
-    const res = await karyawanAPI.getPermintaanStokById(req.id);
-    setActionLoading(false);
-
-    if (res.data) {
-      const data = res.data as PermintaanStok;
-      setSelectedRequestItem(data);
-      setSelectedStockItem(null);
-      setInputQuantity(data.jumlah.toString());
-      setModalType('edit');
-      setModalVisible(true);
-    } else {
-      Alert.alert('Error', 'Gagal mengambil detail permintaan.');
-    }
-  };
-
-  // 4. Submit Form (API 49 Create & API 50 Update)
   const handleSubmit = async () => {
     const qty = parseInt(inputQuantity);
-    if (isNaN(qty) || qty <= 0) {
-      Alert.alert('Validasi', 'Jumlah harus berupa angka lebih dari 0.');
-      return;
-    }
-
+    if (isNaN(qty) || qty <= 0) return Alert.alert('Validasi', 'Input jumlah tidak valid.');
     setActionLoading(true);
     try {
       if (modalType === 'create' && selectedStockItem) {
-        // API 49: Create Request
-        const res = await karyawanAPI.createPermintaanStok({
-          bahan_id: selectedStockItem.bahan_id,
-          jumlah: qty
-        });
-        
-        if (res.error) throw new Error(res.error);
-        Alert.alert('Sukses', 'Permintaan stok berhasil diajukan.');
-        setActiveTab('riwayat');
-
+        await karyawanAPI.createPermintaanStok({ bahan_id: selectedStockItem.bahan_id, jumlah: qty });
       } else if (modalType === 'edit' && selectedRequestItem) {
-        // API 50: Update Request
-        const res = await karyawanAPI.updatePermintaanStok(selectedRequestItem.id, {
-          bahan_id: selectedRequestItem.bahan_id,
-          jumlah: qty
-        });
-
-        if (res.error) throw new Error(res.error);
-        Alert.alert('Sukses', 'Permintaan stok berhasil diperbarui.');
+        await karyawanAPI.updatePermintaanStok(selectedRequestItem.id, { bahan_id: selectedRequestItem.bahan_id, jumlah: qty });
       }
-
       setModalVisible(false);
       loadAllData(true);
-
-    } catch (error: any) {
-      Alert.alert('Gagal', error.message || 'Terjadi kesalahan saat memproses data.');
+    } catch (err: any) {
+      Alert.alert('Gagal', err.message);
     } finally {
       setActionLoading(false);
     }
   };
 
-  // 5. Handle Delete / Cancel Request (API 51)
   const handleCancelRequest = () => {
     if (!selectedRequestItem) return;
-
-    Alert.alert('Batalkan Permintaan', 'Apakah Anda yakin ingin membatalkan permintaan ini?', [
-      { text: 'Kembali', style: 'cancel' },
-      {
-        text: 'Ya, Batalkan',
-        style: 'destructive',
-        onPress: async () => {
-          setActionLoading(true);
-          try {
-            const res = await karyawanAPI.deletePermintaanStok(selectedRequestItem.id);
-            if (res.error) throw new Error(res.error);
-            
-            Alert.alert('Sukses', 'Permintaan berhasil dibatalkan.');
-            setModalVisible(false);
-            loadAllData(true);
-          } catch (error: any) {
-            Alert.alert('Gagal', error.message || 'Gagal membatalkan permintaan.');
-          } finally {
-            setActionLoading(false);
-          }
-        }
-      }
+    Alert.alert('Hapus', 'Batalkan permintaan ini?', [
+      { text: 'Kembali' },
+      { text: 'Ya, Hapus', style: 'destructive', onPress: async () => {
+        await karyawanAPI.deletePermintaanStok(selectedRequestItem.id);
+        setModalVisible(false);
+        loadAllData(true);
+      }}
     ]);
   };
 
-  // --- UI HELPER ---
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'aman': return Colors.success;
-      case 'menipis': return Colors.warning;
-      case 'kritis': return Colors.error;
-      case 'pending': return Colors.warning;
-      case 'approved': return Colors.primary;
-      case 'completed': return Colors.success;
-      case 'rejected': return Colors.error;
-      default: return Colors.textSecondary;
-    }
+  const getStatusColor = (s: string) => {
+    const st = s.toLowerCase();
+    if (st === 'aman' || st === 'received' || st === 'completed') return Colors.success;
+    if (st === 'menipis' || st === 'pending' || st === 'in_transit') return Colors.warning;
+    return Colors.error;
   };
-
-  const getStatusLabel = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'pending': return 'Menunggu Konfirmasi';
-      case 'approved': return 'Disetujui';
-      case 'rejected': return 'Ditolak';
-      case 'completed': return 'Selesai';
-      default: return status;
-    }
-  };
-
-  const lowStockCount = stockItems.filter(i => i.status === 'Menipis').length;
-  const criticalCount = stockItems.filter(i => i.status === 'Kritis').length;
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
       
-      {/* HEADER GREEN DNA */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View>
-            <Text style={styles.headerTitle}>Stok Bahan</Text>
-            <Text style={styles.headerSubtitle}>Kelola persediaan outlet</Text>
+            <Text style={styles.headerTitle}>Persediaan Bahan</Text>
+            <Text style={styles.headerSubtitle}>Monitor stok dan terima barang</Text>
           </View>
-          <View style={styles.headerIconBg}>
+          <View style={styles.headerIconContainer}>
             <Ionicons name="cube" size={24} color={Colors.primary} />
           </View>
         </View>
 
-        {/* Tab Navigation (Pill Style) */}
         <View style={styles.tabContainer}>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'stok' && styles.tabActive]}
-            onPress={() => setActiveTab('stok')}
-          >
-            <Ionicons name="layers" size={16} color={activeTab === 'stok' ? Colors.primary : 'rgba(255,255,255,0.7)'} />
-            <Text style={[styles.tabText, activeTab === 'stok' && styles.tabTextActive]}>Stok Outlet</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'riwayat' && styles.tabActive]}
-            onPress={() => setActiveTab('riwayat')}
-          >
-            <Ionicons name="time" size={16} color={activeTab === 'riwayat' ? Colors.primary : 'rgba(255,255,255,0.7)'} />
-            <Text style={[styles.tabText, activeTab === 'riwayat' && styles.tabTextActive]}>Riwayat Request</Text>
-          </TouchableOpacity>
+          {(['stok', 'terima', 'riwayat'] as const).map((tab) => (
+            <TouchableOpacity 
+              key={tab} 
+              style={[styles.tabButton, activeTab === tab && styles.tabActive]} 
+              onPress={() => setActiveTab(tab)}
+            >
+              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+                {tab === 'stok' ? 'Stok' : tab === 'terima' ? 'Penerimaan' : 'Request'}
+              </Text>
+              {tab === 'terima' && incomingShipments.length > 0 && <View style={styles.notifDot} />}
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
 
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={{ paddingBottom: 100 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent} 
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadAllData(true)} colors={[Colors.primary]} />}
+        showsVerticalScrollIndicator={false}
       >
-        {/* --- CONTENT: TAB STOK --- */}
-        {activeTab === 'stok' && (
+        {loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        ) : (
           <>
-            {/* Overview Cards (Modern Grid) */}
-            <View style={styles.overviewContainer}>
-              <View style={styles.overviewCard}>
-                <View style={[styles.iconCircle, { backgroundColor: '#E3F2FD' }]}>
-                  <Ionicons name="cube" size={20} color={Colors.primary} />
+            {activeTab === 'stok' && (
+              <>
+                <View style={styles.searchBar}>
+                  <Ionicons name="search" size={20} color="#999" />
+                  <TextInput 
+                    style={styles.searchInput} 
+                    placeholder="Cari nama bahan..." 
+                    value={searchQuery} 
+                    onChangeText={setSearchQuery} 
+                  />
                 </View>
-                <Text style={styles.overviewValue}>{stockItems.length}</Text>
-                <Text style={styles.overviewLabel}>Total Item</Text>
-              </View>
-              
-              <View style={styles.overviewCard}>
-                <View style={[styles.iconCircle, { backgroundColor: '#FFF3E0' }]}>
-                  <Ionicons name="warning" size={20} color={Colors.warning} />
-                </View>
-                <Text style={styles.overviewValue}>{lowStockCount}</Text>
-                <Text style={styles.overviewLabel}>Menipis</Text>
-              </View>
 
-              <View style={styles.overviewCard}>
-                <View style={[styles.iconCircle, { backgroundColor: '#FFEBEE' }]}>
-                  <Ionicons name="alert-circle" size={20} color={Colors.error} />
-                </View>
-                <Text style={styles.overviewValue}>{criticalCount}</Text>
-                <Text style={styles.overviewLabel}>Kritis</Text>
-              </View>
-            </View>
-
-            {/* Search Bar */}
-            <View style={styles.searchContainer}>
-              <Ionicons name="search" size={20} color={Colors.textSecondary} />
-              <TextInput 
-                style={styles.searchInput}
-                placeholder="Cari nama bahan..."
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-            </View>
-
-            {/* Stock List */}
-            {loading ? (
-              <ActivityIndicator size="large" color={Colors.primary} style={{marginTop: 50}} />
-            ) : (
-              <View>
                 {filteredStock.length === 0 ? (
-                  <View style={styles.emptyState}>
-                    <Ionicons name="search-outline" size={48} color={Colors.textSecondary} />
-                    <Text style={styles.emptyText}>Data tidak ditemukan</Text>
+                  <View style={styles.emptyContainer}>
+                    <Ionicons name="file-tray-outline" size={60} color="#ccc" />
+                    <Text style={styles.emptyText}>Data stok tidak ditemukan</Text>
                   </View>
                 ) : (
-                  filteredStock.map((item) => (
+                  filteredStock.map(item => (
                     <View key={item.id} style={styles.card}>
-                      <View style={styles.cardHeader}>
-                        <View style={{flex: 1}}>
+                      <View style={styles.cardTop}>
+                        <View style={styles.cardInfo}>
                           <Text style={styles.cardTitle}>{item.bahan.nama}</Text>
-                          <Text style={styles.cardSubtitle}>ID Bahan: {item.bahan_id}</Text>
+                          <Text style={styles.cardUnit}>Satuan: {item.bahan.satuan}</Text>
                         </View>
-                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-                          <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>{item.status}</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.divider} />
-
-                      <View style={styles.detailsRow}>
-                        <View style={styles.detailItem}>
-                          <Text style={styles.detailLabel}>Stok Saat Ini</Text>
-                          <Text style={styles.detailValue}>{item.stok} {item.bahan.satuan}</Text>
-                        </View>
-                        <View style={styles.detailItem}>
-                          <Text style={styles.detailLabel}>Min. Stok</Text>
-                          <Text style={styles.detailValue}>{item.bahan.stok_minimum_outlet} {item.bahan.satuan}</Text>
+                        <View style={[styles.badge, { backgroundColor: getStatusColor(item.status) + '15' }]}>
+                          <Text style={[styles.badgeText, { color: getStatusColor(item.status) }]}>{item.status}</Text>
                         </View>
                       </View>
-
-                      {/* Tombol Request hanya muncul jika stok tidak aman */}
-                      {item.status !== 'Aman' && (
-                        <TouchableOpacity 
-                          style={styles.actionButton}
-                          onPress={() => openCreateRequest(item)}
-                        >
-                          <Ionicons name="add-circle-outline" size={18} color={Colors.primary} />
-                          <Text style={styles.actionButtonText}>Ajukan Restock</Text>
-                        </TouchableOpacity>
-                      )}
+                      <View style={styles.cardDivider} />
+                      <View style={styles.cardBottom}>
+                        <View>
+                          <Text style={styles.stockLabel}>Jumlah Stok</Text>
+                          <Text style={[styles.stockValue, { color: getStatusColor(item.status) }]}>
+                            {item.stok} <Text style={styles.cardUnit}>{item.bahan.satuan}</Text>
+                          </Text>
+                        </View>
+                        {item.status !== 'Aman' && (
+                          <TouchableOpacity 
+                            style={styles.reqBtn} 
+                            onPress={() => { 
+                              setSelectedStockItem(item); 
+                              setModalType('create'); 
+                              setInputQuantity(''); 
+                              setModalVisible(true); 
+                            }}
+                          >
+                            <Ionicons name="add-circle" size={18} color="white" />
+                            <Text style={styles.reqBtnText}>Minta Stok</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     </View>
                   ))
                 )}
-              </View>
+              </>
             )}
-          </>
-        )}
 
-        {/* --- CONTENT: TAB RIWAYAT --- */}
-        {activeTab === 'riwayat' && (
-          <>
-            {loading ? (
-              <ActivityIndicator size="large" color={Colors.primary} style={{marginTop: 50}} />
-            ) : (
-              <View>
-                {requestHistory.length === 0 ? (
-                  <View style={styles.emptyState}>
-                    <Ionicons name="file-tray-outline" size={48} color={Colors.textSecondary} />
-                    <Text style={styles.emptyText}>Belum ada riwayat permintaan</Text>
+            {activeTab === 'terima' && (
+              incomingShipments.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="mail-unread-outline" size={60} color="#ccc" />
+                  <Text style={styles.emptyText}>Tidak ada kiriman dari gudang</Text>
+                </View>
+              ) : (
+                incomingShipments.map(ship => (
+                  <View key={ship.id} style={styles.card}>
+                    <View style={styles.cardTop}>
+                      <View>
+                        <Text style={styles.cardTitle}>Kiriman #{ship.id}</Text>
+                        <Text style={styles.shipmentSub}>Material: {ship.bahan?.nama}</Text>
+                      </View>
+                      <View style={styles.shipIcon}>
+                        <Ionicons name="boat-outline" size={24} color={Colors.primary} />
+                      </View>
+                    </View>
+                    <View style={styles.cardDivider} />
+                    <View style={styles.cardBottom}>
+                      <View>
+                        <Text style={styles.stockLabel}>Jumlah Kirim</Text>
+                        <Text style={styles.shipmentQty}>{ship.jumlah} {ship.bahan?.satuan}</Text>
+                      </View>
+                      <TouchableOpacity 
+                        style={styles.confirmBtn} 
+                        onPress={() => handleConfirmReceipt(ship.id)} 
+                        disabled={actionLoading}
+                      >
+                        {actionLoading ? (
+                          <ActivityIndicator color="white" size="small" />
+                        ) : (
+                          <Text style={styles.confirmBtnText}>Terima Barang</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                ) : (
-                  requestHistory.map((req) => (
-                    <TouchableOpacity 
-                      key={req.id} 
-                      style={styles.card}
-                      onPress={() => openEditRequest(req)}
-                      disabled={req.status !== 'pending'}
-                    >
-                      <View style={styles.cardHeader}>
-                        <View style={{flex: 1}}>
-                          <Text style={styles.cardTitle}>{req.bahan?.nama || `Bahan #${req.bahan_id}`}</Text>
-                          <Text style={styles.cardSubtitle}>Permintaan #{req.id}</Text>
-                        </View>
-                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(req.status) + '20' }]}>
-                          <Text style={[styles.statusText, { color: getStatusColor(req.status) }]}>
-                            {getStatusLabel(req.status)}
-                          </Text>
-                        </View>
+                ))
+              )
+            )}
+
+            {activeTab === 'riwayat' && (
+              requestHistory.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="list-outline" size={60} color="#ccc" />
+                  <Text style={styles.emptyText}>Belum ada riwayat permintaan</Text>
+                </View>
+              ) : (
+                requestHistory.map(req => (
+                  <TouchableOpacity 
+                    key={req.id} 
+                    style={styles.card} 
+                    onPress={() => { 
+                      setSelectedRequestItem(req); 
+                      setInputQuantity(req.jumlah.toString()); 
+                      setModalType('edit'); 
+                      setModalVisible(true); 
+                    }} 
+                    disabled={req.status !== 'pending'}
+                  >
+                    <View style={styles.cardTop}>
+                      <View>
+                        <Text style={styles.cardTitle}>{req.bahan?.nama}</Text>
+                        <Text style={styles.cardUnit}>ID Permintaan: #{req.id}</Text>
                       </View>
-
-                      <View style={styles.divider} />
-
-                      <View style={styles.detailsRow}>
-                        <View style={styles.detailItem}>
-                          <Text style={styles.detailLabel}>Jumlah Diminta</Text>
-                          <Text style={[styles.detailValue, {fontSize: 18}]}>{req.jumlah}</Text>
-                        </View>
-                        <View style={styles.detailItem}>
-                          <Text style={styles.detailLabel}>Status</Text>
-                          <Text style={{fontWeight: '600', color: getStatusColor(req.status)}}>
-                            {req.status.toUpperCase()}
-                          </Text>
-                        </View>
+                      <View style={[styles.badge, { backgroundColor: getStatusColor(req.status) + '15' }]}>
+                        <Text style={[styles.badgeText, { color: getStatusColor(req.status) }]}>
+                          {req.status.toUpperCase()}
+                        </Text>
                       </View>
-
+                    </View>
+                    <View style={styles.cardDivider} />
+                    <View style={styles.historyBottom}>
+                      <View>
+                        <Text style={styles.stockLabel}>Jumlah Diminta</Text>
+                        <Text style={styles.historyQty}>{req.jumlah} {req.bahan?.satuan}</Text>
+                      </View>
                       {req.status === 'pending' && (
-                        <View style={styles.footerNote}>
-                          <Ionicons name="create-outline" size={14} color={Colors.primary} />
-                          <Text style={styles.footerNoteText}>Ketuk untuk mengedit atau membatalkan</Text>
+                        <View style={styles.editIndicator}>
+                          <Ionicons name="pencil" size={14} color={Colors.primary} />
+                          <Text style={styles.editText}>Edit</Text>
                         </View>
                       )}
-                    </TouchableOpacity>
-                  ))
-                )}
-              </View>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )
             )}
           </>
         )}
       </ScrollView>
 
-      {/* --- MODAL FORM (CREATE / EDIT) --- */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
+      <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
+        <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {modalType === 'create' ? 'Ajukan Permintaan Stok' : 'Edit Permintaan'}
-              </Text>
+              <Text style={styles.modalTitle}>{modalType === 'create' ? 'Ajukan Stok' : 'Edit Permintaan'}</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color={Colors.text} />
+                <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
-
-            <View style={styles.modalBody}>
-              <View style={styles.infoBox}>
-                <Ionicons name="cube-outline" size={24} color={Colors.primary} />
-                <View style={{marginLeft: 10}}>
-                  <Text style={styles.infoBoxLabel}>Nama Bahan</Text>
-                  <Text style={styles.infoBoxValue}>
-                    {modalType === 'create' ? selectedStockItem?.bahan.nama : selectedRequestItem?.bahan?.nama}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={styles.inputLabel}>Jumlah Permintaan</Text>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="numeric"
-                  value={inputQuantity}
-                  onChangeText={setInputQuantity}
-                  placeholder="0"
-                  autoFocus
-                />
-                <Text style={styles.inputSuffix}>
-                  {modalType === 'create' ? selectedStockItem?.bahan.satuan : 'Unit'}
-                </Text>
-              </View>
-
-              {modalType === 'create' && selectedStockItem && (
-                <Text style={styles.helperText}>
-                  *Rekomendasi sistem: {Math.max(0, Math.ceil(selectedStockItem.bahan.stok_minimum_outlet * 1.5) - selectedStockItem.stok)} {selectedStockItem.bahan.satuan}
-                </Text>
-              )}
+            <View style={styles.modalInfoBox}>
+               <Ionicons name="cube-outline" size={20} color={Colors.primary} />
+               <Text style={styles.modalInfoText}>{selectedStockItem?.bahan.nama || selectedRequestItem?.bahan?.nama}</Text>
             </View>
-
-            <View style={styles.modalFooter}>
+            <Text style={styles.inputLabel}>Jumlah yang Dibutuhkan</Text>
+            <TextInput 
+              style={styles.input} 
+              keyboardType="numeric" 
+              value={inputQuantity} 
+              onChangeText={setInputQuantity} 
+              placeholder="Contoh: 50" 
+              autoFocus 
+            />
+            <View style={styles.modalActions}>
               {modalType === 'edit' && (
-                <TouchableOpacity 
-                  style={[styles.modalButton, styles.buttonDelete]} 
-                  onPress={handleCancelRequest}
-                  disabled={actionLoading}
-                >
+                <TouchableOpacity style={[styles.btn, styles.btnDelete]} onPress={handleCancelRequest} disabled={actionLoading}>
                   <Ionicons name="trash-outline" size={20} color="white" />
                 </TouchableOpacity>
               )}
-              
               <TouchableOpacity 
-                style={[styles.modalButton, styles.buttonPrimary, { flex: 1 }]} 
-                onPress={handleSubmit}
+                style={[styles.btn, styles.btnSubmit, { flex: 1 }]} 
+                onPress={handleSubmit} 
                 disabled={actionLoading}
               >
                 {actionLoading ? (
                   <ActivityIndicator color="white" />
                 ) : (
-                  <Text style={styles.buttonText}>
-                    {modalType === 'create' ? 'Kirim Permintaan' : 'Simpan Perubahan'}
-                  </Text>
+                  <Text style={styles.btnText}>Simpan Permintaan</Text>
                 )}
               </TouchableOpacity>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
     </View>
   );
@@ -541,105 +392,75 @@ export default function StokScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
-  
-  // HEADER GREEN DNA
-  header: {
-    backgroundColor: Colors.primary,
-    paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingBottom: 25,
-    paddingHorizontal: 24,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8,
+  header: { 
+    backgroundColor: Colors.primary, 
+    paddingTop: Platform.OS === 'ios' ? 60 : 50, 
+    paddingHorizontal: 24, 
+    paddingBottom: 25, 
+    borderBottomLeftRadius: 32, 
+    borderBottomRightRadius: 32,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 10
   },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   headerTitle: { fontSize: 24, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
-  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
-  headerIconBg: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
-
-  // TAB PILL
-  tabContainer: { 
-    flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 16, padding: 4 
+  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
+  headerIconContainer: { width: 44, height: 44, borderRadius: 12, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
+  tabContainer: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 18, padding: 5 },
+  tabButton: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 14, flexDirection:'row', justifyContent:'center' },
+  tabActive: { backgroundColor: 'white', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3 },
+  tabText: { color: 'rgba(255,255,255,0.7)', fontWeight: '700', fontSize: 12 },
+  tabTextActive: { color: Colors.primary },
+  notifDot: { 
+    width: 8, 
+    height: 8, 
+    borderRadius: 4, 
+    backgroundColor: Colors.error, 
+    marginLeft: 6, 
+    borderWidth: 1, // FIX: Properti yang benar
+    borderColor: 'white' 
   },
-  tabButton: { 
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', 
-    paddingVertical: 10, borderRadius: 12, gap: 6 
-  },
-  tabActive: { backgroundColor: 'white', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4 },
-  tabText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.9)' },
-  tabTextActive: { color: Colors.primary, fontWeight: '700' },
-
-  content: { flex: 1, marginTop: 10, paddingHorizontal: 24 },
-
-  // OVERVIEW CARDS
-  overviewContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-  overviewCard: { 
-    flex: 1, backgroundColor: 'white', marginHorizontal: 4, borderRadius: 16, padding: 12, alignItems: 'center',
-    borderWidth: 1, borderColor: '#F0F0F0', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05 
-  },
-  iconCircle: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  overviewValue: { fontSize: 18, fontWeight: '800', color: Colors.text },
-  overviewLabel: { fontSize: 11, color: Colors.textSecondary, fontWeight: '600' },
-
-  // SEARCH BAR
-  searchContainer: { 
-    flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', 
-    borderRadius: 12, paddingHorizontal: 15, marginBottom: 20, 
-    borderWidth: 1, borderColor: '#E0E0E0', height: 50 
-  },
-  searchInput: { flex: 1, marginLeft: 10, fontSize: 15, color: Colors.text },
-
-  // CARD LIST
-  card: { 
-    backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 16,
-    elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4,
-    borderWidth: 1, borderColor: '#F0F0F0'
-  },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: Colors.text, marginBottom: 2 },
-  cardSubtitle: { fontSize: 12, color: Colors.textSecondary },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  statusText: { fontSize: 11, fontWeight: '700' },
-  divider: { height: 1, backgroundColor: '#F0F0F0', marginVertical: 12 },
-  
-  detailsRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  detailItem: { flex: 1 },
-  detailLabel: { fontSize: 12, color: Colors.textSecondary, marginBottom: 4 },
-  detailValue: { fontSize: 15, fontWeight: '700', color: Colors.text },
-
-  actionButton: { 
-    marginTop: 15, backgroundColor: '#E3F2FD', paddingVertical: 10, borderRadius: 8,
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 
-  },
-  actionButtonText: { color: Colors.primary, fontWeight: '700', fontSize: 13 },
-
-  footerNote: { flexDirection: 'row', alignItems: 'center', marginTop: 10, justifyContent: 'flex-end', gap: 4 },
-  footerNoteText: { fontSize: 12, color: Colors.primary, fontStyle: 'italic' },
-
-  emptyState: { alignItems: 'center', justifyContent: 'center', marginTop: 50 },
-  emptyText: { marginTop: 10, color: Colors.textSecondary, fontSize: 14 },
-
-  // MODAL STYLES
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, elevation: 20 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
-  modalBody: { marginBottom: 24 },
-  
-  infoBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F7FA', padding: 12, borderRadius: 12, marginBottom: 20 },
-  infoBoxLabel: { fontSize: 12, color: Colors.textSecondary },
-  infoBoxValue: { fontSize: 15, fontWeight: '700', color: Colors.text },
-  
-  inputLabel: { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 8 },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, paddingHorizontal: 15, height: 50 },
-  input: { flex: 1, fontSize: 16, fontWeight: '700', color: Colors.text },
-  inputSuffix: { fontSize: 14, color: Colors.textSecondary, fontWeight: '600' },
-  
-  helperText: { fontSize: 12, color: Colors.primary, marginTop: 8, fontStyle: 'italic' },
-  
-  modalFooter: { flexDirection: 'row', gap: 12 },
-  modalButton: { paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  buttonPrimary: { backgroundColor: Colors.primary },
-  buttonDelete: { backgroundColor: '#FFEBEE', width: 50 },
-  buttonText: { color: 'white', fontWeight: 'bold', fontSize: 15 },
+  scrollContent: { padding: 20, paddingBottom: 100 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 16, paddingHorizontal: 15, marginBottom: 20, height: 50, borderWidth: 1, borderColor: '#EEE', elevation: 2, shadowColor: '#000', shadowOpacity: 0.02 },
+  searchInput: { flex: 1, marginLeft: 10, fontWeight: '500' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 },
+  emptyContainer: { alignItems: 'center', marginTop: 60 },
+  emptyText: { marginTop: 15, color: '#999', fontSize: 14, fontWeight: '500' },
+  card: { backgroundColor: 'white', borderRadius: 24, padding: 20, marginBottom: 16, elevation: 4, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, borderWidth: 1, borderColor: '#F0F0F0' },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  cardInfo: { flex: 1 },
+  cardTitle: { fontSize: 16, fontWeight: '800', color: '#333', marginBottom: 4 },
+  cardUnit: { fontSize: 12, color: '#999', fontWeight: '500' },
+  badge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  badgeText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
+  cardDivider: { height: 1, backgroundColor: '#F5F5F5', marginVertical: 15 },
+  cardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  stockLabel: { fontSize: 11, color: '#999', fontWeight: '700', textTransform: 'uppercase', marginBottom: 4 },
+  stockValue: { fontSize: 24, fontWeight: '900' },
+  reqBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.primary, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, elevation: 3 },
+  reqBtnText: { color: 'white', fontWeight: '800', fontSize: 13 },
+  shipmentSub: { fontSize: 13, color: '#666', marginTop: 2 },
+  shipIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F8E9', justifyContent: 'center', alignItems: 'center' },
+  shipmentQty: { fontSize: 22, fontWeight: '800', color: '#333' },
+  confirmBtn: { backgroundColor: Colors.success, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, minWidth: 120, alignItems: 'center' },
+  confirmBtnText: { color: 'white', fontWeight: '800', fontSize: 13 },
+  historyBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  historyQty: { fontSize: 20, fontWeight: '800', color: '#444' },
+  editIndicator: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E3F2FD', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  editText: { color: Colors.primary, fontWeight: '700', fontSize: 12 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 25, paddingBottom: Platform.OS === 'ios' ? 40 : 25 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: '#333' },
+  modalInfoBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8F9FA', padding: 15, borderRadius: 16, marginBottom: 20, gap: 10 },
+  modalInfoText: { fontSize: 16, fontWeight: '700', color: '#333' },
+  inputLabel: { fontSize: 13, fontWeight: '700', color: '#666', marginBottom: 10, textTransform: 'uppercase' },
+  input: { backgroundColor: '#F5F5F5', borderRadius: 16, padding: 18, fontSize: 20, fontWeight: '800', color: Colors.primary, marginBottom: 25, borderWidth: 1, borderColor: '#EEE' },
+  modalActions: { flexDirection: 'row', gap: 12 },
+  btn: { padding: 18, borderRadius: 18, alignItems: 'center', justifyContent:'center' },
+  btnSubmit: { backgroundColor: Colors.primary, elevation: 4 },
+  btnDelete: { backgroundColor: Colors.error, width: 60 },
+  btnText: { color: 'white', fontWeight: '800', fontSize: 16 }
 });

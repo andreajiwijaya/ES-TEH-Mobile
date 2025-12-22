@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useRouter, useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
   Alert,
   Platform,
@@ -15,17 +15,20 @@ import {
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { User, Outlet } from '../../types';
-import { authAPI } from '../../services/api'; 
+import { authAPI } from '../../services/api';
 
-export default function PengaturanScreen() {
+export default function AkunScreen() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [outlet, setOutlet] = useState<Outlet | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  // Load profile setiap kali halaman difokuskan
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [])
+  );
 
   const loadProfile = async () => {
     try {
@@ -35,14 +38,14 @@ export default function PengaturanScreen() {
         setUser(parsedUser);
 
         if (parsedUser.outlet) {
-            setOutlet(parsedUser.outlet);
+          setOutlet(parsedUser.outlet);
         } else if (parsedUser.outlet_id) {
-            setOutlet({
-                id: parsedUser.outlet_id,
-                nama: `Outlet #${parsedUser.outlet_id}`,
-                alamat: '-',
-                is_active: true
-            });
+          setOutlet({
+            id: parsedUser.outlet_id,
+            nama: `Outlet #${parsedUser.outlet_id}`,
+            alamat: '-',
+            is_active: true
+          });
         }
       }
     } catch (error) {
@@ -57,16 +60,17 @@ export default function PengaturanScreen() {
       [
         { text: 'Batal', style: 'cancel' },
         {
-          text: 'Keluar',
+          text: 'Keluar Sekarang',
           style: 'destructive',
           onPress: async () => {
             setIsLoggingOut(true);
             try {
-              await authAPI.logout();
+              await authAPI.logout(); // Endpoint 3: Logout
             } catch (error) {
-              console.log('Logout API error (ignored):', error);
+              console.log('Logout API error:', error);
             } finally {
               await AsyncStorage.multiRemove(['@auth_token', '@user_data']);
+              setIsLoggingOut(false);
               router.replace('/(auth)/login');
             }
           },
@@ -91,11 +95,11 @@ export default function PengaturanScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
       
-      {/* Header Background */}
+      {/* Header Background Modern */}
       <View style={styles.headerBackground}>
         <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>Pengaturan Akun</Text>
-            <Text style={styles.headerSubtitle}>Kelola profil dan sesi anda</Text>
+            <Text style={styles.headerTitle}>Profil Saya</Text>
+            <Text style={styles.headerSubtitle}>Kelola informasi akun dan sesi</Text>
         </View>
       </View>
 
@@ -107,12 +111,16 @@ export default function PengaturanScreen() {
         {/* Kartu Profil Utama */}
         <View style={styles.profileCard}>
           <View style={styles.avatarContainer}>
-            <Text style={styles.avatarText}>
-              {user?.username?.substring(0, 2).toUpperCase() || 'KS'}
-            </Text>
+            <View style={styles.avatarCircle}>
+                <Text style={styles.avatarText}>
+                  {user?.username?.substring(0, 2).toUpperCase() || 'KS'}
+                </Text>
+            </View>
+            <View style={styles.statusOnline} />
           </View>
           <Text style={styles.profileName}>{user?.username || 'Pengguna'}</Text>
           <View style={styles.roleBadge}>
+            <Ionicons name="shield-checkmark" size={14} color={Colors.primary} style={{marginRight: 6}} />
             <Text style={styles.roleText}>
               {user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Karyawan'}
             </Text>
@@ -121,7 +129,7 @@ export default function PengaturanScreen() {
 
         {/* Section: Informasi Akun */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>INFORMASI PRIBADI</Text>
+          <Text style={styles.sectionTitle}>DETAIL PENGGUNA</Text>
           <View style={styles.card}>
             <InfoItem 
                 icon="person-outline" 
@@ -129,14 +137,14 @@ export default function PengaturanScreen() {
                 value={user?.username || '-'} 
             />
             <InfoItem 
-                icon="id-card-outline" 
+                icon="finger-print-outline" 
                 label="User ID" 
-                value={user?.id?.toString() || '-'} 
+                value={`#${user?.id || '-'}`} 
             />
             <InfoItem 
-                icon="shield-checkmark-outline" 
-                label="Role Akses" 
-                value={user?.role?.toUpperCase() || '-'} 
+                icon="briefcase-outline" 
+                label="Status Karyawan" 
+                value="Aktif" 
                 isLast
             />
           </View>
@@ -153,7 +161,7 @@ export default function PengaturanScreen() {
             />
             <InfoItem 
                 icon="location-outline" 
-                label="Alamat" 
+                label="Alamat Penempatan" 
                 value={outlet?.alamat || '-'} 
                 isLast
             />
@@ -170,13 +178,16 @@ export default function PengaturanScreen() {
                 <ActivityIndicator color={Colors.error} />
             ) : (
                 <>
-                    <Ionicons name="log-out-outline" size={20} color={Colors.error} />
-                    <Text style={styles.logoutText}>Keluar Aplikasi</Text>
+                    <Ionicons name="log-out-outline" size={22} color={Colors.error} />
+                    <Text style={styles.logoutText}>Keluar dari Aplikasi</Text>
                 </>
             )}
         </TouchableOpacity>
 
-        <Text style={styles.versionText}>Es Teh POS App v1.0.0</Text>
+        <View style={styles.footer}>
+            <Text style={styles.versionText}>Es Teh POS App v1.0.0</Text>
+            <Text style={styles.footerSub}>Pekanbaru, Indonesia</Text>
+        </View>
       </ScrollView>
     </View>
   );
@@ -190,11 +201,10 @@ const styles = StyleSheet.create({
   headerBackground: {
     backgroundColor: Colors.primary,
     height: 180,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
     paddingHorizontal: 24,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
-    alignItems: 'center',
   },
   headerContent: {
     alignItems: 'center',
@@ -202,13 +212,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: Colors.backgroundLight,
+    color: 'white',
     marginBottom: 4,
     letterSpacing: 0.5,
   },
   headerSubtitle: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: 'rgba(255, 255, 255, 0.8)',
   },
   scrollView: {
     flex: 1,
@@ -219,29 +229,43 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   profileCard: {
-    backgroundColor: Colors.backgroundLight,
+    backgroundColor: 'white',
     borderRadius: 24,
     alignItems: 'center',
     paddingVertical: 24,
     paddingHorizontal: 20,
     marginBottom: 24,
+    elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
-    elevation: 8,
   },
   avatarContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  avatarCircle: {
     width: 80,
     height: 80,
     borderRadius: 40,
     backgroundColor: '#E8F5E9',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
     borderWidth: 4,
-    borderColor: Colors.backgroundLight,
-    elevation: 2,
+    borderColor: 'white',
+    elevation: 3,
+  },
+  statusOnline: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#4CAF50',
+    borderWidth: 2,
+    borderColor: 'white',
   },
   avatarText: {
     fontSize: 28,
@@ -251,14 +275,18 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: 20,
     fontWeight: '800',
-    color: Colors.text,
+    color: '#333',
     marginBottom: 8,
   },
   roleBadge: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#F1F8E9',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E8F5E9',
   },
   roleText: {
     fontSize: 12,
@@ -273,21 +301,20 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: '#999',
     marginBottom: 12,
     marginLeft: 4,
     letterSpacing: 1,
-    textTransform: 'uppercase',
   },
   card: {
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: 16,
+    backgroundColor: 'white',
+    borderRadius: 20,
     overflow: 'hidden',
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 8,
     borderWidth: 1,
     borderColor: '#F0F0F0',
   },
@@ -296,7 +323,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: '#F5F5F5',
   },
   infoItemLast: {
     borderBottomWidth: 0,
@@ -305,7 +332,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 12,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#F9F9F9',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -315,39 +342,47 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: '#999',
     marginBottom: 2,
     fontWeight: '600',
+    textTransform: 'uppercase',
   },
   infoValue: {
     fontSize: 15,
-    color: Colors.text,
+    color: '#333',
     fontWeight: '700',
   },
   logoutButton: {
     flexDirection: 'row',
-    backgroundColor: '#FFEBEE',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: '#FFF5F5',
+    borderRadius: 20,
+    padding: 18,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
-    marginBottom: 24,
+    marginBottom: 32,
     borderWidth: 1,
-    borderColor: '#FFCDD2',
+    borderColor: '#FFEBEB',
   },
   logoutText: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#D32F2F',
-    marginLeft: 8,
+    fontWeight: '800',
+    color: '#E53935',
+    marginLeft: 10,
   },
-  versionText: {
-    textAlign: 'center',
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '500',
-    opacity: 0.6,
+  footer: {
+    alignItems: 'center',
     marginBottom: 20,
   },
+  versionText: {
+    color: '#999',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  footerSub: {
+    color: '#CCC',
+    fontSize: 10,
+    marginTop: 4,
+    fontWeight: '600',
+  }
 });

@@ -106,9 +106,10 @@ const makeRequest = async <T>(
     try {
       data = responseText ? JSON.parse(responseText) : {};
     } catch (parseError) {
-      console.error('Invalid JSON:', parseError);
-      console.error('Raw Response:', responseText); // Penting untuk debug 404/500 HTML page
-      return { error: `Server Error: Invalid JSON response (${response.status})` };
+      // FIX ESLint: Mencetak parseError agar variabel terpakai
+      console.error('Invalid JSON response:', parseError);
+      console.error('Raw Response Text:', responseText); 
+      return { error: `Server Error: Respon tidak valid (${response.status})` };
     }
 
     if (!response.ok) {
@@ -124,7 +125,8 @@ const makeRequest = async <T>(
 
     return { data: data };
   } catch (error: any) {
-    console.error('Network Error:', error);
+    // FIX ESLint: Mencetak error agar variabel terpakai
+    console.error('Network Error Detail:', error);
     return { error: 'Gagal terhubung ke server. Periksa koneksi internet.' };
   }
 };
@@ -139,7 +141,7 @@ const makeFormDataRequest = async <T>(
     const token = await getToken();
     const headers: Record<string, string> = {
       'Accept': 'application/json',
-      // PENTING: Jangan set 'Content-Type' manual! Biarkan fetch yang mengaturnya (multipart/form-data; boundary=...)
+      // PENTING: Jangan set 'Content-Type' manual! Biarkan fetch yang mengaturnya
     };
 
     if (token) {
@@ -162,8 +164,8 @@ const makeFormDataRequest = async <T>(
     try {
       data = responseText ? JSON.parse(responseText) : {};
     } catch (parseError) {
+      // FIX ESLint: Mencetak parseError agar variabel terpakai
       console.error('Invalid JSON (FormData):', parseError);
-      console.error('Raw Response:', responseText);
       return { error: 'Server Error: Invalid JSON response' };
     }
 
@@ -175,7 +177,8 @@ const makeFormDataRequest = async <T>(
 
     return { data: data };
   } catch (error: any) {
-    console.error('FormData Network Error:', error);
+    // FIX ESLint: Mencetak error agar variabel terpakai
+    console.error('FormData Network Error Detail:', error);
     return { error: 'Gagal upload data. Periksa koneksi internet.' };
   }
 };
@@ -264,8 +267,9 @@ export const gudangAPI = {
       
       const file = prepareImageFile(data.bukti_foto);
       if (file) formData.append('bukti_foto', file);
-
-      return makeFormDataRequest(`/gudang/barang-keluar/${id}`, formData, 'PUT'); // Note: Laravel sometimes needs _method: PUT inside POST
+      
+      formData.append('_method', 'PUT'); // Trick Laravel agar bisa baca FormData di method PUT
+      return makeFormDataRequest(`/gudang/barang-keluar/${id}`, formData, 'POST');
     }
     return makeRequest(`/gudang/barang-keluar/${id}`, { 
       method: 'PUT', 
@@ -275,22 +279,13 @@ export const gudangAPI = {
 
   deleteBarangKeluar: async (id: number) => makeRequest(`/gudang/barang-keluar/${id}`, { method: 'DELETE' }),
 
-  terimaBarangKeluar: async (id: number, buktiFoto?: any) => {
-    if (buktiFoto) {
-      const formData = new FormData();
-      const file = prepareImageFile(buktiFoto);
-      if (file) formData.append('bukti_foto', file);
-      
-      return makeFormDataRequest(`/gudang/barang-keluar/${id}/terima`, formData, 'POST');
-    }
-    return makeRequest(`/gudang/barang-keluar/${id}/terima`, { method: 'POST' });
-  },
-
   getStok: async () => makeRequest('/gudang/stok'),
   getPermintaanStok: async () => makeRequest('/gudang/permintaan-stok'),
   getPermintaanStokById: async (id: number) => makeRequest(`/gudang/permintaan-stok/${id}`),
-  updatePermintaanStok: async (id: number, status: string) => 
-    makeRequest(`/gudang/permintaan-stok/${id}`, { method: 'PUT', body: JSON.stringify({ status }) }),
+  
+  // FIX: Mengubah agar menerima object data (status) agar sinkron dengan permintaan.tsx Gudang
+  updatePermintaanStok: async (id: number, data: { status: string }) => 
+    makeRequest(`/gudang/permintaan-stok/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 };
 
 // ==================== KARYAWAN APIs ====================
@@ -306,8 +301,11 @@ export const karyawanAPI = {
     formData.append('harga', data.harga.toString());
     formData.append('category', data.category || 'Minuman');
     
-    // Pastikan komposisi dikirim sebagai string JSON yang valid
-    formData.append('komposisi', JSON.stringify(data.komposisi || []));
+    // REVISI UNTUK ERROR "komposisi must be an array"
+    // Laravel seringkali bingung jika kita kirim string JSON. 
+    // Jika array kosong, kita pastikan kirim string '[]' atau loop append.
+    const komposisiArray = Array.isArray(data.komposisi) ? data.komposisi : [];
+    formData.append('komposisi', JSON.stringify(komposisiArray));
 
     if (data.gambar) {
       const file = prepareImageFile(data.gambar);
@@ -319,24 +317,21 @@ export const karyawanAPI = {
 
   // 40. PUT /produk/{id} (Update)
   updateProduk: async (id: number, data: { nama: string; harga: number; gambar?: any; category?: string; komposisi: any[] }) => {
-    // Gunakan FormData agar konsisten, bahkan jika tidak ada gambar (karena komposisi array)
     const formData = new FormData();
     formData.append('nama', data.nama);
     formData.append('harga', data.harga.toString());
     formData.append('category', data.category || 'Minuman');
-    formData.append('komposisi', JSON.stringify(data.komposisi || []));
-
-    // Trick Laravel PUT dengan FormData: Gunakan POST + _method: PUT
-    // Tapi coba PUT langsung dulu, jika gagal ganti ke POST + _method
+    
+    // REVISI UNTUK ERROR "komposisi must be an array"
+    const komposisiArray = Array.isArray(data.komposisi) ? data.komposisi : [];
+    formData.append('komposisi', JSON.stringify(komposisiArray));
     
     if (data.gambar) {
       const file = prepareImageFile(data.gambar);
       if (file) formData.append('gambar', file);
     }
 
-    // Banyak backend (Laravel/PHP) tidak bisa membaca FormData via method PUT langsung.
-    // Solusi standar: Method POST dengan field `_method` = `PUT`
-    formData.append('_method', 'PUT'); 
+    formData.append('_method', 'PUT'); // Trick Laravel
     return makeFormDataRequest(`/produk/${id}`, formData, 'POST');
   },
 
@@ -346,13 +341,13 @@ export const karyawanAPI = {
   getTransaksiById: async (id: number) => makeRequest(`/transaksi/${id}`),
 
   // 44. POST /transaksi
-  createTransaksi: async (data: { tanggal: string; metode_bayar: string; bukti_qris?: any; items: any[] }) => {
+  createTransaksi: async (data: { tanggal: string; metode_bayar: string; bukti_qris?: any; items: any }) => {
     const formData = new FormData();
     formData.append('tanggal', data.tanggal);
     formData.append('metode_bayar', data.metode_bayar);
     
     // Stringify array items agar terbaca backend
-    formData.append('items', JSON.stringify(data.items));
+    formData.append('items', typeof data.items === 'string' ? data.items : JSON.stringify(data.items));
 
     if (data.bukti_qris) {
       const file = prepareImageFile(data.bukti_qris);
@@ -367,22 +362,19 @@ export const karyawanAPI = {
     const formData = new FormData();
     if(data.tanggal) formData.append('tanggal', data.tanggal);
     if(data.metode_bayar) formData.append('metode_bayar', data.metode_bayar);
-    if(data.items) formData.append('items', JSON.stringify(data.items));
+    if(data.items) formData.append('items', typeof data.items === 'string' ? data.items : JSON.stringify(data.items));
     
     if (data.bukti_qris) {
        const file = prepareImageFile(data.bukti_qris);
        if (file) formData.append('bukti_qris', file);
     }
     
-    // Workaround untuk PUT dengan File
     formData.append('_method', 'PUT');
     return makeFormDataRequest(`/transaksi/${id}`, formData, 'POST');
   },
 
   deleteTransaksi: async (id: number) => makeRequest(`/transaksi/${id}`, { method: 'DELETE' }),
 
-  // 47-51 Permintaan Stok (Outlet Side)
-  // Perbaikan: Menambah try-catch khusus di komponen UI jika endpoint ini 405/404
   getPermintaanStok: async () => makeRequest('/permintaan-stok'),
   getPermintaanStokById: async (id: number) => makeRequest(`/permintaan-stok/${id}`),
   createPermintaanStok: async (data: any) => makeRequest('/permintaan-stok', { method: 'POST', body: JSON.stringify(data) }),
@@ -390,6 +382,10 @@ export const karyawanAPI = {
   deletePermintaanStok: async (id: number) => makeRequest(`/permintaan-stok/${id}`, { method: 'DELETE' }),
 
   getStokOutlet: async () => makeRequest('/stok/outlet'),
+
+  // FIX: Menambahkan fungsi yang sempat hilang agar tab Penerimaan di stok.tsx Karyawan tidak error
+  terimaBarangKeluar: async (id: number) => 
+    makeRequest(`/gudang/barang-keluar/${id}/terima`, { method: 'POST' }),
 };
 
 export default {

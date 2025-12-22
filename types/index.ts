@@ -11,7 +11,7 @@ export interface User {
 
 export interface LoginResponse {
   access_token: string;
-  token?: string;        // <--- Agar error di login.tsx hilang
+  token?: string;        // Agar error di login.tsx hilang
   token_type: string;
   user: User;
   message?: string;
@@ -55,7 +55,6 @@ export interface Product {
 
 // ==================== TRANSAKSI & CART ====================
 
-// Tambahkan OrderItem untuk state keranjang belanja di Frontend
 export interface OrderItem {
   id: string; // Menggunakan string karena pakai Date.now() di frontend
   produk_id: number;
@@ -64,13 +63,11 @@ export interface OrderItem {
   notes?: string;
 }
 
-// Tipe untuk item yang dikirim ke Backend (API)
 export interface TransaksiItemPayload {
   produk_id: number;
   quantity: number;
 }
 
-// Tipe data detail transaksi dari Backend
 export interface TransaksiItem {
   id?: number;
   transaksi_id?: number;
@@ -93,13 +90,11 @@ export interface Transaksi {
 
 // ==================== GUDANG (WAREHOUSE) ====================
 
-// --- TAMBAHAN BARU DI SINI (Supaya overview.tsx tidak error) ---
 export interface StokGudang {
   bahan_id: number;
   stok: number;
   bahan?: Bahan;
 }
-// -------------------------------------------------------------
 
 export interface BarangMasuk {
   id: number;
@@ -116,6 +111,7 @@ export interface BarangKeluar {
   gudang_id?: number;
   outlet_id?: number;
   tanggal_keluar: string;
+  // REVISI: 'received' wajib ada untuk mendukung Endpoint 32 (Konfirmasi Terima)
   status: 'pending' | 'in_transit' | 'received' | 'cancelled';
   bukti_foto?: string | null;
   jumlah?: number;
@@ -127,7 +123,8 @@ export interface PermintaanStok {
   outlet_id: number;
   bahan_id: number;
   jumlah: number;
-  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  // REVISI: Status disesuaikan dengan alur di database (approved & cancelled)
+  status: 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled';
   bahan?: Bahan;
   outlet?: Outlet;
 }
