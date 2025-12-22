@@ -24,13 +24,7 @@ export default function AkunScreen() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Load profile setiap kali halaman difokuskan
-  useFocusEffect(
-    useCallback(() => {
-      loadProfile();
-    }, [])
-  );
-
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     try {
       const rawUser = await AsyncStorage.getItem('@user_data');
       if (rawUser) {
@@ -44,14 +38,20 @@ export default function AkunScreen() {
             id: parsedUser.outlet_id,
             nama: `Outlet #${parsedUser.outlet_id}`,
             alamat: '-',
-            is_active: true
+            is_active: true,
           });
         }
       }
     } catch (error) {
       console.error('Gagal memuat profil', error);
     }
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile])
+  );
 
   const handleLogout = async () => {
     Alert.alert(

@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Colors } from '../../constants/Colors';
 
@@ -8,16 +9,10 @@ export default function EmployeeTabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.primary, 
-        tabBarInactiveTintColor: '#B0BEC5', 
-        tabBarShowLabel: true, 
-        tabBarHideOnKeyboard: true, 
-        
-        // Mengatur animasi perpindahan tab agar lebih smooth
-        tabBarVisibilityAnimationConfig: {
-            show: { animation: 'spring', config: { stiffness: 1000, damping: 500 } }
-        },
-        
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: '#B0BEC5',
+        tabBarShowLabel: true,
+        tabBarHideOnKeyboard: true,
         // Style Tab Bar Modern konsisten dengan Gudang
         tabBarStyle: styles.tabBar,
         tabBarItemStyle: styles.tabItem,
@@ -83,17 +78,16 @@ export default function EmployeeTabsLayout() {
 }
 
 // Komponen Helper untuk Icon dengan Efek "Green Pill"
-const TabIcon = ({ focused, color, name }: { focused: boolean; color: string; name: keyof typeof Ionicons.glyphMap }) => {
+const TabIcon = React.memo(function TabIcon({ focused, color, name }: { focused: boolean; color: string; name: React.ComponentProps<typeof Ionicons>['name'] }) {
+  // When icon doesn't have an outline variant, fall back to the base name.
+  const outlineName = `${name}-outline`;
+  const iconName = (focused ? name : (outlineName as React.ComponentProps<typeof Ionicons>['name']));
   return (
-    <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-      <Ionicons 
-        name={focused ? name : (`${name}-outline` as any)} 
-        size={20} // Ukuran sedikit diperkecil agar proporsional dalam container
-        color={color} 
-      />
+    <View accessibilityRole="image" style={[styles.iconContainer, focused && styles.iconContainerActive]}>
+      <Ionicons name={iconName} size={20} color={color} />
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   tabBar: {

@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
-import { Bahan, PermintaanStok, BarangKeluar } from '../../types';
+import { Bahan, PermintaanStok, BarangKeluar, BahanGudang } from '../../types';
 import { karyawanAPI, gudangAPI } from '../../services/api';
 
 interface StockItem {
@@ -33,6 +33,9 @@ export default function StokScreen() {
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [requestHistory, setRequestHistory] = useState<PermintaanStok[]>([]);
   const [incomingShipments, setIncomingShipments] = useState<BarangKeluar[]>([]);
+  const [bahanGudang, setBahanGudang] = useState<BahanGudang[]>([]);
+  const [selectedBahanGudangId, setSelectedBahanGudangId] = useState<number | null>(null);
+  const [modalFromGudang, setModalFromGudang] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -47,10 +50,11 @@ export default function StokScreen() {
   const loadAllData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     try {
-      const [stokRes, reqRes, incomingRes] = await Promise.all([
+      const [stokRes, reqRes, incomingRes, bahanGudangRes] = await Promise.all([
         karyawanAPI.getStokOutlet(),
         karyawanAPI.getPermintaanStok(),
-        gudangAPI.getBarangKeluar()
+        gudangAPI.getBarangKeluar(),
+        karyawanAPI.getBahanGudang(),
       ]);
 
       if (stokRes.data && Array.isArray(stokRes.data)) {
@@ -77,7 +81,26 @@ export default function StokScreen() {
       }
       
       if (incomingRes.data && Array.isArray(incomingRes.data)) {
-        setIncomingShipments((incomingRes.data as BarangKeluar[]).filter(i => i.status !== 'received'));
+        // show only shipments that still need to be received (exclude already received/cancelled)
+        const pending = (incomingRes.data as BarangKeluar[]).filter(i => {
+          const s = (i.status || '').toString().toLowerCase();
+          return s !== 'received' && s !== 'diterima' && s !== 'cancelled';
+        });
+        setIncomingShipments(pending);
+      }
+
+      if (bahanGudangRes.data) {
+        // API may return either an array directly, or an object { message, data: [...] }
+        const payload = Array.isArray(bahanGudangRes.data)
+          ? bahanGudangRes.data
+          : (bahanGudangRes.data as any).data;
+        if (Array.isArray(payload)) {
+          setBahanGudang(payload as BahanGudang[]);
+        } else {
+          // if payload unexpected, clear list and log for debugging
+          console.warn('Unexpected bahanGudang response shape', bahanGudangRes.data);
+          setBahanGudang([]);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -97,20 +120,68 @@ export default function StokScreen() {
   const handleConfirmReceipt = async (id: number) => {
     Alert.alert('Konfirmasi', 'Barang sudah sampai dan sesuai?', [
       { text: 'Batal', style: 'cancel' },
-      { text: 'Ya, Terima', onPress: async () => {
-        setActionLoading(true);
-        try {
-          const res = await (karyawanAPI as any).terimaBarangKeluar(id); 
-          if (res.error) throw new Error(res.error);
-          Alert.alert('Sukses', 'Stok outlet telah bertambah.');
-          loadAllData(true);
-        } catch (err: any) {
-          Alert.alert('Gagal', err.message);
-        } finally {
-          setActionLoading(false);
+      {
+        text: 'Tolak',
+        style: 'destructive',
+        onPress: async () => {
+          Alert.alert('Tolak Kiriman', 'Apa Anda yakin menolak kiriman ini?', [
+            { text: 'Batal', style: 'cancel' },
+            { text: 'Ya, Tolak', style: 'destructive', onPress: async () => {
+              setActionLoading(true);
+              try {
+                const res = await karyawanAPI.tolakBarangKeluar(id);
+                if (res.error) throw new Error(res.error);
+                const msg = (res.data && (res.data as any).message) || 'Kiriman ditolak.';
+                Alert.alert('Berhasil', msg);
+                await loadAllData(true);
+              } catch (err: any) {
+                console.error('Tolak Error:', err);
+                Alert.alert('Gagal', err.message || 'Gagal menolak kiriman.');
+              } finally {
+                setActionLoading(false);
+              }
+            }}
+          ]);
         }
-      }}
+      },
+      {
+        text: 'Ya, Terima',
+        onPress: async () => {
+          setActionLoading(true);
+          try {
+            const res = await karyawanAPI.terimaBarangKeluar(id);
+            if (res.error) {
+              throw new Error(res.error);
+            }
+            const successMsg = (res.data && (res.data as any).message) || 'Stok outlet telah bertambah.';
+            Alert.alert('Sukses', successMsg);
+            await loadAllData(true);
+          } catch (err: any) {
+            console.error('Terima Error:', err);
+            Alert.alert('Gagal', err.message || 'Gagal menerima barang.');
+          } finally {
+            setActionLoading(false);
+          }
+        }
+      }
     ]);
+  };
+
+  const handleRejectShipment = async (id: number) => {
+    // helper if we need to call reject separately from confirm dialog
+    setActionLoading(true);
+    try {
+      const res = await karyawanAPI.tolakBarangKeluar(id);
+      if (res.error) throw new Error(res.error);
+      const msg = (res.data && (res.data as any).message) || 'Kiriman ditolak.';
+      Alert.alert('Berhasil', msg);
+      await loadAllData(true);
+    } catch (err: any) {
+      console.error('Tolak Error:', err);
+      Alert.alert('Gagal', err.message || 'Gagal menolak kiriman.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -118,12 +189,20 @@ export default function StokScreen() {
     if (isNaN(qty) || qty <= 0) return Alert.alert('Validasi', 'Input jumlah tidak valid.');
     setActionLoading(true);
     try {
-      if (modalType === 'create' && selectedStockItem) {
-        await karyawanAPI.createPermintaanStok({ bahan_id: selectedStockItem.bahan_id, jumlah: qty });
+      if (modalType === 'create') {
+        if (modalFromGudang && selectedBahanGudangId) {
+          await karyawanAPI.createPermintaanStok({ bahan_id: selectedBahanGudangId, jumlah: qty });
+        } else if (selectedStockItem) {
+          await karyawanAPI.createPermintaanStok({ bahan_id: selectedStockItem.bahan_id, jumlah: qty });
+        } else {
+          throw new Error('Pilih bahan terlebih dahulu.');
+        }
       } else if (modalType === 'edit' && selectedRequestItem) {
         await karyawanAPI.updatePermintaanStok(selectedRequestItem.id, { bahan_id: selectedRequestItem.bahan_id, jumlah: qty });
       }
       setModalVisible(false);
+      setModalFromGudang(false);
+      setSelectedBahanGudangId(null);
       loadAllData(true);
     } catch (err: any) {
       Alert.alert('Gagal', err.message);
@@ -205,6 +284,23 @@ export default function StokScreen() {
                   />
                 </View>
 
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 12 }}>
+                  <TouchableOpacity
+                    style={[styles.reqBtn, { paddingHorizontal: 12, paddingVertical: 8 }]}
+                    onPress={() => {
+                      setModalFromGudang(true);
+                      setSelectedStockItem(null);
+                      setSelectedBahanGudangId(null);
+                      setModalType('create');
+                      setInputQuantity('');
+                      setModalVisible(true);
+                    }}
+                  >
+                    <Ionicons name="download-outline" size={16} color="white" />
+                    <Text style={[styles.reqBtnText, { marginLeft: 8, fontSize: 12 }]}>Ambil dari Gudang</Text>
+                  </TouchableOpacity>
+                </View>
+
                 {filteredStock.length === 0 ? (
                   <View style={styles.emptyContainer}>
                     <Ionicons name="file-tray-outline" size={60} color="#ccc" />
@@ -275,17 +371,31 @@ export default function StokScreen() {
                         <Text style={styles.stockLabel}>Jumlah Kirim</Text>
                         <Text style={styles.shipmentQty}>{ship.jumlah} {ship.bahan?.satuan}</Text>
                       </View>
-                      <TouchableOpacity 
-                        style={styles.confirmBtn} 
-                        onPress={() => handleConfirmReceipt(ship.id)} 
-                        disabled={actionLoading}
-                      >
-                        {actionLoading ? (
-                          <ActivityIndicator color="white" size="small" />
-                        ) : (
-                          <Text style={styles.confirmBtnText}>Terima Barang</Text>
-                        )}
-                      </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity
+                          style={[styles.btn, { backgroundColor: Colors.error, paddingHorizontal: 12 } ]}
+                          onPress={() => handleRejectShipment(ship.id)}
+                          disabled={actionLoading}
+                        >
+                          {actionLoading ? (
+                            <ActivityIndicator color="white" size="small" />
+                          ) : (
+                            <Text style={[styles.btnText, { fontSize: 13 }]}>Tolak</Text>
+                          )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                          style={styles.confirmBtn} 
+                          onPress={() => handleConfirmReceipt(ship.id)} 
+                          disabled={actionLoading}
+                        >
+                          {actionLoading ? (
+                            <ActivityIndicator color="white" size="small" />
+                          ) : (
+                            <Text style={styles.confirmBtnText}>Terima Barang</Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
                 ))
@@ -354,8 +464,36 @@ export default function StokScreen() {
             </View>
             <View style={styles.modalInfoBox}>
                <Ionicons name="cube-outline" size={20} color={Colors.primary} />
-               <Text style={styles.modalInfoText}>{selectedStockItem?.bahan.nama || selectedRequestItem?.bahan?.nama}</Text>
+               <Text style={styles.modalInfoText}>
+                 {modalType === 'create' ? (
+                   modalFromGudang ? (bahanGudang.find(b => b.id === selectedBahanGudangId)?.nama || 'Pilih bahan dari gudang')
+                   : (selectedStockItem?.bahan.nama || 'Pilih bahan')
+                 ) : (selectedRequestItem?.bahan?.nama)}
+               </Text>
             </View>
+
+            {modalType === 'create' && modalFromGudang && (
+              <View style={{ maxHeight: 220, marginBottom: 12 }}>
+                {bahanGudang.length === 0 ? (
+                  <View style={{ padding: 16 }}>
+                    <Text style={{ color: '#666' }}>Tidak ada referensi bahan dari gudang.</Text>
+                  </View>
+                ) : (
+                  <ScrollView>
+                    {bahanGudang.map(b => (
+                      <TouchableOpacity
+                        key={b.id}
+                        style={[{ padding: 12, borderBottomWidth: 1, borderColor: '#F0F0F0' }, selectedBahanGudangId === b.id && { backgroundColor: '#F1F8E9' }]}
+                        onPress={() => setSelectedBahanGudangId(b.id)}
+                      >
+                        <Text style={{ fontWeight: '700' }}>{b.nama}</Text>
+                        <Text style={{ color: '#666', fontSize: 12 }}>{b.satuan}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+            )}
             <Text style={styles.inputLabel}>Jumlah yang Dibutuhkan</Text>
             <TextInput 
               style={styles.input} 

@@ -42,23 +42,40 @@ export default function RiwayatScreen() {
     if (!isRefresh) setLoading(true);
     try {
       const response = await karyawanAPI.getTransaksi(); 
-      
       if (response.data && Array.isArray(response.data)) {
-        const mappedData: TransactionWithItems[] = response.data.map((tx: any) => ({
-          id: tx.id,
-          outlet_id: tx.outlet_id,
-          karyawan_id: tx.karyawan_id,
-          tanggal: tx.tanggal,
-          total: Number(tx.total) || 0,
-          metode_bayar: tx.metode_bayar || 'tunai',
-          items: Array.isArray(tx.items) 
-            ? tx.items.map((item: any) => ({
-                produk_nama: item.produk?.nama || 'Produk dihapus',
-                quantity: Number(item.quantity),
-                subtotal: Number(item.subtotal)
-              }))
-            : []
-        }));
+        const mappedData: TransactionWithItems[] = response.data.map((tx: any) => {
+          // normalize items: accept array, JSON string, or object wrapper
+          const rawItems = tx.items;
+          let itemsArr: any[] = [];
+          if (Array.isArray(rawItems)) itemsArr = rawItems;
+          else if (typeof rawItems === 'string') {
+            try {
+              const parsed = JSON.parse(rawItems);
+              if (Array.isArray(parsed)) itemsArr = parsed;
+              } catch {
+                itemsArr = [];
+              }
+          } else if (rawItems && typeof rawItems === 'object') {
+            if (Array.isArray(rawItems.items)) itemsArr = rawItems.items;
+            else itemsArr = [];
+          }
+
+          const normalizedItems = itemsArr.map((item: any) => ({
+            produk_nama: item.produk?.nama || item.produk_nama || item.nama || 'Produk dihapus',
+            quantity: Number(item.quantity ?? item.jumlah ?? item.qty ?? 0),
+            subtotal: Number(item.subtotal ?? item.sub_total ?? 0),
+          }));
+
+          return {
+            id: tx.id,
+            outlet_id: tx.outlet_id,
+            karyawan_id: tx.karyawan_id,
+            tanggal: tx.tanggal,
+            total: Number(tx.total) || 0,
+            metode_bayar: tx.metode_bayar || 'tunai',
+            items: normalizedItems,
+          };
+        });
 
         mappedData.sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
         setTransactions(mappedData);
@@ -89,6 +106,28 @@ export default function RiwayatScreen() {
       const res = await karyawanAPI.getTransaksiById(id);
       if (res.data) {
         const tx = res.data as any;
+
+        // normalize items same as in list
+        const rawItems = tx.items;
+        let itemsArr: any[] = [];
+        if (Array.isArray(rawItems)) itemsArr = rawItems;
+        else if (typeof rawItems === 'string') {
+          try {
+            const parsed = JSON.parse(rawItems);
+            if (Array.isArray(parsed)) itemsArr = parsed;
+          } catch {
+            itemsArr = [];
+          }
+        } else if (rawItems && typeof rawItems === 'object') {
+          if (Array.isArray(rawItems.items)) itemsArr = rawItems.items;
+        }
+
+        const normalizedItems = itemsArr.map((item: any) => ({
+          produk_nama: item.produk?.nama || item.produk_nama || item.nama || 'Produk dihapus',
+          quantity: Number(item.quantity ?? item.jumlah ?? item.qty ?? 0),
+          subtotal: Number(item.subtotal ?? item.sub_total ?? 0),
+        }));
+
         const detailTx: TransactionWithItems = {
           id: tx.id,
           outlet_id: tx.outlet_id,
@@ -96,13 +135,7 @@ export default function RiwayatScreen() {
           tanggal: tx.tanggal,
           total: Number(tx.total),
           metode_bayar: tx.metode_bayar || 'tunai',
-          items: Array.isArray(tx.items) 
-            ? tx.items.map((item: any) => ({
-                produk_nama: item.produk?.nama || 'Produk dihapus',
-                quantity: Number(item.quantity),
-                subtotal: Number(item.subtotal)
-              }))
-            : []
+          items: normalizedItems,
         };
         setSelectedTx(detailTx);
         setModalVisible(true);

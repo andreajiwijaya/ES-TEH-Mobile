@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from 'expo-router'; // FIX: Tambahkan import ini
 import { Colors } from '../../constants/Colors';
-import { BarangKeluar, PermintaanStok } from '../../types';
+import { BarangKeluar, PermintaanStok, FileAsset } from '../../types';
 import { gudangAPI } from '../../services/api';
 
 export default function BarangKeluarScreen() {
@@ -39,10 +39,16 @@ export default function BarangKeluarScreen() {
   // Modal Update / Upload Bukti
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<BarangKeluar | null>(null);
-  const [buktiFoto, setBuktiFoto] = useState<any>(null);
+  const [buktiFoto, setBuktiFoto] = useState<FileAsset | null>(null);
   const [updateJumlah, setUpdateJumlah] = useState('');
 
-  // --- HELPER FUNCTIONS ---
+  // --- HELPERS ---
+
+  const getImageUri = (img?: string | FileAsset | null) => {
+    if (!img) return 'https://via.placeholder.com/300';
+    if (typeof img === 'string') return img;
+    return img.uri ?? 'https://via.placeholder.com/300';
+  };
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
@@ -58,10 +64,26 @@ export default function BarangKeluarScreen() {
       }
 
       if (permintaanRes.data && Array.isArray(permintaanRes.data)) {
-        // Filter hanya approved yang siap dikirim
-        const filtered = permintaanRes.data.filter((p: any) => 
-          p.status === 'approved'
-        );
+        // Normalize status to lowercase and accept multiple "approved" variants (e.g. 'disetujui')
+        const normalized = (permintaanRes.data as any[]).map((p: any) => ({
+          ...p,
+          status: (p.status || '').toString().toLowerCase(),
+        }));
+
+        const isApproved = (s?: string) => {
+          const st = (s || '').toString().toLowerCase();
+          return (
+            st === 'approved' ||
+            st.includes('approved') ||
+            st.includes('disetujui') ||
+            st.includes('diterima') ||
+            st.includes('received') ||
+            st.includes('accept')
+          );
+        };
+
+        // Filter only approved requests ready to create outgoing shipment
+        const filtered = normalized.filter((p: any) => isApproved(p.status));
         setPermintaanStok(filtered);
       }
 
@@ -121,15 +143,43 @@ export default function BarangKeluarScreen() {
   };
 
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.5,
-    });
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Izin dibutuhkan', 'Berikan izin akses foto untuk mengunggah bukti.');
+        return;
+      }
 
-    if (!result.canceled) {
-      setBuktiFoto(result.assets[0]);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.5,
+      });
+
+      if ('canceled' in result) {
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          const asset = result.assets[0];
+          const file: FileAsset = {
+            uri: asset.uri,
+            fileName: asset.fileName ?? asset.uri.split('/').pop() ?? undefined,
+            name: asset.fileName ?? asset.uri.split('/').pop() ?? undefined,
+            type: asset.type ?? 'image/jpeg',
+          };
+          setBuktiFoto(file);
+        }
+      } else {
+        // legacy shape
+        // @ts-ignore
+        if (!result.cancelled && result.uri) {
+          // @ts-ignore
+          const file: FileAsset = { uri: result.uri, name: result.uri.split('/').pop() ?? undefined };
+          setBuktiFoto(file);
+        }
+      }
+    } catch (err) {
+      console.error('pickImage error', err);
+      Alert.alert('Error', 'Gagal memilih gambar');
     }
   };
 
@@ -182,29 +232,36 @@ export default function BarangKeluarScreen() {
 
   // --- UI HELPERS ---
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status?: string | null) => {
     switch (status) {
       case 'pending': return Colors.warning;
       case 'in_transit': return Colors.primary;
       case 'received': return Colors.success;
+      case 'diterima': return Colors.success; // backend may use 'diterima'
       case 'cancelled': return Colors.error;
       default: return Colors.textSecondary;
     }
   };
 
-  const getStatusLabel = (status: string) => {
+  const getStatusLabel = (status?: string | null) => {
       switch (status) {
           case 'in_transit': return 'DIKIRIM';
           case 'received': return 'DITERIMA';
+          case 'diterima': return 'DITERIMA';
           case 'cancelled': return 'BATAL';
-          default: return status.toUpperCase();
+          default: return (status ?? '-').toString().toUpperCase();
       }
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('id-ID', {
-      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return '-';
+    try {
+      return new Date(dateString).toLocaleDateString('id-ID', {
+        day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+    } catch {
+      return dateString;
+    }
   };
 
   return (
@@ -257,7 +314,7 @@ export default function BarangKeluarScreen() {
                                 <Text style={styles.cardId}>Pengiriman #{item.id}</Text>
                                 <Text style={styles.cardDate}>{formatDate(item.tanggal_keluar)}</Text>
                             </View>
-                            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
+                            <View style={[styles.statusBadge, { backgroundColor: (getStatusColor(item.status) || Colors.textSecondary) + '20' }]}>
                                 <Text style={{ color: getStatusColor(item.status), fontWeight: '800', fontSize: 11 }}>
                                     {getStatusLabel(item.status)}
                                 </Text>
@@ -270,7 +327,7 @@ export default function BarangKeluarScreen() {
                             <View style={styles.infoRow}>
                                 <Ionicons name="storefront-outline" size={16} color={Colors.textSecondary} />
                                 <Text style={styles.infoLabel}>Tujuan:</Text>
-                                <Text style={styles.infoText}>Outlet #{item.outlet_id}</Text>
+                                <Text style={styles.infoText}>Outlet #{item.outlet_id ?? '-'}</Text>
                             </View>
                             {item.bahan && (
                                 <View style={styles.infoRow}>
@@ -282,7 +339,7 @@ export default function BarangKeluarScreen() {
                             <View style={styles.infoRow}>
                                 <Ionicons name="layers-outline" size={16} color={Colors.textSecondary} />
                                 <Text style={styles.infoLabel}>Jumlah:</Text>
-                                <Text style={styles.infoHighlight}>{item.jumlah || 0} {item.bahan?.satuan}</Text>
+                                <Text style={styles.infoHighlight}>{item.jumlah ?? 0} {item.bahan?.satuan ?? ''}</Text>
                             </View>
                         </View>
 
@@ -396,7 +453,7 @@ export default function BarangKeluarScreen() {
                 <Text style={styles.label}>Bukti Foto (Opsional):</Text>
                 <TouchableOpacity style={styles.uploadBox} onPress={pickImage}>
                     {buktiFoto ? (
-                        <Image source={{ uri: buktiFoto.uri }} style={{width: '100%', height: '100%', borderRadius: 8}} />
+                        <Image source={{ uri: getImageUri(buktiFoto) }} style={{width: '100%', height: '100%', borderRadius: 8}} />
                     ) : (
                         <View style={{alignItems:'center'}}>
                             <Ionicons name="camera-outline" size={32} color={Colors.primary} />

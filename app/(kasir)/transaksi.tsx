@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
-import { OrderItem, Product } from '../../types';
+import { OrderItem, Product, FileAsset } from '../../types';
 import { karyawanAPI } from '../../services/api';
 
 // Helper format mata uang
@@ -40,7 +40,14 @@ export default function TransaksiScreen() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<'tunai' | 'qris' | null>(null);
-  const [paymentProof, setPaymentProof] = useState<any>(null);
+  const [paymentProof, setPaymentProof] = useState<FileAsset | null>(null);
+
+  // --- HELPERS ---
+  const getImageUri = (img?: string | FileAsset | null) => {
+    if (!img) return 'https://via.placeholder.com/150';
+    if (typeof img === 'string') return img;
+    return img.uri ?? 'https://via.placeholder.com/150';
+  };
 
   // --- LOAD DATA ---
   const loadProducts = useCallback(async () => {
@@ -143,19 +150,51 @@ export default function TransaksiScreen() {
   };
 
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.5,
-    });
-    if (!result.canceled) setPaymentProof(result.assets[0]);
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Izin dibutuhkan', 'Berikan izin akses foto untuk mengunggah bukti pembayaran.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+      });
+
+      // handle new SDK shape
+      if ('canceled' in result) {
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          const asset = result.assets[0];
+          const file: FileAsset = {
+            uri: asset.uri,
+            fileName: asset.fileName ?? asset.uri.split('/').pop() ?? undefined,
+            name: asset.fileName ?? asset.uri.split('/').pop() ?? undefined,
+            type: asset.type ?? 'image/jpeg',
+          };
+          setPaymentProof(file);
+        }
+      } else {
+        // legacy shape
+        // @ts-ignore
+        if (!result.cancelled && result.uri) {
+          // @ts-ignore
+          const file: FileAsset = { uri: result.uri, name: result.uri.split('/').pop() ?? undefined };
+          setPaymentProof(file);
+        }
+      }
+    } catch (err) {
+      console.error('pickImage error', err);
+      Alert.alert('Error', 'Gagal memilih gambar');
+    }
   };
 
   // Filter & Summary
   const categories = ['Semua', ...Array.from(new Set(products.map(p => p.category || ''))).filter(c => c !== '')];
   const filteredProducts = selectedCategory === 'Semua' ? products : products.filter(p => p.category === selectedCategory);
-  const grandTotal = orderItems.reduce((sum, item) => sum + item.subtotal, 0);
+  const grandTotal = orderItems.reduce((sum, item) => sum + (item.subtotal || 0), 0);
   const totalQty = orderItems.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
@@ -204,7 +243,7 @@ export default function TransaksiScreen() {
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
             <TouchableOpacity style={styles.card} activeOpacity={0.8} onPress={() => addToCart(item)}>
-              <Image source={{ uri: item.gambar || 'https://via.placeholder.com/150' }} style={styles.cardImg} />
+              <Image source={{ uri: getImageUri(item.gambar) }} style={styles.cardImg} />
               <View style={styles.cardBody}>
                 <Text style={styles.cardTitle} numberOfLines={1}>{item.nama}</Text>
                 <Text style={styles.cardPrice}>{formatCurrency(item.harga)}</Text>
@@ -254,7 +293,7 @@ export default function TransaksiScreen() {
                   <View key={item.id} style={styles.cartItem}>
                     <View style={{flex:1}}>
                       <Text style={styles.itemName}>{p?.nama}</Text>
-                      <Text style={styles.itemSubtotal}>{formatCurrency(item.subtotal)}</Text>
+                      <Text style={styles.itemSubtotal}>{formatCurrency(item.subtotal || 0)}</Text>
                     </View>
                     <View style={styles.qtyControl}>
                       <TouchableOpacity onPress={() => updateCartQty(item.id, -1)}><Ionicons name="remove-circle-outline" size={26} color={Colors.primary}/></TouchableOpacity>

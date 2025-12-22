@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -23,60 +23,67 @@ import { Outlet } from '../../types';
 export default function OutletScreen() {
   // State
   const [outlets, setOutlets] = useState<Outlet[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [processing, setProcessing] = useState(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [processing, setProcessing] = useState<boolean>(false);
 
   // Modal State
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [selectedOutlet, setSelectedOutlet] = useState<Outlet | null>(null);
-  
-  // Form Data
-  const [formData, setFormData] = useState({
+
+  // Form Data (strict types)
+  const [formData, setFormData] = useState<{ nama: string; alamat: string; is_active: boolean }>({
     nama: '',
     alamat: '',
     is_active: true,
   });
 
-  useEffect(() => {
-    loadOutlets();
-  }, []);
-
-  const loadOutlets = async () => {
+  const loadOutlets = useCallback(async () => {
+    setLoading(true);
+    setRefreshing(false);
     try {
-      setLoading(true);
       const response = await ownerAPI.getOutlets();
-      
+
       if (response.error) {
         Alert.alert('Error', response.error);
         return;
       }
-      
-      if (response.data) {
-        const rawData = Array.isArray(response.data) 
-          ? response.data 
-          : ((response.data as any).data || []);
 
-        if (Array.isArray(rawData)) {
-            const mappedOutlets = rawData.map((o: any) => ({
-              id: o.id,
-              nama: o.nama || 'Outlet Tanpa Nama',
-              alamat: o.alamat || '-',
-              // FIX: Menggunakan Strict Equality (===) agar ESLint happy
-              is_active: o.is_active === 1 || o.is_active === '1' || o.is_active === true,
-              users_count: o.users_count || 0
-            }));
-            setOutlets(mappedOutlets);
-        }
+      // response.data might already be an array, or an object { data: [...] }
+      const raw = response.data;
+      const rawData = Array.isArray(raw) ? raw : (raw && (raw.data ?? raw.items ?? [])) ?? [];
+
+      if (!Array.isArray(rawData)) {
+        setOutlets([]);
+        return;
       }
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Gagal memuat outlet');
+
+      const mappedOutlets: Outlet[] = rawData.map((o: any) => ({
+        id: Number(o.id),
+        nama: String(o.nama ?? 'Outlet Tanpa Nama'),
+        alamat: String(o.alamat ?? '-'),
+        // backend may return 0/1, boolean, or strings '0'/'1'
+        is_active: o.is_active === true || o.is_active === 1 || o.is_active === '1' || o.is_active === 'true',
+        users_count: Number(o.users_count ?? 0),
+        created_at: o.created_at ?? undefined,
+        updated_at: o.updated_at ?? undefined,
+      }));
+
+      setOutlets(mappedOutlets);
+    } catch (err: any) {
+      console.error('loadOutlets error', err);
+      Alert.alert('Error', err?.message ?? 'Gagal memuat outlet');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
+
+  // Include loadOutlets in dependency array to satisfy eslint "exhaustive-deps"
+  useEffect(() => {
+    loadOutlets();
+  }, [loadOutlets]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -89,28 +96,30 @@ export default function OutletScreen() {
   };
 
   // --- ACTIONS ---
-
   const handleAdd = async () => {
-    if (!formData.nama || !formData.alamat) {
+    if (!formData.nama.trim() || !formData.alamat.trim()) {
       Alert.alert('Validasi', 'Nama dan alamat outlet harus diisi');
       return;
     }
     setProcessing(true);
     try {
       const response = await ownerAPI.createOutlet({
-        nama: formData.nama,
-        alamat: formData.alamat,
+        nama: formData.nama.trim(),
+        alamat: formData.alamat.trim(),
         is_active: formData.is_active,
       });
-      if (response.error) Alert.alert('Gagal', response.error);
-      else {
+
+      if (response.error) {
+        Alert.alert('Gagal', response.error);
+      } else {
         Alert.alert('Sukses', 'Outlet berhasil ditambahkan');
         setShowAddModal(false);
         resetForm();
-        loadOutlets();
+        await loadOutlets();
       }
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Gagal menambahkan outlet');
+    } catch (err: any) {
+      console.error('handleAdd error', err);
+      Alert.alert('Error', err?.message ?? 'Gagal menambahkan outlet');
     } finally {
       setProcessing(false);
     }
@@ -119,35 +128,38 @@ export default function OutletScreen() {
   const openEditModal = (outlet: Outlet) => {
     setSelectedOutlet(outlet);
     setFormData({
-      nama: outlet.nama,
-      alamat: outlet.alamat,
-      is_active: outlet.is_active,
+      nama: outlet.nama ?? '',
+      alamat: outlet.alamat ?? '',
+      is_active: !!outlet.is_active,
     });
     setShowEditModal(true);
   };
 
   const handleUpdate = async () => {
     if (!selectedOutlet) return;
-    if (!formData.nama || !formData.alamat) {
+    if (!formData.nama.trim() || !formData.alamat.trim()) {
       Alert.alert('Validasi', 'Nama dan alamat harus diisi');
       return;
     }
     setProcessing(true);
     try {
       const response = await ownerAPI.updateOutlet(selectedOutlet.id, {
-        nama: formData.nama,
-        alamat: formData.alamat,
+        nama: formData.nama.trim(),
+        alamat: formData.alamat.trim(),
         is_active: formData.is_active,
       });
-      if (response.error) Alert.alert('Gagal', response.error);
-      else {
+
+      if (response.error) {
+        Alert.alert('Gagal', response.error);
+      } else {
         Alert.alert('Sukses', 'Data outlet berhasil diperbarui');
         setShowEditModal(false);
         resetForm();
-        loadOutlets();
+        await loadOutlets();
       }
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Gagal mengupdate outlet');
+    } catch (err: any) {
+      console.error('handleUpdate error', err);
+      Alert.alert('Error', err?.message ?? 'Gagal mengupdate outlet');
     } finally {
       setProcessing(false);
     }
@@ -166,10 +178,11 @@ export default function OutletScreen() {
             if (response.error) Alert.alert('Gagal', response.error);
             else {
               Alert.alert('Sukses', 'Outlet berhasil dihapus');
-              loadOutlets();
+              await loadOutlets();
             }
-          } catch (error: any) {
-            Alert.alert('Error', error.message);
+          } catch (err: any) {
+            console.error('deleteOutlet error', err);
+            Alert.alert('Error', err?.message ?? 'Gagal menghapus outlet');
           } finally {
             setLoading(false);
           }
@@ -179,29 +192,101 @@ export default function OutletScreen() {
   };
 
   const toggleStatus = async (outlet: Outlet) => {
-    const updatedOutlets = outlets.map(o => 
-        o.id === outlet.id ? { ...o, is_active: !o.is_active } : o
-    );
-    setOutlets(updatedOutlets);
+    // Optimistic UI: toggle locally first
+    setOutlets(prev => prev.map(o => (o.id === outlet.id ? { ...o, is_active: !o.is_active } : o)));
+
+    // Prepare payload: ensure nama & alamat are valid strings (use current list data if missing)
+    const current = outlets.find(o => o.id === outlet.id) ?? outlet;
+    const payload = {
+      nama: current.nama ?? '',
+      alamat: current.alamat ?? '',
+      is_active: !current.is_active,
+    };
+
     try {
-        const response = await ownerAPI.updateOutlet(outlet.id, {
-            nama: outlet.nama,
-            alamat: outlet.alamat,
-            is_active: !outlet.is_active
-        });
-        if (response.error) {
-            loadOutlets(); 
-            Alert.alert('Gagal', 'Gagal mengubah status outlet');
-        }
-    } catch (error) {
-        console.error(error); 
-        loadOutlets(); 
+      const response = await ownerAPI.updateOutlet(outlet.id, payload);
+      if (response.error) {
+        // revert UI and show error
+        await loadOutlets();
+        Alert.alert('Gagal', 'Gagal mengubah status outlet');
+      } else {
+        // success -> reload to sync exact server values
+        await loadOutlets();
+      }
+    } catch (err) {
+      console.error('toggleStatus error', err);
+      await loadOutlets();
     }
   };
 
+  // Render item for FlatList
+  const renderOutlet = ({ item }: { item: Outlet }) => (
+    <View style={[styles.outletCard, !item.is_active && styles.outletCardInactive]}>
+      <View style={styles.cardHeader}>
+        <View style={styles.cardTitleSection}>
+          <Text style={styles.outletName}>{item.nama}</Text>
+          <View style={[
+            styles.statusPill,
+            { backgroundColor: item.is_active ? '#E8F5E9' : '#FFEBEE' }
+          ]}>
+            <View style={[
+              styles.statusDot,
+              { backgroundColor: item.is_active ? '#4CAF50' : '#F44336' }
+            ]} />
+            <Text style={[
+              styles.statusText,
+              { color: item.is_active ? '#2E7D32' : '#C62828' }
+            ]}>
+              {item.is_active ? 'Buka' : 'Tutup'}
+            </Text>
+          </View>
+        </View>
+
+        <Switch
+          value={!!item.is_active}
+          onValueChange={() => toggleStatus(item)}
+          trackColor={{ false: '#e0e0e0', true: '#A5D6A7' }}
+          thumbColor={item.is_active ? Colors.primary : '#f4f3f4'}
+          style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+        />
+      </View>
+
+      <View style={styles.cardBody}>
+        <View style={styles.infoRow}>
+          <Ionicons name="location-outline" size={16} color={Colors.textSecondary} />
+          <Text style={styles.infoText} numberOfLines={2}>{item.alamat}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Ionicons name="people-outline" size={16} color={Colors.textSecondary} />
+          <Text style={styles.infoText}>{item.users_count ?? 0} Staff Bertugas</Text>
+        </View>
+      </View>
+
+      <View style={styles.cardActions}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => openEditModal(item)}
+        >
+          <Ionicons name="create-outline" size={18} color={Colors.primary} />
+          <Text style={styles.actionTextEdit}>Edit Info</Text>
+        </TouchableOpacity>
+
+        <View style={styles.verticalDivider} />
+
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => handleDelete(item.id)}
+        >
+          <Ionicons name="trash-outline" size={18} color="#D32F2F" />
+          <Text style={styles.actionTextDelete}>Hapus</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
-      {/* HEADER GREEN DNA */}
+      {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>Manajemen Cabang</Text>
@@ -212,13 +297,11 @@ export default function OutletScreen() {
         </View>
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
-        
-        {/* ACTION BAR */}
         <View style={styles.actionBar}>
           <View>
             <Text style={styles.sectionTitle}>Daftar Outlet</Text>
@@ -233,7 +316,6 @@ export default function OutletScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* SUMMARY CARDS (Modern Grid) */}
         <View style={styles.summaryGrid}>
           <View style={styles.summaryCard}>
             <View style={[styles.summaryIcon, { backgroundColor: '#E3F2FD' }]}>
@@ -260,7 +342,7 @@ export default function OutletScreen() {
           <View style={styles.listSection}>
             <FlatList
               data={outlets}
-              keyExtractor={item => item.id.toString()}
+              keyExtractor={item => String(item.id)}
               scrollEnabled={false}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
@@ -268,80 +350,13 @@ export default function OutletScreen() {
                   <Text style={styles.emptyText}>Belum ada outlet terdaftar.</Text>
                 </View>
               }
-              renderItem={({ item }) => (
-                <View style={[styles.outletCard, !item.is_active && styles.outletCardInactive]}>
-                  
-                  {/* Card Header */}
-                  <View style={styles.cardHeader}>
-                    <View style={styles.cardTitleSection}>
-                      <Text style={styles.outletName}>{item.nama}</Text>
-                      <View style={[
-                        styles.statusPill, 
-                        { backgroundColor: item.is_active ? '#E8F5E9' : '#FFEBEE' }
-                      ]}>
-                        <View style={[
-                          styles.statusDot, 
-                          { backgroundColor: item.is_active ? '#4CAF50' : '#F44336' }
-                        ]} />
-                        <Text style={[
-                          styles.statusText, 
-                          { color: item.is_active ? '#2E7D32' : '#C62828' }
-                        ]}>
-                          {item.is_active ? 'Buka' : 'Tutup'}
-                        </Text>
-                      </View>
-                    </View>
-                    
-                    <Switch
-                        value={item.is_active}
-                        onValueChange={() => toggleStatus(item)}
-                        trackColor={{ false: '#e0e0e0', true: '#A5D6A7' }} 
-                        thumbColor={item.is_active ? Colors.primary : '#f4f3f4'}
-                        style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                    />
-                  </View>
-
-                  {/* Card Body */}
-                  <View style={styles.cardBody}>
-                    <View style={styles.infoRow}>
-                      <Ionicons name="location-outline" size={16} color={Colors.textSecondary} />
-                      <Text style={styles.infoText} numberOfLines={2}>{item.alamat}</Text>
-                    </View>
-                    <View style={styles.infoRow}>
-                      <Ionicons name="people-outline" size={16} color={Colors.textSecondary} />
-                      <Text style={styles.infoText}>{item.users_count || 0} Staff Bertugas</Text>
-                    </View>
-                  </View>
-
-                  {/* Card Actions */}
-                  <View style={styles.cardActions}>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => openEditModal(item)}
-                    >
-                      <Ionicons name="create-outline" size={18} color={Colors.primary} />
-                      <Text style={styles.actionTextEdit}>Edit Info</Text>
-                    </TouchableOpacity>
-                    
-                    <View style={styles.verticalDivider} />
-                    
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => handleDelete(item.id)}
-                    >
-                      <Ionicons name="trash-outline" size={18} color="#D32F2F" />
-                      <Text style={styles.actionTextDelete}>Hapus</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                </View>
-              )}
+              renderItem={renderOutlet}
             />
           </View>
         )}
       </ScrollView>
 
-      {/* --- MODAL ADD / EDIT --- */}
+      {/* MODAL ADD / EDIT */}
       <Modal visible={showAddModal || showEditModal} transparent animationType="slide">
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -400,15 +415,13 @@ export default function OutletScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
-  
-  // Header Green DNA
+
   header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
@@ -426,14 +439,12 @@ const styles = StyleSheet.create({
 
   content: { flex: 1, marginTop: 10, paddingHorizontal: 24 },
 
-  // Action Bar
   actionBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
   sectionSubtitle: { fontSize: 13, color: Colors.textSecondary },
   addButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, gap: 6 },
   addButtonText: { color: 'white', fontWeight: '700', fontSize: 13 },
 
-  // Summary Grid
   summaryGrid: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   summaryCard: { flex: 1, backgroundColor: 'white', padding: 16, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: '#F0F0F0', elevation: 1 },
   summaryIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
@@ -445,15 +456,14 @@ const styles = StyleSheet.create({
   emptyContainer: { alignItems: 'center', paddingVertical: 40 },
   emptyText: { marginTop: 10, color: Colors.textSecondary },
 
-  // List Item (Clean Card)
   listSection: { paddingBottom: 20 },
-  outletCard: { backgroundColor: 'white', borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F0F0F0', elevation: 1, overflow:'hidden' },
+  outletCard: { backgroundColor: 'white', borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F0F0F0', elevation: 1, overflow: 'hidden' },
   outletCardInactive: { backgroundColor: '#FAFAFA', borderColor: '#EEEEEE' },
-  
+
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: 16, paddingBottom: 12 },
   cardTitleSection: { flex: 1, paddingRight: 10 },
   outletName: { fontSize: 16, fontWeight: '700', color: Colors.text, marginBottom: 6 },
-  
+
   statusPill: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
   statusText: { fontSize: 11, fontWeight: '700' },
@@ -468,7 +478,6 @@ const styles = StyleSheet.create({
   actionTextEdit: { fontSize: 13, fontWeight: '700', color: Colors.primary },
   actionTextDelete: { fontSize: 13, fontWeight: '700', color: '#D32F2F' },
 
-  // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },

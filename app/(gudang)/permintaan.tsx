@@ -33,8 +33,13 @@ export default function ApprovalPermintaanScreen() {
       const response = await gudangAPI.getPermintaanStok();
       
       if (response.data && Array.isArray(response.data)) {
-        // Sort: ID terbesar (terbaru) di atas agar user tidak perlu scroll ke bawah
-        const sorted = response.data.sort((a: any, b: any) => b.id - a.id);
+        // Normalize status to lowercase to avoid mismatches like 'PENDING'|'Pending' etc.
+        const normalized = (response.data as any[]).map((r: any) => ({
+          ...r,
+          status: (r.status || '').toString().toLowerCase(),
+        }));
+        // Sort: newest (highest id) first
+        const sorted = normalized.sort((a: any, b: any) => b.id - a.id);
         setRequests(sorted);
       }
     } catch (error: any) {
@@ -59,9 +64,23 @@ export default function ApprovalPermintaanScreen() {
   };
 
   // Filter Data Sesuai Tab
+  const isPendingStatus = (s?: string) => {
+    const st = (s || '').toString().toLowerCase();
+    if (!st) return true; // treat empty/unknown as pending for review
+    return (
+      st.includes('pending') ||
+      st.includes('menunggu') ||
+      st.includes('wait') ||
+      st.includes('requested') ||
+      st.includes('diajukan') ||
+      st.includes('ajukan') ||
+      st === 'pending'
+    );
+  };
+
   const filteredData = requests.filter(item => {
-    if (filter === 'pending') return item.status === 'pending';
-    return item.status !== 'pending'; 
+    if (filter === 'pending') return isPendingStatus(item.status);
+    return !isPendingStatus(item.status);
   });
 
   // --- ACTIONS ---
@@ -75,10 +94,12 @@ export default function ApprovalPermintaanScreen() {
         {
           text: status === 'approved' ? 'Setujui' : 'Tolak',
           style: status === 'approved' ? 'default' : 'destructive',
-          onPress: async () => {
+            onPress: async () => {
             setProcessingId(id);
             try {
-              const payload = { status } as any;
+              // Map client-side action tokens to backend-expected English status values
+              const backendStatus = status === 'approved' ? 'approved' : 'rejected';
+              const payload = { status: backendStatus } as any;
               const res = await gudangAPI.updatePermintaanStok(id, payload);
               
               if (res.error) throw new Error(res.error);
@@ -98,11 +119,21 @@ export default function ApprovalPermintaanScreen() {
 
   // Helper UI
   const getStatusBadge = (status: string) => {
-    switch(status) {
-      case 'pending': return { bg: '#FFF8E1', text: '#FF8F00', label: 'MENUNGGU' };
-      case 'approved': return { bg: '#E8F5E9', text: '#2E7D32', label: 'DISETUJUI' };
-      case 'rejected': return { bg: '#FFEBEE', text: '#C62828', label: 'DITOLAK' };
-      default: return { bg: '#F5F5F5', text: '#757575', label: status.toUpperCase() };
+    const st = (status || '').toString().toLowerCase();
+    switch(st) {
+      case 'pending':
+      case 'menunggu':
+      case 'requested':
+        return { bg: '#FFF8E1', text: '#FF8F00', label: 'MENUNGGU' };
+      case 'approved':
+      case 'completed':
+        return { bg: '#E8F5E9', text: '#2E7D32', label: 'DISETUJUI' };
+      case 'rejected':
+      case 'cancelled':
+      case 'ditolak':
+        return { bg: '#FFEBEE', text: '#C62828', label: 'DITOLAK' };
+      default:
+        return { bg: '#F5F5F5', text: '#757575', label: (status || '').toString().toUpperCase() };
     }
   };
 
@@ -142,9 +173,9 @@ export default function ApprovalPermintaanScreen() {
             style={[styles.tab, filter === 'pending' && styles.tabActive]} 
             onPress={() => setFilter('pending')}
           >
-            <Text style={[styles.tabText, filter === 'pending' && styles.tabTextActive]}>
-              Pending ({requests.filter(r => r.status === 'pending').length})
-            </Text>
+              <Text style={[styles.tabText, filter === 'pending' && styles.tabTextActive]}>
+                Pending ({requests.filter(r => isPendingStatus(r.status)).length})
+              </Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
