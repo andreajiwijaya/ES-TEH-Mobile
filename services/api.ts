@@ -26,6 +26,7 @@ import {
   Outlet,
   User,
   Bahan,
+  BahanGudang, 
   BarangMasuk,
   BarangKeluar,
   PermintaanStok,
@@ -78,7 +79,7 @@ const removeToken = async (): Promise<void> => {
   }
 };
 
-const prepareImageFile = (imageAsset: FileAsset | null) => {
+const prepareImageFile = (imageAsset: FileAsset | null | undefined) => {
   if (!imageAsset) return null;
 
   const uri = imageAsset.uri;
@@ -132,14 +133,13 @@ const makeRequest = async <T = any>(
       data = responseText ? JSON.parse(responseText) : {};
     } catch (parseError) {
       console.error('Invalid JSON response:', parseError);
-      console.error('Raw Response Text:', responseText);
       return { error: `Server Error: Respon tidak valid (${response.status})` };
     }
 
     if (!response.ok) {
       console.log('API Error Data:', data);
       if (response.status === 401) {
-        await removeToken(); // Auto logout
+        await removeToken(); 
         return { error: 'Sesi habis, silakan login kembali.' };
       }
       const msg = data.message || data.error || `Error ${response.status}`;
@@ -214,15 +214,12 @@ export const authAPI = {
       body: JSON.stringify({ username, password }),
     });
 
-    if (res.data && (res.data as any).access_token) {
-      await saveToken((res.data as any).access_token);
-      if ((res.data as any).user) {
-        await AsyncStorage.setItem(USER_KEY, JSON.stringify((res.data as any).user));
-      }
-    } else if (res.data && (res.data as any).token) {
-      await saveToken((res.data as any).token);
-      if ((res.data as any).user) {
-        await AsyncStorage.setItem(USER_KEY, JSON.stringify((res.data as any).user));
+    if (res.data) {
+      const data = res.data as any;
+      const token = data.access_token || data.token;
+      if (token) await saveToken(token);
+      if (data.user) {
+        await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user));
       }
     }
     return res;
@@ -239,7 +236,6 @@ export const authAPI = {
 // ==================== OWNER APIs ====================
 
 export const ownerAPI = {
-  // OUTLETS
   getOutlets: async () => makeRequest<Outlet[]>('/outlets'),
   getOutlet: async (id: number) => makeRequest<Outlet>(`/outlets/${id}`),
   createOutlet: async (data: CreateOutletPayload) =>
@@ -248,7 +244,6 @@ export const ownerAPI = {
     makeRequest<Outlet>(`/outlets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteOutlet: async (id: number) => makeRequest(`/outlets/${id}`, { method: 'DELETE' }),
 
-  // USERS
   getUsers: async () => makeRequest<User[]>('/users'),
   getUser: async (id: number) => makeRequest<User>(`/users/${id}`),
   createUser: async (data: CreateUserPayload) =>
@@ -257,7 +252,6 @@ export const ownerAPI = {
     makeRequest<User>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteUser: async (id: number) => makeRequest(`/users/${id}`, { method: 'DELETE' }),
 
-  // LAPORAN
   getLaporanPendapatan: async (startDate: string, endDate: string) =>
     makeRequest<LaporanResponse>(`/laporan/pendapatan?start_date=${startDate}&end_date=${endDate}`),
   exportLaporan: async (startDate: string, endDate: string) =>
@@ -268,7 +262,6 @@ export const ownerAPI = {
 // ==================== GUDANG APIs ====================
 
 export const gudangAPI = {
-  // BAHAN
   getBahan: async () => makeRequest<Bahan[]>('/gudang/bahan'),
   getBahanById: async (id: number) => makeRequest<Bahan>(`/gudang/bahan/${id}`),
   createBahan: async (data: CreateBahanPayload) =>
@@ -277,7 +270,6 @@ export const gudangAPI = {
     makeRequest<Bahan>(`/gudang/bahan/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteBahan: async (id: number) => makeRequest(`/gudang/bahan/${id}`, { method: 'DELETE' }),
 
-  // BARANG MASUK
   getBarangMasuk: async () => makeRequest<BarangMasuk[]>('/gudang/barang-masuk'),
   getBarangMasukById: async (id: number) => makeRequest<BarangMasuk>(`/gudang/barang-masuk/${id}`),
   createBarangMasuk: async (data: CreateBarangMasukPayload) =>
@@ -286,9 +278,9 @@ export const gudangAPI = {
     makeRequest<BarangMasuk>(`/gudang/barang-masuk/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteBarangMasuk: async (id: number) => makeRequest(`/gudang/barang-masuk/${id}`, { method: 'DELETE' }),
 
-  // BARANG KELUAR
   getBarangKeluar: async () => makeRequest<BarangKeluar[]>('/gudang/barang-keluar'),
   getBarangKeluarById: async (id: number) => makeRequest<BarangKeluar>(`/gudang/barang-keluar/${id}`),
+  
   createBarangKeluar: async (data: CreateBarangKeluarPayload) =>
     makeRequest<BarangKeluar>('/gudang/barang-keluar', { method: 'POST', body: JSON.stringify(data) }),
 
@@ -296,10 +288,8 @@ export const gudangAPI = {
     if (data.bukti_foto) {
       const formData = new FormData();
       if (data.jumlah !== undefined && data.jumlah !== null) formData.append('jumlah', data.jumlah.toString());
-
       const file = prepareImageFile(data.bukti_foto);
       if (file) formData.append('bukti_foto', file);
-
       formData.append('_method', 'PUT');
       return makeFormDataRequest<BarangKeluar>(`/gudang/barang-keluar/${id}`, formData, 'POST');
     }
@@ -311,58 +301,31 @@ export const gudangAPI = {
 
   deleteBarangKeluar: async (id: number) => makeRequest(`/gudang/barang-keluar/${id}`, { method: 'DELETE' }),
 
-  // Set status for barang keluar (used for reject/cancel flows)
   setBarangKeluarStatus: async (id: number, status: string) =>
     makeRequest(`/gudang/barang-keluar/${id}`, { method: 'PUT', body: JSON.stringify({ status }) }),
 
-  // STOK
   getStok: async () => makeRequest('/gudang/stok'),
 
-  // PERMINTAAN STOK
   getPermintaanStok: async () => makeRequest<PermintaanStok[]>('/gudang/permintaan-stok'),
   getPermintaanStokById: async (id: number) => makeRequest<PermintaanStok>(`/gudang/permintaan-stok/${id}`),
+  
   updatePermintaanStok: async (id: number, data: UpdatePermintaanStokPayload) => {
-    // Try a sequence of status variants to accommodate backend CHECK constraint.
-    const originalStatus = (data as any).status;
-    const candidates = Array.from(new Set<string>([
-      String(originalStatus),
-      'disetujui',
-      'ditolak',
-      'diterima',
-      'approved',
-      'rejected',
-      'received',
-    ]));
-
+    // Mencoba status yang kemungkinan diterima backend Nopal
+    const candidates = [String((data as any).status), 'disetujui', 'approved', 'rejected'];
     let lastErr: any = null;
+
     for (const candidate of candidates) {
       try {
-        console.log(`[API-TRY] PUT /gudang/permintaan-stok/${id} status=${candidate}`);
         const res = await makeRequest<PermintaanStok>(`/gudang/permintaan-stok/${id}`, {
           method: 'PUT',
           body: JSON.stringify({ status: candidate }),
         });
         if (!res.error) return res;
-
-        // If server returned a CHECK constraint-like error, try next candidate
         lastErr = res.error;
-        const errLower = (res.error || '').toString().toLowerCase();
-        if (errLower.includes('check constraint') || errLower.includes('sqlstate[23000]') || errLower.includes('integrity constraint')) {
-          continue;
-        }
-
-        // For other errors, stop and return
-        return res;
       } catch (err: any) {
         lastErr = err;
-        const msg = (err && err.message) ? err.message.toString().toLowerCase() : '';
-        if (msg.includes('check constraint') || msg.includes('sqlstate[23000]') || msg.includes('integrity constraint')) {
-          continue; // try next candidate
-        }
-        return { error: err?.message || 'Unknown error' } as ApiResponse<PermintaanStok>;
       }
     }
-
     return { error: lastErr?.toString() || 'Gagal memperbarui status permintaan' } as ApiResponse<PermintaanStok>;
   },
 };
@@ -370,24 +333,10 @@ export const gudangAPI = {
 // ==================== KARYAWAN / KASIR APIs ====================
 
 export const karyawanAPI = {
-  // PRODUK
   getProduk: async () => makeRequest<Product[]>('/produk'),
   getProdukById: async (id: number) => makeRequest<Product>(`/produk/${id}`),
 
   createProduk: async (data: CreateProductPayload) => {
-    const hasFile = !!data.gambar;
-    if (!hasFile) {
-      return makeRequest<Product>('/produk', {
-        method: 'POST',
-        body: JSON.stringify({
-          nama: data.nama,
-          harga: data.harga,
-          category: data.category || 'Minuman',
-          komposisi: data.komposisi || [],
-        }),
-      });
-    }
-
     const formData = new FormData();
     formData.append('nama', data.nama);
     formData.append('harga', data.harga.toString());
@@ -407,23 +356,10 @@ export const karyawanAPI = {
   },
 
   updateProduk: async (id: number, data: UpdateProductPayload) => {
-    const hasFile = !!data.gambar;
-    if (!hasFile) {
-      return makeRequest<Product>(`/produk/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          nama: data.nama,
-          harga: data.harga,
-          category: data.category || 'Minuman',
-          komposisi: data.komposisi || [],
-        }),
-      });
-    }
-
     const formData = new FormData();
-    formData.append('nama', data.nama || '');
-    formData.append('harga', (data.harga || 0).toString());
-    formData.append('category', data.category || 'Minuman');
+    if (data.nama) formData.append('nama', data.nama);
+    if (data.harga) formData.append('harga', data.harga.toString());
+    if (data.category) formData.append('category', data.category);
 
     if (data.komposisi && data.komposisi.length > 0) {
       data.komposisi.forEach((item, index) => {
@@ -441,7 +377,6 @@ export const karyawanAPI = {
 
   deleteProduk: async (id: number) => makeRequest(`/produk/${id}`, { method: 'DELETE' }),
 
-  // TRANSAKSI
   getTransaksi: async () => makeRequest<Transaksi[]>('/transaksi'),
   getTransaksiById: async (id: number) => makeRequest<Transaksi>(`/transaksi/${id}`),
 
@@ -449,7 +384,6 @@ export const karyawanAPI = {
     const formData = new FormData();
     formData.append('tanggal', data.tanggal);
     formData.append('metode_bayar', data.metode_bayar);
-
     formData.append('items', typeof data.items === 'string' ? data.items : JSON.stringify(data.items));
 
     if (data.bukti_qris) {
@@ -477,7 +411,6 @@ export const karyawanAPI = {
 
   deleteTransaksi: async (id: number) => makeRequest(`/transaksi/${id}`, { method: 'DELETE' }),
 
-  // PERMINTAAN STOK (KARYAWAN)
   getPermintaanStok: async () => makeRequest<PermintaanStok[]>('/permintaan-stok'),
   getPermintaanStokById: async (id: number) => makeRequest<PermintaanStok>(`/permintaan-stok/${id}`),
   createPermintaanStok: async (data: CreatePermintaanStokPayload) =>
@@ -486,14 +419,9 @@ export const karyawanAPI = {
     makeRequest<PermintaanStok>(`/permintaan-stok/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deletePermintaanStok: async (id: number) => makeRequest(`/permintaan-stok/${id}`, { method: 'DELETE' }),
 
-  // STOK OUTLET
   getStokOutlet: async () => makeRequest<StokOutletItem[]>('/stok/outlet'),
-
-  // BAHAN GUDANG - referensi bahan yang bisa diminta oleh karyawan
   getBahanGudang: async () => makeRequest<BahanGudang[]>('/bahan-gudang'),
 
-  // TERIMA BARANG KELUAR (untuk karyawan/outlet)
-  // POST /barang-keluar/{id}/terima
   terimaBarangKeluar: async (id: number, bukti_foto?: FileAsset | null) => {
     if (bukti_foto) {
       const formData = new FormData();
@@ -504,9 +432,7 @@ export const karyawanAPI = {
     return makeRequest<TerimaBarangKeluarResponse>(`/barang-keluar/${id}/terima`, { method: 'POST' });
   },
 
-  // Tolak kiriman (wrapper yang dapat dipanggil oleh UI karyawan)
   tolakBarangKeluar: async (id: number) => {
-    // gunakan gudangAPI helper untuk set status agar konsisten
     return gudangAPI.setBarangKeluarStatus(id, 'cancelled');
   },
 };

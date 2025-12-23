@@ -50,8 +50,9 @@ export default function OutletScreen() {
         return;
       }
 
-      // response.data might already be an array, or an object { data: [...] }
-      const raw = response.data;
+      // FIX: Gunakan casting 'as any' sementara untuk mengakses properti dinamis dari response.data
+      // agar tidak muncul error 'never'
+      const raw: any = response.data;
       const rawData = Array.isArray(raw) ? raw : (raw && (raw.data ?? raw.items ?? [])) ?? [];
 
       if (!Array.isArray(rawData)) {
@@ -80,7 +81,6 @@ export default function OutletScreen() {
     }
   }, []);
 
-  // Include loadOutlets in dependency array to satisfy eslint "exhaustive-deps"
   useEffect(() => {
     loadOutlets();
   }, [loadOutlets]);
@@ -192,10 +192,8 @@ export default function OutletScreen() {
   };
 
   const toggleStatus = async (outlet: Outlet) => {
-    // Optimistic UI: toggle locally first
     setOutlets(prev => prev.map(o => (o.id === outlet.id ? { ...o, is_active: !o.is_active } : o)));
 
-    // Prepare payload: ensure nama & alamat are valid strings (use current list data if missing)
     const current = outlets.find(o => o.id === outlet.id) ?? outlet;
     const payload = {
       nama: current.nama ?? '',
@@ -206,11 +204,9 @@ export default function OutletScreen() {
     try {
       const response = await ownerAPI.updateOutlet(outlet.id, payload);
       if (response.error) {
-        // revert UI and show error
         await loadOutlets();
         Alert.alert('Gagal', 'Gagal mengubah status outlet');
       } else {
-        // success -> reload to sync exact server values
         await loadOutlets();
       }
     } catch (err) {
@@ -219,7 +215,6 @@ export default function OutletScreen() {
     }
   };
 
-  // Render item for FlatList
   const renderOutlet = ({ item }: { item: Outlet }) => (
     <View style={[styles.outletCard, !item.is_active && styles.outletCardInactive]}>
       <View style={styles.cardHeader}>
@@ -286,7 +281,6 @@ export default function OutletScreen() {
 
   return (
     <View style={styles.container}>
-      {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>Manajemen Cabang</Text>
@@ -356,7 +350,6 @@ export default function OutletScreen() {
         )}
       </ScrollView>
 
-      {/* MODAL ADD / EDIT */}
       <Modal visible={showAddModal || showEditModal} transparent animationType="slide">
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -421,7 +414,6 @@ export default function OutletScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
-
   header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
@@ -436,63 +428,50 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 24, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
   headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
   headerIconBg: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
-
   content: { flex: 1, marginTop: 10, paddingHorizontal: 24 },
-
   actionBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
   sectionSubtitle: { fontSize: 13, color: Colors.textSecondary },
   addButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, gap: 6 },
   addButtonText: { color: 'white', fontWeight: '700', fontSize: 13 },
-
   summaryGrid: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   summaryCard: { flex: 1, backgroundColor: 'white', padding: 16, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: '#F0F0F0', elevation: 1 },
   summaryIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
   summaryValue: { fontSize: 20, fontWeight: '800', color: Colors.text },
   summaryLabel: { fontSize: 12, color: Colors.textSecondary },
-
   loadingContainer: { paddingVertical: 50, alignItems: 'center' },
   loadingText: { marginTop: 10, color: Colors.textSecondary },
   emptyContainer: { alignItems: 'center', paddingVertical: 40 },
   emptyText: { marginTop: 10, color: Colors.textSecondary },
-
   listSection: { paddingBottom: 20 },
   outletCard: { backgroundColor: 'white', borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F0F0F0', elevation: 1, overflow: 'hidden' },
   outletCardInactive: { backgroundColor: '#FAFAFA', borderColor: '#EEEEEE' },
-
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: 16, paddingBottom: 12 },
   cardTitleSection: { flex: 1, paddingRight: 10 },
   outletName: { fontSize: 16, fontWeight: '700', color: Colors.text, marginBottom: 6 },
-
   statusPill: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
   statusText: { fontSize: 11, fontWeight: '700' },
-
   cardBody: { paddingHorizontal: 16, paddingBottom: 16 },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   infoText: { fontSize: 13, color: Colors.textSecondary, flex: 1 },
-
   cardActions: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#F5F5F5' },
   actionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, gap: 6 },
   verticalDivider: { width: 1, backgroundColor: '#F5F5F5' },
   actionTextEdit: { fontSize: 13, fontWeight: '700', color: Colors.primary },
   actionTextDelete: { fontSize: 13, fontWeight: '700', color: '#D32F2F' },
-
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   modalTitle: { fontSize: 20, fontWeight: '700', color: Colors.text },
   modalBody: { marginBottom: 24 },
-
   inputGroup: { marginBottom: 16 },
   inputLabel: { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 8 },
   input: { borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, padding: 14, fontSize: 15, backgroundColor: '#FAFAFA' },
   textArea: { minHeight: 80, textAlignVertical: 'top' },
-
   switchContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, backgroundColor: '#FAFAFA', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#EEEEEE' },
   switchLabel: { fontSize: 15, fontWeight: '600', color: Colors.text },
   switchSubLabel: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
-
   modalFooter: { flexDirection: 'row', gap: 12 },
   btnCancel: { flex: 1, padding: 16, alignItems: 'center', borderRadius: 12, backgroundColor: '#F5F5F5' },
   btnCancelText: { fontWeight: '700', color: '#757575' },

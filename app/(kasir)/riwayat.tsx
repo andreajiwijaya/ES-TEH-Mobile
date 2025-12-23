@@ -11,7 +11,8 @@ import {
   Alert,
   RefreshControl,
   Modal,
-  StatusBar
+  StatusBar,
+  Image 
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Colors } from '../../constants/Colors';
@@ -19,7 +20,9 @@ import { Transaksi } from '../../types';
 import { karyawanAPI } from '../../services/api';
 
 interface TransactionWithItems extends Omit<Transaksi, 'items'> {
+  bukti_qris?: string | null;
   items: {
+    produk_id: number;
     produk_nama: string;
     quantity: number;
     subtotal: number;
@@ -37,35 +40,38 @@ export default function RiwayatScreen() {
   const [selectedTx, setSelectedTx] = useState<TransactionWithItems | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
+  // --- HELPER PARSING ---
+  const parseItems = (tx: any): any[] => {
+    try {
+      const rawItems = tx.item_transaksi || tx.items || [];
+      let itemsArr: any[] = [];
+      if (Array.isArray(rawItems)) {
+        itemsArr = rawItems;
+      } else if (typeof rawItems === 'string') {
+        const parsed = JSON.parse(rawItems);
+        itemsArr = Array.isArray(parsed) ? parsed : (parsed.items || []);
+      }
+
+      return itemsArr.map((item: any) => ({
+        produk_id: Number(item.produk_id || item.id || 0),
+        produk_nama: item.produk?.nama || item.produk_nama || 'Produk',
+        quantity: Number(item.quantity ?? 0),
+        subtotal: Number(item.subtotal ?? 0),
+      }));
+    } catch (e) {
+      console.error("Parsing error:", e);
+      return [];
+    }
+  };
+
   // --- 1. LOAD DATA ---
   const loadTransactions = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     try {
-      const response = await karyawanAPI.getTransaksi(); 
+      const response = await karyawanAPI.getTransaksi();
       if (response.data && Array.isArray(response.data)) {
         const mappedData: TransactionWithItems[] = response.data.map((tx: any) => {
-          // normalize items: accept array, JSON string, or object wrapper
-          const rawItems = tx.items;
-          let itemsArr: any[] = [];
-          if (Array.isArray(rawItems)) itemsArr = rawItems;
-          else if (typeof rawItems === 'string') {
-            try {
-              const parsed = JSON.parse(rawItems);
-              if (Array.isArray(parsed)) itemsArr = parsed;
-              } catch {
-                itemsArr = [];
-              }
-          } else if (rawItems && typeof rawItems === 'object') {
-            if (Array.isArray(rawItems.items)) itemsArr = rawItems.items;
-            else itemsArr = [];
-          }
-
-          const normalizedItems = itemsArr.map((item: any) => ({
-            produk_nama: item.produk?.nama || item.produk_nama || item.nama || 'Produk dihapus',
-            quantity: Number(item.quantity ?? item.jumlah ?? item.qty ?? 0),
-            subtotal: Number(item.subtotal ?? item.sub_total ?? 0),
-          }));
-
+          const normalizedItems = parseItems(tx);
           return {
             id: tx.id,
             outlet_id: tx.outlet_id,
@@ -73,6 +79,7 @@ export default function RiwayatScreen() {
             tanggal: tx.tanggal,
             total: Number(tx.total) || 0,
             metode_bayar: tx.metode_bayar || 'tunai',
+            bukti_qris: tx.bukti_qris,
             items: normalizedItems,
           };
         });
@@ -106,27 +113,7 @@ export default function RiwayatScreen() {
       const res = await karyawanAPI.getTransaksiById(id);
       if (res.data) {
         const tx = res.data as any;
-
-        // normalize items same as in list
-        const rawItems = tx.items;
-        let itemsArr: any[] = [];
-        if (Array.isArray(rawItems)) itemsArr = rawItems;
-        else if (typeof rawItems === 'string') {
-          try {
-            const parsed = JSON.parse(rawItems);
-            if (Array.isArray(parsed)) itemsArr = parsed;
-          } catch {
-            itemsArr = [];
-          }
-        } else if (rawItems && typeof rawItems === 'object') {
-          if (Array.isArray(rawItems.items)) itemsArr = rawItems.items;
-        }
-
-        const normalizedItems = itemsArr.map((item: any) => ({
-          produk_nama: item.produk?.nama || item.produk_nama || item.nama || 'Produk dihapus',
-          quantity: Number(item.quantity ?? item.jumlah ?? item.qty ?? 0),
-          subtotal: Number(item.subtotal ?? item.sub_total ?? 0),
-        }));
+        const normalizedItems = parseItems(tx);
 
         const detailTx: TransactionWithItems = {
           id: tx.id,
@@ -135,6 +122,7 @@ export default function RiwayatScreen() {
           tanggal: tx.tanggal,
           total: Number(tx.total),
           metode_bayar: tx.metode_bayar || 'tunai',
+          bukti_qris: tx.bukti_qris,
           items: normalizedItems,
         };
         setSelectedTx(detailTx);
@@ -148,67 +136,28 @@ export default function RiwayatScreen() {
     }
   };
 
-  // --- 3. EDIT PEMBAYARAN ---
-  const handleUpdatePayment = async (newMethod: 'tunai' | 'qris') => {
+  // --- 3. HAPUS TRANSAKSI ---
+  const handleVoidTransaction = () => {
     if (!selectedTx) return;
-    Alert.alert('Konfirmasi', `Ubah pembayaran ke ${newMethod.toUpperCase()}?`, [
-      { text: 'Batal', style: 'cancel' },
-      { text: 'Ya, Ubah', onPress: async () => {
+    Alert.alert('Hapus Riwayat', 'Yakin ingin menghapus transaksi ini? Stok akan dikembalikan.', [
+      { text: 'Kembali', style: 'cancel' },
+      { text: 'Ya, Hapus', style: 'destructive', onPress: async () => {
         setActionLoading(true);
         try {
-          const res = await karyawanAPI.updateTransaksi(selectedTx.id, {
-            tanggal: selectedTx.tanggal,
-            metode_bayar: newMethod,
-            items: selectedTx.items 
-          });
+          const res = await karyawanAPI.deleteTransaksi(selectedTx.id);
           if (!res.error) {
-            Alert.alert('Sukses', 'Pembayaran berhasil diubah');
+            Alert.alert('Sukses', 'Transaksi telah dihapus.');
             setModalVisible(false);
             loadTransactions(true);
           }
         } catch (err) {
           console.error(err);
-          Alert.alert('Gagal', 'Gagal update pembayaran');
-        } finally {
-          setActionLoading(false);
-        }
+          Alert.alert('Gagal', 'Gagal menghapus transaksi.');
+        } finally { setActionLoading(false); }
       }}
     ]);
   };
 
-  // --- 4. VOID TRANSAKSI ---
-  const handleVoidTransaction = () => {
-    if (!selectedTx) return;
-    Alert.alert(
-      'VOID Transaksi',
-      'Yakin ingin membatalkan transaksi ini?',
-      [
-        { text: 'Kembali', style: 'cancel' },
-        {
-          text: 'Ya, Batalkan',
-          style: 'destructive',
-          onPress: async () => {
-            setActionLoading(true);
-            try {
-              const res = await karyawanAPI.deleteTransaksi(selectedTx.id);
-              if (!res.error) {
-                Alert.alert('Sukses', 'Transaksi telah di-VOID.');
-                setModalVisible(false);
-                loadTransactions(true);
-              }
-            } catch (err) {
-              console.error(err);
-              Alert.alert('Gagal', 'Gagal membatalkan transaksi.');
-            } finally {
-              setActionLoading(false);
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  // --- HELPERS ---
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return new Intl.DateTimeFormat('id-ID', {
@@ -235,7 +184,6 @@ export default function RiwayatScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
-      
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View>
@@ -248,11 +196,7 @@ export default function RiwayatScreen() {
         </View>
       </View>
 
-      <ScrollView 
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.revenueCard}>
           <Text style={styles.revLabel}>Total Pendapatan ({selectedFilter === 'today' ? 'Hari Ini' : 'Periode Terpilih'})</Text>
           <Text style={styles.revValue}>Rp {totalRevenue.toLocaleString('id-ID')}</Text>
@@ -266,11 +210,7 @@ export default function RiwayatScreen() {
 
         <View style={styles.filterSection}>
           {['today', 'week', 'month', 'all'].map((f) => (
-            <TouchableOpacity
-              key={f}
-              style={[styles.filterPill, selectedFilter === f && styles.filterPillActive]}
-              onPress={() => setSelectedFilter(f as any)}
-            >
+            <TouchableOpacity key={f} style={[styles.filterPill, selectedFilter === f && styles.filterPillActive]} onPress={() => setSelectedFilter(f as any)}>
               <Text style={[styles.filterText, selectedFilter === f && styles.filterTextActive]}>
                 {f === 'today' ? 'Hari Ini' : f === 'week' ? '7 Hari' : f === 'month' ? 'Bulan Ini' : 'Semua'}
               </Text>
@@ -326,6 +266,21 @@ export default function RiwayatScreen() {
                   <Text style={styles.itemSub}>Rp {item.subtotal.toLocaleString('id-ID')}</Text>
                 </View>
               ))}
+
+              {selectedTx?.metode_bayar === 'qris' && (
+                <View style={styles.qrisSection}>
+                  <Text style={styles.qrisLabel}>Bukti Pembayaran QRIS:</Text>
+                  {selectedTx.bukti_qris ? (
+                    <Image source={{ uri: selectedTx.bukti_qris }} style={styles.qrisImage} resizeMode="contain" />
+                  ) : (
+                    <View style={styles.noImage}>
+                      <Ionicons name="image-outline" size={32} color="#ccc" />
+                      <Text style={{color: '#999'}}>Bukti tidak tersedia</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
               <View style={styles.modalDivider} />
               <View style={styles.modalTotalRow}>
                  <Text style={styles.modalTotalLabel}>GRAND TOTAL</Text>
@@ -334,29 +289,13 @@ export default function RiwayatScreen() {
             </ScrollView>
 
             <View style={styles.actionContainer}>
-               <Text style={styles.actionLabel}>Aksi Cepat:</Text>
+               <Text style={styles.actionLabel}>Aksi Transaksi:</Text>
                <View style={styles.actionRow}>
-                  <TouchableOpacity 
-                    style={styles.actionBtn} 
-                    onPress={() => handleUpdatePayment(selectedTx?.metode_bayar === 'tunai' ? 'qris' : 'tunai')}
-                    disabled={actionLoading}
-                  >
-                    {actionLoading ? <ActivityIndicator size="small" color={Colors.primary} /> : (
-                      <>
-                        <Ionicons name="swap-horizontal" size={18} color={Colors.primary} />
-                        <Text style={styles.actionBtnText}>Ubah Bayar</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.actionBtn, styles.btnVoid]} 
-                    onPress={handleVoidTransaction}
-                    disabled={actionLoading}
-                  >
+                  <TouchableOpacity style={[styles.actionBtn, styles.btnVoid]} onPress={handleVoidTransaction} disabled={actionLoading}>
                     {actionLoading ? <ActivityIndicator size="small" color={Colors.error} /> : (
                       <>
                         <Ionicons name="trash-outline" size={18} color={Colors.error} />
-                        <Text style={[styles.actionBtnText, {color: Colors.error}]}>VOID</Text>
+                        <Text style={[styles.actionBtnText, {color: Colors.error}]}>Hapus Riwayat</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -418,5 +357,9 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: 12 },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 15, borderRadius: 16, backgroundColor: '#F8F9FA', borderWidth: 1, borderColor: '#EEE', gap: 8 },
   btnVoid: { borderColor: '#FFEBEE', backgroundColor: '#FFF9F9' },
-  actionBtnText: { fontWeight: '700', fontSize: 13, color: Colors.primary }
+  actionBtnText: { fontWeight: '700', fontSize: 13, color: Colors.primary },
+  qrisSection: { marginTop: 20, marginBottom: 10 },
+  qrisLabel: { fontWeight: '700', marginBottom: 10, color: '#444' },
+  qrisImage: { width: '100%', height: 300, borderRadius: 12, backgroundColor: '#f0f0f0' },
+  noImage: { width: '100%', height: 100, backgroundColor: '#f5f5f5', borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#ccc' }
 });

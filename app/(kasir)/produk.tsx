@@ -45,7 +45,7 @@ export default function ProdukScreen() {
   const safeNumberFormat = (n?: number) => {
     if (typeof n !== 'number') return '-';
     try {
-      return n.toLocaleString();
+      return n.toLocaleString('id-ID');
     } catch {
       return String(n);
     }
@@ -108,47 +108,39 @@ export default function ProdukScreen() {
     });
   };
 
-  const pickImage = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Izin dibutuhkan', 'Berikan izin akses foto untuk mengunggah gambar.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.6,
-      });
-
-      if ('canceled' in result) {
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-          const asset = result.assets[0];
-          const file: FileAsset = {
-            uri: asset.uri,
-            // ensure fileName is string | undefined (avoid null)
-            fileName: asset.fileName ?? asset.uri.split('/').pop() ?? undefined,
-            name: asset.fileName ?? asset.uri.split('/').pop() ?? undefined,
-            type: asset.type ?? 'image/jpeg',
-          };
-          setForm(prev => ({ ...prev, gambar: file }));
-        }
-      } else {
-        // legacy shape (older SDKs)
-        // @ts-ignore
-        if (!result.cancelled && result.uri) {
-          // @ts-ignore
-          const file: FileAsset = { uri: result.uri, name: result.uri.split('/').pop() ?? undefined };
-          setForm(prev => ({ ...prev, gambar: file }));
-        }
-      }
-    } catch (err) {
-      console.error('pickImage error', err);
-      Alert.alert('Error', 'Gagal memilih gambar');
+const pickImage = async () => {
+  try {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Izin dibutuhkan', 'Berikan izin akses foto untuk mengunggah gambar.');
+      return;
     }
-  };
+
+    // Gunakan MediaTypeOptions jika MediaType memicu error property not exist
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, 
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+      
+      // Pastikan format URI dan Type benar untuk mencegah "Network request failed"
+      const file: FileAsset = {
+        uri: Platform.OS === 'ios' ? asset.uri.replace('file://', '') : asset.uri,
+        fileName: asset.fileName || `img_${Date.now()}.jpg`,
+        name: asset.fileName || `img_${Date.now()}.jpg`,
+        type: asset.mimeType || 'image/jpeg',
+      };
+      setForm(prev => ({ ...prev, gambar: file }));
+    }
+  } catch (err) {
+    console.error('pickImage error', err);
+    Alert.alert('Error', 'Gagal memilih gambar');
+  }
+};
 
   const handleOpenEdit = async (id: number) => {
     setProcessing(true);
@@ -192,11 +184,12 @@ export default function ProdukScreen() {
 
     setProcessing(true);
     try {
+      // FIX: Pastikan payload sesuai untuk FormData di api.ts
       const payload: any = {
         nama: form.nama,
         harga: parseInt(String(form.harga), 10) || 0,
         category: form.category,
-        gambar: form.gambar, // FileAsset | null | undefined
+        gambar: form.gambar, 
         komposisi: validKomposisi.map(k => ({
           bahan_id: k.bahan_id,
           quantity: parseFloat(k.quantity),
@@ -207,7 +200,6 @@ export default function ProdukScreen() {
         ? await karyawanAPI.updateProduk(editingProduct.id, payload)
         : await karyawanAPI.createProduk(payload);
 
-      // Use ApiResponse shape: check res.error
       if (res.error) throw new Error(res.error);
 
       Alert.alert('Sukses', 'Data produk berhasil disimpan');
@@ -217,8 +209,8 @@ export default function ProdukScreen() {
       setEditingProduct(null);
       await loadInitialData(true);
     } catch (error: any) {
-      console.error('handleSave error', error);
-      Alert.alert('Gagal', error?.message ? String(error.message) : 'Terjadi kesalahan saat menyimpan');
+      console.error('handleSave error detail:', error); // Log detail error untuk debug
+      Alert.alert('Gagal', error?.message || 'Terjadi kesalahan saat menyimpan');
     } finally {
       setProcessing(false);
     }
@@ -238,7 +230,7 @@ export default function ProdukScreen() {
             await loadInitialData(true);
           } catch (error: any) {
             console.error('delete error', error);
-            Alert.alert('Gagal', error?.message ? String(error.message) : 'Terjadi kesalahan saat menghapus');
+            Alert.alert('Gagal', error?.message || 'Terjadi kesalahan saat menghapus');
           } finally {
             setProcessing(false);
           }
@@ -293,9 +285,7 @@ export default function ProdukScreen() {
                 </View>
               </View>
               <View style={styles.cardInfo}>
-                <Text style={styles.cardName} numberOfLines={1}>
-                  {item.nama}
-                </Text>
+                <Text style={styles.cardName} numberOfLines={1}>{item.nama}</Text>
                 <Text style={styles.cardPrice}>Rp {safeNumberFormat(item.harga)}</Text>
                 <View style={styles.cardActions}>
                   <TouchableOpacity onPress={() => handleOpenEdit(item.id)} style={styles.editBtn}>
@@ -353,20 +343,20 @@ export default function ProdukScreen() {
               <View style={styles.komposisiList}>
                 {komposisiList.map((it, index) => (
                   <View key={index} style={styles.komposisiRow}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
-                      {bahanOptions.map(b => {
-                        const key = String((b as any).id ?? (b as any).bahan_id ?? `${index}-${Math.random()}`);
-                        const bahanId = (b as any).bahan_id ?? (b as any).bahan?.id ?? (b as any).id;
-                        const namaBahan = (b as any).bahan?.nama ?? (b as any).nama ?? 'Bahan';
-                        const active = it.bahan_id === bahanId;
-                        return (
-                          <TouchableOpacity key={key} onPress={() => updateKomposisiRow(index, 'bahan_id', bahanId)} style={[styles.chip, active && styles.chipActive]}>
-                            <Text style={[styles.chipText, active && styles.chipTextActive]}>{namaBahan}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-
+                    <View style={{ flex: 1 }}>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                        {bahanOptions.map(b => {
+                          const bahanId = (b as any).bahan_id ?? (b as any).bahan?.id ?? (b as any).id;
+                          const namaBahan = (b as any).bahan?.nama ?? (b as any).nama ?? 'Bahan';
+                          const active = it.bahan_id === bahanId;
+                          return (
+                            <TouchableOpacity key={bahanId} onPress={() => updateKomposisiRow(index, 'bahan_id', bahanId)} style={[styles.chip, active && styles.chipActive]}>
+                              <Text style={[styles.chipText, active && styles.chipTextActive]}>{namaBahan}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
                     <TextInput style={styles.qtyInput} value={it.quantity} onChangeText={t => updateKomposisiRow(index, 'quantity', t)} placeholder="Qty" keyboardType="numeric" />
                     <TouchableOpacity onPress={() => removeKomposisiRow(index)} style={{ marginLeft: 8 }}>
                       <Ionicons name="trash-outline" size={22} color={Colors.error} />
@@ -405,10 +395,10 @@ const styles = StyleSheet.create({
   cardName: { fontWeight: '800', fontSize: 14, color: '#333' },
   cardPrice: { color: Colors.primary, fontWeight: '900', fontSize: 15, marginVertical: 4 },
   cardActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
-  editBtn: { backgroundColor: Colors.primary, padding: 8, borderRadius: 10, marginRight: 8, alignItems: 'center' },
-  deleteBtn: { backgroundColor: Colors.error, padding: 8, borderRadius: 10, alignItems: 'center' },
+  editBtn: { backgroundColor: Colors.primary, padding: 8, borderRadius: 10, flex: 1, marginRight: 4, alignItems: 'center' },
+  deleteBtn: { backgroundColor: Colors.error, padding: 8, borderRadius: 10, flex: 1, marginLeft: 4, alignItems: 'center' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 20, maxHeight: '90%' },
+  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 20, maxHeight: '95%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20, alignItems: 'center' },
   modalTitle: { fontSize: 20, fontWeight: '800' },
   modalCloseBtn: { padding: 5 },
@@ -424,7 +414,7 @@ const styles = StyleSheet.create({
   saveBtnText: { color: 'white', fontWeight: '800', fontSize: 16 },
   btnDisabled: { opacity: 0.7 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  addBahanBtn: { backgroundColor: Colors.primaryLight, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  addBahanBtn: { backgroundColor: '#E8F5E9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   addBahanText: { color: Colors.primary, fontWeight: 'bold', fontSize: 12 },
   komposisiList: { backgroundColor: '#F9FAF9', borderRadius: 16, padding: 10, marginBottom: 20 },
   komposisiRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },

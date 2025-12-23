@@ -20,7 +20,6 @@ import { Colors } from '../../constants/Colors';
 import { OrderItem, Product, FileAsset } from '../../types';
 import { karyawanAPI } from '../../services/api';
 
-// Helper format mata uang
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
@@ -35,21 +34,18 @@ export default function TransaksiScreen() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
-  // -- State Kasir (POS) --
   const [selectedCategory, setSelectedCategory] = useState('Semua');
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<'tunai' | 'qris' | null>(null);
   const [paymentProof, setPaymentProof] = useState<FileAsset | null>(null);
 
-  // --- HELPERS ---
   const getImageUri = (img?: string | FileAsset | null) => {
     if (!img) return 'https://via.placeholder.com/150';
     if (typeof img === 'string') return img;
     return img.uri ?? 'https://via.placeholder.com/150';
   };
 
-  // --- LOAD DATA ---
   const loadProducts = useCallback(async () => {
     setLoading(true);
     try {
@@ -69,13 +65,8 @@ export default function TransaksiScreen() {
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadProducts();
-    }, [loadProducts])
-  );
+  useFocusEffect(useCallback(() => { loadProducts(); }, [loadProducts]));
 
-  // --- LOGIC KASIR ---
   const addToCart = (product: Product) => {
     const existingItem = orderItems.find(item => item.produk_id === product.id);
     if (existingItem) {
@@ -118,7 +109,8 @@ export default function TransaksiScreen() {
 
     setProcessing(true);
     try {
-      const payload = {
+      // FIX: Payload disesuaikan untuk diproses oleh makeFormDataRequest di api.ts
+      const payload: any = {
         tanggal: new Date().toISOString().slice(0, 19).replace('T', ' '),
         metode_bayar: selectedPayment,
         items: JSON.stringify(orderItems.map(item => ({ 
@@ -127,11 +119,11 @@ export default function TransaksiScreen() {
         }))),
       };
 
-      const finalPayload = selectedPayment === 'qris' 
-        ? { ...payload, bukti_qris: paymentProof } 
-        : payload;
+      if (selectedPayment === 'qris' && paymentProof) {
+        payload.bukti_qris = paymentProof;
+      }
 
-      const response = await karyawanAPI.createTransaksi(finalPayload);
+      const response = await karyawanAPI.createTransaksi(payload);
       if (response.error) throw new Error(response.error);
 
       Alert.alert('Sukses', 'Transaksi Berhasil!', [{
@@ -143,6 +135,7 @@ export default function TransaksiScreen() {
         }
       }]);
     } catch (err: any) {
+      console.error('Payment Processing Error:', err);
       Alert.alert('Gagal', err.message || 'Gagal menyimpan transaksi.');
     } finally {
       setProcessing(false);
@@ -157,33 +150,24 @@ export default function TransaksiScreen() {
         return;
       }
 
+      // FIX: Menghilangkan deprecated MediaTypeOptions sesuai LOG
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images, 
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.5,
       });
 
-      // handle new SDK shape
-      if ('canceled' in result) {
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-          const asset = result.assets[0];
-          const file: FileAsset = {
-            uri: asset.uri,
-            fileName: asset.fileName ?? asset.uri.split('/').pop() ?? undefined,
-            name: asset.fileName ?? asset.uri.split('/').pop() ?? undefined,
-            type: asset.type ?? 'image/jpeg',
-          };
-          setPaymentProof(file);
-        }
-      } else {
-        // legacy shape
-        // @ts-ignore
-        if (!result.cancelled && result.uri) {
-          // @ts-ignore
-          const file: FileAsset = { uri: result.uri, name: result.uri.split('/').pop() ?? undefined };
-          setPaymentProof(file);
-        }
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        
+        // FIX: Pastikan format file sesuai agar tidak memicu "Network request failed"
+        const file: FileAsset = {
+          uri: Platform.OS === 'ios' ? asset.uri.replace('file://', '') : asset.uri,
+          name: asset.fileName || `qris_${Date.now()}.jpg`,
+          type: asset.type === 'image' ? 'image/jpeg' : (asset.mimeType || 'image/jpeg'),
+        };
+        setPaymentProof(file);
       }
     } catch (err) {
       console.error('pickImage error', err);
@@ -191,7 +175,6 @@ export default function TransaksiScreen() {
     }
   };
 
-  // Filter & Summary
   const categories = ['Semua', ...Array.from(new Set(products.map(p => p.category || ''))).filter(c => c !== '')];
   const filteredProducts = selectedCategory === 'Semua' ? products : products.filter(p => p.category === selectedCategory);
   const grandTotal = orderItems.reduce((sum, item) => sum + (item.subtotal || 0), 0);
@@ -200,8 +183,6 @@ export default function TransaksiScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
-      
-      {/* Header Modern */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View>
@@ -214,7 +195,6 @@ export default function TransaksiScreen() {
         </View>
       </View>
 
-      {/* Kategori Horizontal */}
       <View style={styles.categoryContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
           {categories.map((cat, index) => (
@@ -256,7 +236,6 @@ export default function TransaksiScreen() {
         />
       )}
 
-      {/* Cart Float Bar */}
       {orderItems.length > 0 && (
         <View style={styles.cartBarWrapper}>
           <TouchableOpacity style={styles.cartBar} activeOpacity={0.9} onPress={() => setShowCheckoutModal(true)}>
@@ -275,7 +254,6 @@ export default function TransaksiScreen() {
         </View>
       )}
 
-      {/* Modal Checkout */}
       <Modal visible={showCheckoutModal} animationType="slide" transparent onRequestClose={() => setShowCheckoutModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -360,36 +338,28 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 30, 
     borderBottomRightRadius: 30,
     elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10
   },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerTitle: { fontSize: 24, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
   headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   headerIconContainer: { width: 44, height: 44, borderRadius: 12, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
-  
   categoryContainer: { paddingVertical: 15 },
   categoryScroll: { paddingHorizontal: 20 },
   catPill: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 25, backgroundColor: 'white', marginRight: 10, borderWidth: 1, borderColor: '#EEE' },
   catPillActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   catText: { fontSize: 13, fontWeight: '700', color: '#666' },
   catTextActive: { color: 'white' },
-
   grid: { padding: 15, paddingBottom: 120 },
-  card: { flex: 0.5, backgroundColor: 'white', margin: 8, borderRadius: 20, overflow: 'hidden', elevation: 3, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5 },
+  card: { flex: 0.5, backgroundColor: 'white', margin: 8, borderRadius: 20, overflow: 'hidden', elevation: 3 },
   cardImg: { width: '100%', height: 130, backgroundColor: '#F0F0F0' },
   cardBody: { padding: 12 },
   cardTitle: { fontSize: 14, fontWeight: '700', color: '#333' },
   cardPrice: { fontSize: 14, fontWeight: '800', color: Colors.primary, marginTop: 4 },
   addBtnIcon: { position: 'absolute', bottom: 12, right: 12, backgroundColor: Colors.primary, width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
-  
   centerLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 10, color: '#666', fontWeight: '600' },
-
   cartBarWrapper: { position: 'absolute', bottom: 30, left: 20, right: 20 },
-  cartBar: { backgroundColor: Colors.primary, borderRadius: 20, padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', elevation: 8, shadowColor: Colors.primary, shadowOpacity: 0.3, shadowRadius: 10 },
+  cartBar: { backgroundColor: Colors.primary, borderRadius: 20, padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', elevation: 8 },
   cartInfo: { flexDirection: 'row', alignItems: 'center' },
   badge: { backgroundColor: 'white', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   badgeText: { color: Colors.primary, fontWeight: '800', fontSize: 12 },
@@ -397,13 +367,11 @@ const styles = StyleSheet.create({
   cartTotal: { color: 'white', fontSize: 18, fontWeight: '800' },
   btnCheckout: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 12 },
   btnCheckoutText: { color: 'white', fontWeight: '800', marginRight: 5 },
-
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: 'white', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 25, maxHeight: '90%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   modalTitle: { fontSize: 20, fontWeight: '800', color: '#333' },
   closeBtn: { padding: 5 },
-  
   cartList: { marginBottom: 20 },
   cartItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   itemName: { fontWeight: '700', color: '#333', fontSize: 15 },
@@ -411,22 +379,18 @@ const styles = StyleSheet.create({
   qtyControl: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#F8F9FA', padding: 5, borderRadius: 15 },
   qtyText: { fontWeight: '800', fontSize: 16, minWidth: 20, textAlign: 'center' },
   itemDelete: { marginLeft: 10, padding: 5 },
-
   paymentSection: { borderTopWidth: 1, borderTopColor: '#EEE', paddingTop: 20 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   summaryLabel: { fontSize: 16, fontWeight: '600', color: '#666' },
   summaryValue: { fontSize: 22, fontWeight: '800', color: Colors.primary },
-  
   payLabel: { fontSize: 14, fontWeight: '700', color: '#333', marginBottom: 12 },
   payRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
   payBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 16, borderWidth: 1, borderColor: '#EEE', gap: 10, backgroundColor: '#F8F9FA' },
   payBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   payBtnText: { fontWeight: '700', color: '#666' },
-  
   uploadBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderStyle: 'dashed', borderWidth: 2, borderColor: Colors.primary, borderRadius: 16, marginBottom: 20, backgroundColor: '#F1F8E9' },
   uploadBtnDone: { borderColor: Colors.success, backgroundColor: '#E8F5E9' },
   uploadBtnText: { marginLeft: 10, color: Colors.primary, fontWeight: '700' },
-  
   btnFinal: { backgroundColor: Colors.primary, padding: 20, borderRadius: 20, alignItems: 'center', elevation: 4 },
   btnFinalText: { color: 'white', fontWeight: '800', fontSize: 16 },
   btnDisabled: { backgroundColor: '#CCC', elevation: 0 }
