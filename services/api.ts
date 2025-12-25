@@ -257,6 +257,9 @@ export const ownerAPI = {
   exportLaporan: async (startDate: string, endDate: string) =>
     makeRequest(`/laporan/export?start_date=${startDate}&end_date=${endDate}`),
   getDashboard: async () => makeRequest<DashboardData>('/dashboard'),
+
+  // SINKRONISASI: Menambahkan endpoint stok-detail untuk laporan owner
+  getStokDetail: async () => makeRequest<any>('/stok-detail'), 
 };
 
 // ==================== GUDANG APIs ====================
@@ -310,7 +313,6 @@ export const gudangAPI = {
   getPermintaanStokById: async (id: number) => makeRequest<PermintaanStok>(`/gudang/permintaan-stok/${id}`),
   
   updatePermintaanStok: async (id: number, data: UpdatePermintaanStokPayload) => {
-    // Mencoba status yang kemungkinan diterima backend Nopal
     const candidates = [String((data as any).status), 'disetujui', 'approved', 'rejected'];
     let lastErr: any = null;
 

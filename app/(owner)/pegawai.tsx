@@ -1,12 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  FlatList,
   TextInput,
   Modal,
   Platform,
@@ -14,36 +13,44 @@ import {
   Alert,
   RefreshControl,
   KeyboardAvoidingView,
+  StatusBar
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../../constants/Colors';
 import { User, Outlet } from '../../types';
 import { ownerAPI } from '../../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // FIX: Ditambahkan untuk sinkronisasi
 
 export default function KaryawanScreen() {
-  // State
   const [employees, setEmployees] = useState<User[]>([]);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [user, setUser] = useState<any>(null); // State User Baru untuk Header Dynamic
 
-  // Modal State
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showOutletModal, setShowOutletModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<User | null>(null);
   
-  // Form Data
   const [formData, setFormData] = useState({
     username: '',
     password: '',
-    role: 'karyawan' as 'karyawan' | 'gudang',
+    role: 'karyawan' as 'karyawan' | 'gudang' | 'supervisor',
     outlet_id: '',
   });
 
-  const loadData = useCallback(async (isRefresh = false) => {
-    if (!isRefresh) setLoading(true);
+  // --- LOGIKA FETCH DATA UTUH ---
+  const loadData = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
+      // SINKRONISASI DATA USER LOGIN UNTUK HEADER
+      const userData = await AsyncStorage.getItem('@user_data');
+      if (userData) setUser(JSON.parse(userData));
+
       const [usersResponse, outletsResponse] = await Promise.all([
         ownerAPI.getUsers(),
         ownerAPI.getOutlets(),
@@ -72,24 +79,40 @@ export default function KaryawanScreen() {
           : ((outletsResponse.data as any).data || []);
         if (Array.isArray(rawOutlets)) setOutlets(rawOutlets);
       }
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Gagal memuat data');
+    } catch {
+      Alert.alert('Error', 'Gagal menyinkronkan data terbaru');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useFocusEffect(
+    useCallback(() => {
+      loadData(true);
+    }, [loadData])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
     loadData(true);
   };
 
-  // Helpers
+  const filteredEmployees = useMemo(() => {
+    return employees.filter(e => 
+      e.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      e.role.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [employees, searchQuery]);
+
+  const stats = useMemo(() => {
+    return {
+      total: employees.length,
+      staff: employees.filter(e => e.role === 'karyawan').length,
+      gudang: employees.filter(e => e.role === 'gudang').length
+    };
+  }, [employees]);
+
   const getOutletName = (outletId?: number | null) => {
     if (!outletId) return '-';
     const outlet = outlets.find(o => o.id === outletId);
@@ -99,9 +122,9 @@ export default function KaryawanScreen() {
   const resetForm = () => {
     setFormData({ username: '', password: '', role: 'karyawan', outlet_id: '' });
     setSelectedEmployee(null);
+    setShowPassword(false);
   };
 
-  // Actions
   const handleAdd = async () => {
     if (!formData.username || !formData.password) {
       Alert.alert('Validasi', 'Username dan password wajib diisi');
@@ -110,256 +133,210 @@ export default function KaryawanScreen() {
     setProcessing(true);
     try {
       const payload: any = { username: formData.username, password: formData.password, role: formData.role };
-      if (formData.outlet_id) payload.outlet_id = parseInt(formData.outlet_id);
-      
+      if (formData.role === 'karyawan' && formData.outlet_id) {
+        payload.outlet_id = parseInt(formData.outlet_id);
+      }
       const response = await ownerAPI.createUser(payload);
       if (response.error) Alert.alert('Gagal', response.error);
       else {
-        Alert.alert('Sukses', 'User berhasil ditambahkan');
         setShowAddModal(false);
         resetForm();
-        loadData(true);
+        await loadData(true);
       }
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
     } finally {
       setProcessing(false);
     }
-  };
-
-  const openEditModal = (employee: User) => {
-    setSelectedEmployee(employee);
-    setFormData({
-      username: employee.username,
-      password: '', 
-      role: employee.role as any,
-      outlet_id: employee.outlet_id ? employee.outlet_id.toString() : '',
-    });
-    setShowEditModal(true);
   };
 
   const handleUpdate = async () => {
     if (!selectedEmployee) return;
-    if (!formData.username) {
-      Alert.alert('Validasi', 'Username tidak boleh kosong');
-      return;
-    }
     setProcessing(true);
     try {
       const payload: any = { username: formData.username, role: formData.role };
       if (formData.password) payload.password = formData.password;
-      if (formData.outlet_id) payload.outlet_id = parseInt(formData.outlet_id);
-      else payload.outlet_id = null;
-
+      if (formData.role === 'karyawan') {
+        payload.outlet_id = formData.outlet_id ? parseInt(formData.outlet_id) : null;
+      } else {
+        payload.outlet_id = null;
+      }
       const response = await ownerAPI.updateUser(selectedEmployee.id, payload);
       if (response.error) Alert.alert('Gagal', response.error);
       else {
-        Alert.alert('Sukses', 'Data user diperbarui');
         setShowEditModal(false);
         resetForm();
-        loadData(true);
+        await loadData(true);
       }
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
     } finally {
       setProcessing(false);
     }
   };
 
-  // --- LOGIC HAPUS (FIXED FOR WEB & MOBILE) ---
-  const executeDelete = async (id: number) => {
-    setLoading(true);
-    try {
-      const res = await ownerAPI.deleteUser(id);
-      if (res.error) {
-        Alert.alert('Gagal', res.error);
-      } else {
-        if (Platform.OS !== 'web') {
-            Alert.alert('Terhapus', 'Akun berhasil dihapus.');
-        }
-        loadData(true);
-      }
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleDelete = (id: number) => {
-    if (Platform.OS === 'web') {
-        // Confirm khusus Web
-        if (window.confirm('Yakin ingin menghapus akun ini? Akses akan dicabut permanen.')) {
-            executeDelete(id);
-        }
-    } else {
-        // Alert khusus Android/iOS
-        Alert.alert('Hapus User', 'Yakin ingin menghapus akun ini?', [
-            { text: 'Batal', style: 'cancel' },
-            { 
-                text: 'Hapus', 
-                style: 'destructive', 
-                onPress: () => executeDelete(id)
-            }
-        ]);
-    }
+    Alert.alert('Hapus Akun', 'Cabut akses user ini secara permanen?', [
+      { text: 'Batal', style: 'cancel' },
+      { text: 'Hapus', style: 'destructive', onPress: async () => {
+          await ownerAPI.deleteUser(id);
+          loadData(true);
+      }}
+    ]);
   };
 
   return (
     <View style={styles.container}>
-      {/* HEADER GREEN DNA */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Manajemen SDM</Text>
-          <Text style={styles.headerSubtitle}>Kelola akun pegawai & akses sistem</Text>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+      
+      <View style={styles.premiumHeader}>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.headerTitle}>Manajemen Karyawan</Text>
+            <Text style={styles.headerSubtitle}>Status operasional tim lapangan</Text>
+          </View>
+          <View style={styles.headerAvatar}>
+            {/* FIX: Avatar Inisial Dinamis Mengikuti User Login */}
+            <Text style={styles.avatarText}>
+              {user?.username ? user.username.substring(0, 2).toUpperCase() : 'PT'}
+            </Text>
+          </View>
         </View>
-        <View style={styles.headerIconBg}>
-          <Ionicons name="people" size={28} color={Colors.primary} />
+
+        <View style={styles.statsCard}>
+          <View style={styles.statBox}>
+            <Text style={styles.statVal}>{stats.total}</Text>
+            <Text style={styles.statLab}>TOTAL</Text>
+          </View>
+          <View style={styles.vDivider} />
+          <View style={styles.statBox}>
+            <Text style={[styles.statVal, {color: Colors.primary}]}>{stats.staff}</Text>
+            <Text style={styles.statLab}>OUTLET</Text>
+          </View>
+          <View style={styles.vDivider} />
+          <View style={styles.statBox}>
+            <Text style={[styles.statVal, {color: '#F59E0B'}]}>{stats.gudang}</Text>
+            <Text style={styles.statLab}>GUDANG</Text>
+          </View>
         </View>
       </View>
 
       <ScrollView 
-        style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
+        style={styles.mainContent}
+        contentContainerStyle={styles.scrollPadding}
       >
-        
-        {/* ACTION BAR */}
-        <View style={styles.actionBar}>
-          <View>
-            <Text style={styles.sectionTitle}>Daftar User Aktif</Text>
-            <Text style={styles.sectionSubtitle}>{employees.length} Akun Terdaftar</Text>
+        <View style={styles.actionRow}>
+          <View style={styles.searchBox}>
+            <Ionicons name="search-outline" size={20} color="#94A3B8" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Cari karyawan..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor="#94A3B8"
+            />
           </View>
-          <TouchableOpacity
-            style={styles.addButton}
+          <TouchableOpacity 
+            style={styles.greenAddBtn}
             onPress={() => { resetForm(); setShowAddModal(true); }}
           >
-            <Ionicons name="add" size={20} color="white" />
-            <Text style={styles.addButtonText}>User Baru</Text>
+            <Ionicons name="add" size={30} color="white" />
           </TouchableOpacity>
         </View>
 
-        {/* SUMMARY CARDS (Modern Grid) */}
-        <View style={styles.summaryGrid}>
-          <View style={styles.summaryCard}>
-            <View style={[styles.summaryIcon, { backgroundColor: '#E8F5E9' }]}>
-              <Ionicons name="storefront" size={20} color={Colors.primary} />
-            </View>
-            <Text style={styles.summaryValue}>{employees.filter(e => e.role === 'karyawan').length}</Text>
-            <Text style={styles.summaryLabel}>Outlet Staff</Text>
-          </View>
-          
-          <View style={styles.summaryCard}>
-            <View style={[styles.summaryIcon, { backgroundColor: '#FFF3E0' }]}>
-              <Ionicons name="cube" size={20} color={Colors.warning} />
-            </View>
-            <Text style={styles.summaryValue}>{employees.filter(e => e.role === 'gudang').length}</Text>
-            <Text style={styles.summaryLabel}>Gudang Staff</Text>
-          </View>
-        </View>
-
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingText}>Memuat data...</Text>
-          </View>
-        ) : (
-          <View style={styles.listSection}>
-            <FlatList
-              data={employees}
-              keyExtractor={item => item.id.toString()}
-              scrollEnabled={false}
-              ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <Ionicons name="people-outline" size={48} color="#E0E0E0" />
-                  <Text style={styles.emptyText}>Belum ada data user.</Text>
-                </View>
-              }
-              renderItem={({ item }) => (
-                <View style={styles.employeeCard}>
-                  <View style={styles.cardMain}>
-                    <View style={styles.avatarContainer}>
-                      <View style={[
-                        styles.avatarCircle, 
-                        { backgroundColor: item.role === 'owner' ? Colors.primary : (item.role === 'gudang' ? '#FFAB00' : '#81C784') }
-                      ]}>
+        <View style={styles.listSection}>
+          <Text style={styles.sectionHeading}>Daftar Tim Aktif</Text>
+          {loading && !refreshing ? (
+            <ActivityIndicator size="large" color={Colors.primary} style={{marginTop: 40}} />
+          ) : (
+            filteredEmployees.map((item) => (
+              <View key={item.id} style={styles.employeeCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.nameRow}>
+                    <View style={[styles.avatarCircle, { backgroundColor: item.role === 'owner' ? Colors.primary : (item.role === 'gudang' ? '#F59E0B' : '#10B981') }]}>
                         <Text style={styles.avatarLetter}>{item.username.charAt(0).toUpperCase()}</Text>
-                      </View>
                     </View>
-                    
-                    <View style={styles.infoContainer}>
-                      <Text style={styles.employeeName}>{item.username}</Text>
-                      <View style={styles.roleRow}>
-                        <View style={[
-                          styles.roleBadge, 
-                          { backgroundColor: item.role === 'owner' ? '#E8F5E9' : (item.role === 'gudang' ? '#FFF8E1' : '#F1F8E9') }
-                        ]}>
-                          <Text style={[
-                            styles.roleText,
-                            { color: item.role === 'owner' ? Colors.primary : (item.role === 'gudang' ? '#FF8F00' : '#2E7D32') }
-                          ]}>
-                            {item.role.toUpperCase()}
-                          </Text>
+                    <View style={styles.identityContainer}>
+                        <Text style={styles.usernameText} numberOfLines={1}>{item.username}</Text>
+                        <View style={[styles.rolePill, { backgroundColor: item.role === 'gudang' ? '#FFFBEB' : '#F0FDF4' }]}>
+                            <Text style={[styles.rolePillText, { color: item.role === 'gudang' ? '#B45309' : '#15803D' }]}>
+                                {item.role.toUpperCase()}
+                            </Text>
                         </View>
-                        
-                        {item.outlet_id && (
-                          <View style={styles.locationBadge}>
-                            <Ionicons name="location-outline" size={12} color="#757575" />
-                            <Text style={styles.locationText}>{getOutletName(item.outlet_id)}</Text>
-                          </View>
-                        )}
-                      </View>
                     </View>
                   </View>
+                  <TouchableOpacity style={styles.settingsBtn} onPress={() => {
+                        setSelectedEmployee(item);
+                        setFormData({ username: item.username, password: '', role: item.role as any, outlet_id: item.outlet_id?.toString() || '' });
+                        setShowEditModal(true);
+                  }}>
+                      <Ionicons name="create-outline" size={22} color={Colors.primary} />
+                  </TouchableOpacity>
+                </View>
 
-                  <View style={styles.actionRow}>
-                    <TouchableOpacity style={styles.editBtn} onPress={() => openEditModal(item)}>
-                      <Ionicons name="create-outline" size={18} color={Colors.primary} />
-                      <Text style={styles.editBtnText}>Edit</Text>
-                    </TouchableOpacity>
-                    
-                    {item.role !== 'owner' && (
-                      <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id)}>
-                        <Ionicons name="trash-outline" size={18} color="#D32F2F" />
-                      </TouchableOpacity>
-                    )}
+                <View style={styles.cardBody}>
+                  <View style={styles.infoRow}>
+                    <Ionicons name="location-outline" size={14} color="#94A3B8" />
+                    <Text style={styles.locationText} numberOfLines={1}>
+                        {item.role === 'karyawan' ? `Penempatan: ${getOutletName(item.outlet_id)}` : 'Akses Gudang Pusat'}
+                    </Text>
                   </View>
                 </View>
-              )}
-            />
-          </View>
-        )}
+
+                <View style={styles.cardDivider} />
+
+                <View style={styles.cardFooter}>
+                    <Text style={styles.idText}>ID: USR-{item.id}</Text>
+                    {item.role !== 'owner' && (
+                        <TouchableOpacity onPress={() => handleDelete(item.id)}>
+                            <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                        </TouchableOpacity>
+                    )}
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+        <View style={{height: 100}} />
       </ScrollView>
 
-      {/* --- MODAL ADD / EDIT --- */}
-      <Modal visible={showAddModal || showEditModal} transparent animationType="slide">
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+      {/* MODAL ADD / EDIT */}
+      <Modal visible={showAddModal || showEditModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{showAddModal ? 'Tambah User Baru' : 'Edit Data User'}</Text>
+              <Text style={styles.modalTitle}>{showAddModal ? 'Tambah Akun' : 'Edit Akun'}</Text>
               <TouchableOpacity onPress={() => { setShowAddModal(false); setShowEditModal(false); }}>
-                <Ionicons name="close" size={24} color={Colors.text} />
+                <Ionicons name="close-circle" size={28} color="#94A3B8" />
               </TouchableOpacity>
             </View>
-
-            <ScrollView style={styles.modalBody}>
+            <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Username</Text>
-                <TextInput style={styles.input} placeholder="Contoh: kasir_sudirman" value={formData.username} onChangeText={(t) => setFormData({ ...formData, username: t })} autoCapitalize="none" />
+                <Text style={styles.inputLabel}>Username</Text>
+                <TextInput style={styles.input} value={formData.username} onChangeText={(t) => setFormData({...formData, username: t})} placeholder="Username login..." autoCapitalize="none" />
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>{showEditModal ? 'Password Baru (Opsional)' : 'Password'}</Text>
+                <div style={styles.passwordWrapper}>
+                    <TextInput 
+                        style={styles.passwordInput} 
+                        value={formData.password} 
+                        onChangeText={(t) => setFormData({...formData, password: t})} 
+                        placeholder="Minimal 6 karakter..." 
+                        secureTextEntry={!showPassword} 
+                    />
+                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+                        <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={22} color="#94A3B8" />
+                    </TouchableOpacity>
+                </div>
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>{showEditModal ? 'Password Baru (Opsional)' : 'Password'}</Text>
-                <TextInput style={styles.input} placeholder={showEditModal ? "Kosongkan jika tidak diubah" : "Masukkan password"} value={formData.password} onChangeText={(t) => setFormData({ ...formData, password: t })} secureTextEntry />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Role Akses</Text>
+                <Text style={styles.inputLabel}>Role Akses</Text>
                 <View style={styles.roleGrid}>
                   {['karyawan', 'gudang'].map((r) => (
                     <TouchableOpacity key={r} style={[styles.roleCard, formData.role === r && styles.roleCardActive]} onPress={() => setFormData({...formData, role: r as any})}>
-                      <Ionicons name={r === 'karyawan' ? 'storefront' : 'cube'} size={24} color={formData.role === r ? Colors.primary : '#BDBDBD'} />
-                      <Text style={[styles.roleCardText, formData.role === r && styles.roleCardTextActive]}>{r.charAt(0).toUpperCase() + r.slice(1)}</Text>
+                      <Ionicons name={r === 'karyawan' ? 'storefront' : 'cube'} size={22} color={formData.role === r ? Colors.primary : '#CBD5E1'} />
+                      <Text style={[styles.roleCardText, formData.role === r && styles.roleCardTextActive]}>{r.toUpperCase()}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -367,42 +344,37 @@ export default function KaryawanScreen() {
 
               {formData.role === 'karyawan' && (
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Penempatan Outlet</Text>
-                  <TouchableOpacity style={styles.selectButton} onPress={() => setShowOutletModal(true)}>
-                    <Text style={styles.selectText}>{formData.outlet_id ? getOutletName(parseInt(formData.outlet_id)) : 'Pilih Outlet'}</Text>
-                    <Ionicons name="chevron-down" size={20} color={Colors.text} />
-                  </TouchableOpacity>
+                    <Text style={styles.inputLabel}>Lokasi Penempatan</Text>
+                    <TouchableOpacity style={styles.selectBtn} onPress={() => setShowOutletModal(true)}>
+                        <Text style={styles.selectBtnText}>{formData.outlet_id ? getOutletName(parseInt(formData.outlet_id)) : 'Pilih Cabang...'}</Text>
+                        <Ionicons name="chevron-down" size={20} color="#94A3B8" />
+                    </TouchableOpacity>
                 </View>
               )}
-            </ScrollView>
 
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.btnCancel} onPress={() => { setShowAddModal(false); setShowEditModal(false); }}>
-                <Text style={styles.btnCancelText}>Batal</Text>
+              <TouchableOpacity style={styles.saveBtn} onPress={showAddModal ? handleAdd : handleUpdate} disabled={processing}>
+                {processing ? <ActivityIndicator color="white" /> : <Text style={styles.saveBtnText}>Simpan Data</Text>}
               </TouchableOpacity>
-              <TouchableOpacity style={styles.btnSave} onPress={showAddModal ? handleAdd : handleUpdate} disabled={processing}>
-                {processing ? <ActivityIndicator color="white" /> : <Text style={styles.btnSaveText}>Simpan</Text>}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
 
-      {/* --- MODAL PILIH OUTLET --- */}
-      <Modal visible={showOutletModal} transparent animationType="slide">
+      {/* MODAL PILIH OUTLET */}
+      <Modal visible={showOutletModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
             <View style={[styles.modalContent, {maxHeight: '60%'}]}>
                 <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>Pilih Outlet</Text>
+                    <Text style={styles.modalTitle}>Daftar Outlet</Text>
                     <TouchableOpacity onPress={() => setShowOutletModal(false)}>
-                        <Ionicons name="close" size={24} color={Colors.text} />
+                        <Ionicons name="close" size={24} color="#1E293B" />
                     </TouchableOpacity>
                 </View>
                 <ScrollView>
                     {outlets.map((o) => (
-                        <TouchableOpacity key={o.id} style={[styles.outletItem, formData.outlet_id === o.id.toString() && styles.outletItemActive]} onPress={() => { setFormData({...formData, outlet_id: o.id.toString()}); setShowOutletModal(false); }}>
-                            <Text style={[styles.outletItemText, formData.outlet_id === o.id.toString() && {color: Colors.primary, fontWeight:'bold'}]}>{o.nama}</Text>
-                            {formData.outlet_id === o.id.toString() && <Ionicons name="checkmark" size={20} color={Colors.primary} />}
+                        <TouchableOpacity key={o.id} style={styles.outletOption} onPress={() => { setFormData({...formData, outlet_id: o.id.toString()}); setShowOutletModal(false); }}>
+                            <Text style={[styles.optionText, formData.outlet_id === o.id.toString() && {color: Colors.primary, fontWeight:'bold'}]}>{o.nama}</Text>
+                            {formData.outlet_id === o.id.toString() && <Ionicons name="checkmark-circle" size={22} color={Colors.primary} />}
                         </TouchableOpacity>
                     ))}
                 </ScrollView>
@@ -414,94 +386,101 @@ export default function KaryawanScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FA' },
-  
-  // Header Green DNA
-  header: {
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  premiumHeader: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingBottom: 25,
-    paddingHorizontal: 24,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8,
+    paddingBottom: 70,
+    paddingHorizontal: 25,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    zIndex: 10,
   },
-  headerContent: { flex: 1 },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
-  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
-  headerIconBg: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerTitle: { color: 'white', fontSize: 24, fontWeight: '900' },
+  headerSubtitle: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600', marginTop: 2 },
+  headerAvatar: { width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  avatarText: { color: 'white', fontSize: 16, fontWeight: '900' },
 
-  content: { flex: 1, marginTop: 10, paddingHorizontal: 24 },
+  statsCard: {
+    position: 'absolute',
+    bottom: -35,
+    left: 25,
+    right: 25,
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    borderRadius: 24,
+    paddingVertical: 20,
+    elevation: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 15,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  statBox: { flex: 1, alignItems: 'center' },
+  statVal: { fontSize: 24, fontWeight: '900', color: '#1E293B' },
+  statLab: { fontSize: 8, fontWeight: '900', color: '#94A3B8', letterSpacing: 1, marginTop: 4 },
+  vDivider: { width: 1, height: '60%', backgroundColor: '#F1F5F9', alignSelf: 'center' },
 
-  // Action Bar
-  actionBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
-  sectionSubtitle: { fontSize: 13, color: Colors.textSecondary },
-  addButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, gap: 6 },
-  addButtonText: { color: 'white', fontWeight: '700', fontSize: 13 },
+  mainContent: { flex: 1 },
+  scrollPadding: { paddingTop: 60, paddingHorizontal: 25 },
 
-  // Summary Grid
-  summaryGrid: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-  summaryCard: { flex: 1, backgroundColor: 'white', padding: 16, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: '#F0F0F0', elevation: 1 },
-  summaryIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  summaryValue: { fontSize: 20, fontWeight: '800', color: Colors.text },
-  summaryLabel: { fontSize: 12, color: Colors.textSecondary },
+  actionRow: { flexDirection: 'row', gap: 12, marginBottom: 25 },
+  searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 18, paddingHorizontal: 15, height: 56, borderWidth: 1, borderColor: '#E2E8F0' },
+  searchInput: { flex: 1, marginLeft: 10, fontSize: 15, color: '#1E293B', fontWeight: '600' },
+  greenAddBtn: { width: 56, height: 56, backgroundColor: '#10B981', borderRadius: 18, justifyContent: 'center', alignItems: 'center', elevation: 4 },
 
-  loadingContainer: { paddingVertical: 50, alignItems: 'center' },
-  loadingText: { marginTop: 10, color: Colors.textSecondary },
-  emptyContainer: { alignItems: 'center', paddingVertical: 40 },
-  emptyText: { marginTop: 10, color: Colors.textSecondary },
-
-  // Employee Card
-  listSection: { paddingBottom: 20 },
-  employeeCard: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F0F0F0', elevation: 1 },
-  cardMain: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  avatarContainer: { marginRight: 16 },
-  avatarCircle: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
-  avatarLetter: { color: 'white', fontSize: 20, fontWeight: 'bold' },
-  infoContainer: { flex: 1 },
-  employeeName: { fontSize: 16, fontWeight: '700', color: Colors.text, marginBottom: 4 },
+  listSection: { marginTop: 10 },
+  sectionHeading: { fontSize: 18, fontWeight: '900', color: '#1E293B', marginBottom: 15 },
   
-  roleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-  roleBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  roleText: { fontSize: 11, fontWeight: '700' },
-  locationBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  locationText: { fontSize: 12, color: '#757575' },
+  employeeCard: { backgroundColor: 'white', padding: 20, borderRadius: 30, marginBottom: 15, borderWidth: 1, borderColor: '#F1F5F9', elevation: 2 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 15 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
+  avatarCircle: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+  avatarLetter: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  identityContainer: { gap: 4 },
+  usernameText: { fontSize: 17, fontWeight: '800', color: '#1E293B' },
+  rolePill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start' },
+  rolePillText: { fontSize: 10, fontWeight: '900' },
+  settingsBtn: { padding: 4 },
 
-  actionRow: { flexDirection: 'row', gap: 10, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F5F5F5' },
-  editBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0F9FF', paddingVertical: 10, borderRadius: 8, gap: 6 },
-  editBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 13 },
-  // FIX: Tombol delete diberi style yang lebih jelas (width & height fix) agar mudah ditekan
-  deleteBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFEBEE', borderRadius: 8 },
+  cardBody: { marginBottom: 15 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  locationText: { fontSize: 13, color: '#64748B', fontWeight: '500' },
 
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  modalTitle: { fontSize: 20, fontWeight: '700', color: Colors.text },
-  modalBody: { marginBottom: 24 },
+  cardDivider: { height: 1, backgroundColor: '#F1F5F9', marginBottom: 15 },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  idText: { fontSize: 11, color: '#CBD5E1', fontWeight: '600' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.8)', justifyContent: 'center', padding: 25 },
+  modalContent: { backgroundColor: 'white', borderRadius: 32, padding: 25 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
+  modalTitle: { fontSize: 22, fontWeight: '900', color: '#1E293B' },
+  inputGroup: { marginBottom: 20 },
+  inputLabel: { fontSize: 14, fontWeight: '800', color: '#1E293B', marginBottom: 8 },
+  input: { backgroundColor: '#F8FAFC', borderRadius: 15, padding: 18, fontSize: 15, color: '#1E293B', borderWidth: 1, borderColor: '#E2E8F0' },
   
-  inputGroup: { marginBottom: 16 },
-  label: { fontSize: 14, fontWeight: '600', color: Colors.text, marginBottom: 8 },
-  input: { borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, padding: 14, fontSize: 15, backgroundColor: '#FAFAFA' },
-  
-  roleGrid: { flexDirection: 'row', gap: 12 },
-  roleCard: { flex: 1, padding: 16, borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, alignItems: 'center', gap: 8 },
-  roleCardActive: { borderColor: Colors.primary, backgroundColor: '#F0F9FF' },
-  roleCardText: { fontWeight: '600', color: '#9E9E9E' },
+  passwordWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 15, borderWidth: 1, borderColor: '#E2E8F0' },
+  passwordInput: { flex: 1, padding: 18, fontSize: 15, color: '#1E293B' },
+  eyeIcon: { paddingHorizontal: 15 },
+
+  roleGrid: { flexDirection: 'row', gap: 8 },
+  roleCard: { flex: 1, paddingVertical: 15, paddingHorizontal: 5, borderWidth: 1.5, borderColor: '#F1F5F9', borderRadius: 18, alignItems: 'center', gap: 5, backgroundColor: '#F8FAFC' },
+  roleCardActive: { borderColor: Colors.primary, backgroundColor: '#F0FDF4' },
+  roleCardText: { fontSize: 9, fontWeight: '800', color: '#94A3B8' },
   roleCardTextActive: { color: Colors.primary },
 
-  selectButton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, padding: 14, backgroundColor: '#FAFAFA' },
-  selectText: { fontSize: 15, color: Colors.text },
+  selectBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 18, borderRadius: 15, borderWidth: 1, borderColor: '#E2E8F0' },
+  selectBtnText: { fontSize: 15, color: '#475569', fontWeight: '600' },
+  
+  saveBtn: { backgroundColor: Colors.primary, padding: 20, borderRadius: 20, alignItems: 'center', marginTop: 10 },
+  saveBtnText: { color: 'white', fontWeight: '900', fontSize: 16 },
 
-  modalFooter: { flexDirection: 'row', gap: 12 },
-  btnCancel: { flex: 1, padding: 16, alignItems: 'center', borderRadius: 12, backgroundColor: '#F5F5F5' },
-  btnCancelText: { fontWeight: '700', color: '#757575' },
-  btnSave: { flex: 1, padding: 16, alignItems: 'center', borderRadius: 12, backgroundColor: Colors.primary },
-  btnSaveText: { fontWeight: '700', color: 'white' },
+  outletOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  optionText: { fontSize: 16, color: '#475569' },
 
-  outletItem: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
-  outletItemActive: { backgroundColor: '#F0F9FF' },
-  outletItemText: { fontSize: 15, color: Colors.text },
+  emptyContainer: { alignItems: 'center', marginTop: 80 },
+  emptyText: { color: '#94A3B8', fontWeight: '600', marginTop: 10 }
 });

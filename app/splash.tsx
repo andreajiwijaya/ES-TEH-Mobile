@@ -7,62 +7,68 @@ import { Colors } from '../constants/Colors';
 export default function SplashScreen() {
   const router = useRouter();
 
-  // --- ANIMATED VALUES ---
-  const startScale = useRef(new Animated.Value(0)).current;  // Untuk Intro Pop
-  const pulseScale = useRef(new Animated.Value(1)).current;  // Untuk efek Bernapas (Loop)
-  const opacity = useRef(new Animated.Value(0)).current;     // Opacity Global
-  const textTranslate = useRef(new Animated.Value(40)).current; // Teks naik dari bawah
+  // Animated Values
+  const logoScale = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const textTranslate = useRef(new Animated.Value(30)).current;
+  const textOpacity = useRef(new Animated.Value(0)).current;
+  const shimmer = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // 1. SEQUENCE ANIMASI INTRO
-    Animated.parallel([
-      // A. Logo Pop (Elastic Bounce)
-      Animated.spring(startScale, {
-        toValue: 1,
-        friction: 4,      
-        tension: 80,      
-        useNativeDriver: true,
-      }),
-      // B. Fade In
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      // C. Teks Slide Up
-      Animated.sequence([
-        Animated.delay(300), 
+    // SEQUENCE ANIMASI INTRO
+    Animated.sequence([
+      // Logo Pop
+      Animated.parallel([
+        Animated.spring(logoScale, {
+          toValue: 1,
+          friction: 6,
+          tension: 80,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+      ]),
+      
+      // Text Slide Up
+      Animated.parallel([
         Animated.spring(textTranslate, {
           toValue: 0,
-          friction: 6,
+          friction: 8,
+          tension: 90,
           useNativeDriver: true,
-        })
-      ])
+        }),
+        Animated.timing(textOpacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ]),
     ]).start(() => {
-      // 2. SETELAH INTRO SELESAI -> JALANKAN EFEK "BERNAPAS" (LOOP)
+      // Shimmer Effect Loop
       Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseScale, {
-            toValue: 1.08, 
-            duration: 1000,
-            easing: Easing.inOut(Easing.ease),
+          Animated.timing(shimmer, {
+            toValue: 1,
+            duration: 2500,
+            easing: Easing.linear,
             useNativeDriver: true,
           }),
-          Animated.timing(pulseScale, {
-            toValue: 1,    
-            duration: 1000,
-            easing: Easing.inOut(Easing.ease),
+          Animated.timing(shimmer, {
+            toValue: 0,
+            duration: 0,
             useNativeDriver: true,
-          })
+          }),
         ])
       ).start();
     });
 
-    // 3. LOGIC CEK SESI
+    // CHECK SESSION
     const checkSession = async () => {
       try {
-        // Waktu tunggu 3.5 detik untuk animasi
-        const minWait = new Promise(resolve => setTimeout(resolve, 3500));
+        const minWait = new Promise(resolve => setTimeout(resolve, 3000));
         
         const [token, userDataRaw] = await Promise.all([
           AsyncStorage.getItem('@auth_token'),
@@ -93,30 +99,59 @@ export default function SplashScreen() {
     };
 
     checkSession();
+  }, [opacity, router, logoScale, textTranslate, textOpacity, shimmer]);
 
-    // FIX: Masukkan semua dependency ke array ini agar Linter senang
-  }, [opacity, pulseScale, router, startScale, textTranslate]); 
-
-  // Combine Scale: Menggabungkan animasi intro dengan loop
-  const combinedScale = Animated.multiply(startScale, pulseScale);
+  const shimmerTranslate = shimmer.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-200, 200],
+  });
 
   return (
     <View style={styles.container}>
       
-      {/* CENTER CONTENT */}
-      <View style={styles.centerContent}>
-        
-        {/* LOGO DENGAN EFEK GABUNGAN */}
+      {/* Subtle Background Gradient */}
+      <View style={styles.backgroundGradient}>
         <Animated.View 
           style={[
-            styles.logoContainer, 
+            styles.gradientCircle,
+            {
+              opacity: opacity.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 0.08],
+              }),
+            },
+          ]}
+        />
+      </View>
+
+      {/* Center Content */}
+      <View style={styles.centerContent}>
+        
+        {/* Logo Container */}
+        <Animated.View 
+          style={[
+            styles.logoWrapper,
             { 
-              opacity, 
-              transform: [{ scale: combinedScale }]
-            }
+              opacity,
+              transform: [{ scale: logoScale }],
+            },
           ]}
         >
-          <View style={styles.logoCircleContainer}>
+          {/* Subtle Glow */}
+          <View style={styles.logoGlow} />
+          
+          {/* Main Logo Circle */}
+          <View style={styles.logoCircle}>
+            {/* Shimmer Overlay */}
+            <Animated.View 
+              style={[
+                styles.shimmerOverlay,
+                {
+                  transform: [{ translateX: shimmerTranslate }],
+                },
+              ]}
+            />
+            
             <Image 
               source={require('../assets/images/logo-esteh.png')} 
               style={styles.logoImage}
@@ -125,26 +160,31 @@ export default function SplashScreen() {
           </View>
         </Animated.View>
 
-        {/* TEKS DENGAN EFEK SLIDE */}
+        {/* Text Container */}
         <Animated.View 
           style={[
-            styles.textContainer, 
+            styles.textContainer,
             { 
-              opacity, 
-              transform: [{ translateY: textTranslate }] 
-            }
+              opacity: textOpacity,
+              transform: [{ translateY: textTranslate }],
+            },
           ]}
         >
           <Text style={styles.brandTitle}>Es Teh Favorit Indonesia</Text>
-          <Text style={styles.brandSubtitle}>Integrated Business App</Text>
+          <View style={styles.divider} />
+          <Text style={styles.brandSubtitle}>Integrated Business Platform</Text>
         </Animated.View>
 
       </View>
 
-      {/* FOOTER */}
+      {/* Footer with Loading */}
       <Animated.View style={[styles.footerContainer, { opacity }]}>
-        <ActivityIndicator size="small" color={Colors.primary} style={styles.spinner} />
-        <Text style={styles.version}>v1.0.0</Text>
+        <View style={styles.loadingWrapper}>
+          <ActivityIndicator size="small" color={Colors.primary} />
+          <Text style={styles.loadingText}>Memuat aplikasi...</Text>
+        </View>
+        
+        <Text style={styles.version}>Version 1.0.0  •  © 2025 Es Teh Indonesia</Text>
       </Animated.View>
 
     </View>
@@ -154,76 +194,126 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F4F8',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
+
+  // Background
+  backgroundGradient: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gradientCircle: {
+    width: 500,
+    height: 500,
+    borderRadius: 250,
+    backgroundColor: Colors.primary,
+  },
+
+  // Center Content
   centerContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 40,
   },
-  footerContainer: {
+
+  // Logo Wrapper
+  logoWrapper: {
+    position: 'relative',
+    alignItems: 'center',
+    marginBottom: 48,
+  },
+  logoGlow: {
     position: 'absolute',
-    bottom: 50,
-    alignItems: 'center',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: Colors.primary,
+    opacity: 0.12,
   },
-  spinner: {
-    marginBottom: 10,
-    transform: [{ scale: 0.8 }]
-  },
-  version: {
-    color: '#B0BEC5',
-    fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 1,
-  },
-  
-  // LOGO STYLES
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  logoCircleContainer: {
+  logoCircle: {
     width: 140,
     height: 140,
     borderRadius: 70,
     backgroundColor: 'white',
     justifyContent: 'center',
     alignItems: 'center',
-    
-    // Shadow Effect
-    elevation: 15,
+    elevation: 12,
     shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.8)'
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    borderWidth: 3,
+    borderColor: Colors.primary,
+    overflow: 'hidden',
+  },
+  shimmerOverlay: {
+    position: 'absolute',
+    width: 80,
+    height: '180%',
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    transform: [{ rotate: '25deg' }],
   },
   logoImage: {
-    width: '70%', 
-    height: '70%', 
+    width: '70%',
+    height: '70%',
+    zIndex: 1,
   },
-  
-  // TEXT STYLES
+
+  // Text Styles
   textContainer: {
     alignItems: 'center',
+    paddingHorizontal: 40,
   },
   brandTitle: {
     fontSize: 26,
-    fontWeight: '800', 
+    fontWeight: '800',
     color: Colors.primary,
     letterSpacing: 0.5,
     textAlign: 'center',
-    marginBottom: 6,
+    marginBottom: 16,
+  },
+  divider: {
+    width: 50,
+    height: 2,
+    backgroundColor: Colors.primary,
+    borderRadius: 1,
+    marginBottom: 16,
+    opacity: 0.3,
   },
   brandSubtitle: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: Colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#9CA3AF',
     letterSpacing: 1.5,
-    textTransform: 'uppercase', 
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+
+  // Footer
+  footerContainer: {
+    position: 'absolute',
+    bottom: 50,
+    alignItems: 'center',
+  },
+  loadingWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 20,
+  },
+  loadingText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#9CA3AF',
+  },
+  version: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#D1D5DB',
+    letterSpacing: 0.5,
   },
 });

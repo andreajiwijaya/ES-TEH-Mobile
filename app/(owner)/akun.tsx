@@ -1,220 +1,274 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, Platform } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  Alert, 
+  ScrollView, 
+  Platform, 
+  StatusBar,
+  Dimensions,
+  TextInput,
+  Modal,
+  ActivityIndicator,
+  KeyboardAvoidingView
+} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
-import { authAPI } from '../../services/api';
+import { authAPI, ownerAPI } from '../../services/api';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const { height } = Dimensions.get('window');
 
 export default function ProfileScreen() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [processing, setProcessing] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [modalType, setModalType] = useState<'username' | 'password'>('username');
+  const [formData, setFormData] = useState({ value: '' });
 
-  useEffect(() => {
-    loadUser();
+  const loadUser = useCallback(async () => {
+    try {
+      const data = await AsyncStorage.getItem('@user_data');
+      if (data) setUser(JSON.parse(data));
+    } catch {
+      console.error("Gagal load user data");
+    }
   }, []);
 
-  const loadUser = async () => {
-    const data = await AsyncStorage.getItem('@user_data');
-    if (data) setUser(JSON.parse(data));
+  useFocusEffect(useCallback(() => { loadUser(); }, [loadUser]));
+
+  const handleUpdateAccount = async () => {
+    if (!formData.value.trim()) {
+      Alert.alert('Validasi', 'Input tidak boleh kosong');
+      return;
+    }
+    setProcessing(true);
+    try {
+      const payload: any = {};
+      if (modalType === 'username') payload.username = formData.value;
+      if (modalType === 'password') payload.password = formData.value;
+
+      const res = await ownerAPI.updateUser(user.id, payload);
+      if (res.error) {
+        Alert.alert('Gagal', res.error);
+      } else {
+        Alert.alert('Sukses', `${modalType === 'username' ? 'Username' : 'Password'} diperbarui`);
+        if (modalType === 'username') {
+          const newUser = { ...user, username: formData.value };
+          await AsyncStorage.setItem('@user_data', JSON.stringify(newUser));
+          setUser(newUser);
+        }
+        setShowEditModal(false);
+        setFormData({ value: '' });
+      }
+    } catch {
+      Alert.alert('Error', 'Gagal menghubungi server');
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleLogout = () => {
-    Alert.alert('Konfirmasi', 'Yakin ingin keluar aplikasi?', [
+    Alert.alert('Konfirmasi', 'Yakin ingin keluar?', [
       { text: 'Batal', style: 'cancel' },
-      {
-        text: 'Keluar',
-        style: 'destructive',
-        onPress: async () => {
+      { text: 'Keluar', style: 'destructive', onPress: async () => {
           await authAPI.logout();
           router.replace('/(auth)/login');
-        },
-      },
+      }},
     ]);
   };
 
   return (
     <View style={styles.container}>
-      {/* HEADER GREEN DNA */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Profil Saya</Text>
-          <Text style={styles.headerSubtitle}>Informasi Akun Pengguna</Text>
-        </View>
-        <View style={styles.headerIconBg}>
-          <Ionicons name="person" size={28} color={Colors.primary} />
-        </View>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+      
+      {/* HEADER BACKGROUND SOLID */}
+      <View style={styles.headerBg}>
+        <Text style={styles.headerTitleMain}>Manajemen Akun</Text>
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 40 }}>
-        
-        {/* PROFILE CARD (Modern Card Style) */}
+      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+        {/* PROFILE FLOATING CARD */}
         <View style={styles.profileCard}>
-          <View style={styles.avatarSection}>
+          <View style={styles.avatarContainer}>
             <View style={styles.avatarCircle}>
               <Text style={styles.avatarText}>
                 {user?.username ? user.username.substring(0, 2).toUpperCase() : 'OW'}
               </Text>
             </View>
-            <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
+            <View style={styles.onlineBadge}>
+              <Ionicons name="checkmark-circle" size={22} color={Colors.primary} />
             </View>
           </View>
-          
-          <Text style={styles.userName}>{user?.username || 'Owner'}</Text>
-          <Text style={styles.userRole}>Administrator / Pemilik</Text>
-          
-          <View style={styles.statusPill}>
-            <View style={styles.statusDot} />
-            <Text style={styles.statusText}>Akun Aktif</Text>
+          <Text style={styles.profileName}>{user?.username || 'Owner'}</Text>
+          <Text style={styles.profileRole}>Administrator / Pemilik Bisnis</Text>
+          <View style={styles.verifiedPill}>
+            <View style={styles.dot} />
+            <Text style={styles.verifiedText}>Akun Terverifikasi</Text>
           </View>
         </View>
 
-        {/* INFO SECTION */}
-        <View style={styles.sectionTitleContainer}>
-          <Text style={styles.sectionTitle}>Detail Informasi</Text>
+        {/* MENU AREA */}
+        <View style={styles.contentArea}>
+          <Text style={styles.groupLabel}>DETAIL INFORMASI</Text>
+          <View style={styles.menuGroup}>
+            <View style={styles.infoRow}>
+              <View style={[styles.iconBox, { backgroundColor: '#E3F2FD' }]}>
+                <Ionicons name="person-outline" size={22} color="#1565C0" />
+              </View>
+              <View style={styles.infoTexts}>
+                <Text style={styles.infoLabel}>Username</Text>
+                <Text style={styles.infoValue}>{user?.username || '-'}</Text>
+              </View>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.infoRow}>
+              <View style={[styles.iconBox, { backgroundColor: '#E8F5E9' }]}>
+                <Ionicons name="shield-checkmark-outline" size={22} color="#2E7D32" />
+              </View>
+              <View style={styles.infoTexts}>
+                <Text style={styles.infoLabel}>Hak Akses</Text>
+                <Text style={styles.infoValue}>Owner (Akses Penuh)</Text>
+              </View>
+            </View>
+          </View>
+
+          <Text style={styles.groupLabel}>KEAMANAN & SISTEM</Text>
+          <View style={styles.menuGroup}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setModalType('username'); setFormData({ value: user?.username || '' }); setShowEditModal(true); }}>
+              <Ionicons name="create-outline" size={22} color="#64748B" />
+              <Text style={styles.menuItemText}>Ubah Username</Text>
+              <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setModalType('password'); setFormData({ value: '' }); setShowEditModal(true); }}>
+              <Ionicons name="lock-closed-outline" size={22} color="#64748B" />
+              <Text style={styles.menuItemText}>Ganti Password</Text>
+              <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <View style={styles.menuItem}>
+              <Ionicons name="git-branch-outline" size={22} color="#64748B" />
+              <Text style={styles.menuItemText}>Versi Aplikasi</Text>
+              <Text style={styles.versionLabel}>v1.5.0 stable</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <Ionicons name="power" size={22} color="white" />
+            <Text style={styles.logoutBtnText}>Keluar dari Aplikasi</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.copyright}>© 2025 Esteh Indonesia System</Text>
+          <View style={{ height: 40 }} />
         </View>
-
-        <View style={styles.infoCard}>
-          {/* Row 1: Username */}
-          <View style={styles.infoRow}>
-            <View style={[styles.iconBox, { backgroundColor: '#E3F2FD' }]}>
-              <Ionicons name="person-outline" size={22} color="#1565C0" />
-            </View>
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Username</Text>
-              <Text style={styles.infoValue}>{user?.username || '-'}</Text>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Row 2: Role */}
-          <View style={styles.infoRow}>
-            <View style={[styles.iconBox, { backgroundColor: '#E8F5E9' }]}>
-              <Ionicons name="shield-checkmark-outline" size={22} color="#2E7D32" />
-            </View>
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Hak Akses</Text>
-              <Text style={styles.infoValue}>Owner (Full Access)</Text>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Row 3: App Version */}
-          <View style={styles.infoRow}>
-            <View style={[styles.iconBox, { backgroundColor: '#FFF3E0' }]}>
-              <Ionicons name="information-circle-outline" size={22} color="#EF6C00" />
-            </View>
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Versi Aplikasi</Text>
-              <Text style={styles.infoValue}>v1.0.0 (Stable)</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* LOGOUT BUTTON */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.8}>
-          <Ionicons name="log-out-outline" size={22} color="#D32F2F" />
-          <Text style={styles.logoutText}>Keluar Aplikasi</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.copyrightText}>© 2025 Es Teh Indonesia Management</Text>
-
       </ScrollView>
+
+      {/* MODAL EDIT */}
+      <Modal visible={showEditModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
+            <View style={styles.modalHead}>
+              <Text style={styles.modalTitle}>{modalType === 'username' ? 'Edit Username' : 'Ubah Password'}</Text>
+              <TouchableOpacity onPress={() => setShowEditModal(false)}><Ionicons name="close-circle" size={28} color="#94A3B8" /></TouchableOpacity>
+            </View>
+            <View style={styles.inputArea}>
+              <Text style={styles.inputLabel}>{modalType === 'username' ? 'Username Baru' : 'Password Baru'}</Text>
+              <TextInput style={styles.input} value={formData.value} onChangeText={(t) => setFormData({ value: t })} secureTextEntry={modalType === 'password'} placeholder="Ketik di sini..." autoCapitalize="none" />
+            </View>
+            <TouchableOpacity style={styles.btnSave} onPress={handleUpdateAccount} disabled={processing}>
+              {processing ? <ActivityIndicator color="white" /> : <Text style={styles.btnSaveText}>Simpan Perubahan</Text>}
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FA' },
-
-  // HEADER (Sama dengan Laporan.tsx)
-  header: {
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  headerBg: {
     backgroundColor: Colors.primary,
+    height: height * 0.22,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingBottom: 25,
-    paddingHorizontal: 24,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8,
   },
-  headerContent: { flex: 1 },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
-  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
-  headerIconBg: { 
-    width: 48, height: 48, borderRadius: 16, backgroundColor: 'white', 
-    justifyContent: 'center', alignItems: 'center' 
-  },
-
-  content: { flex: 1, paddingHorizontal: 24, paddingTop: 24 },
-
-  // PROFILE CARD
+  headerTitleMain: { color: 'white', fontSize: 24, fontWeight: '900' },
+  scrollView: { flex: 1, marginTop: -height * 0.1 }, // Menarik konten naik ke area header
+  
   profileCard: {
     backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 24,
+    marginHorizontal: 25,
+    borderRadius: 30,
+    padding: 25,
     alignItems: 'center',
-    marginBottom: 24,
-    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8,
-    borderWidth: 1, borderColor: '#F0F0F0'
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 15,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
-  avatarSection: { position: 'relative', marginBottom: 16 },
+  avatarContainer: { marginBottom: 15 },
   avatarCircle: {
-    width: 88, height: 88, borderRadius: 44,
-    backgroundColor: '#F1F8E9', // Light Green
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 4, borderColor: 'white',
-    elevation: 4, shadowColor: Colors.primary, shadowOpacity: 0.2, shadowRadius: 8
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: 'white',
   },
-  avatarText: { fontSize: 32, fontWeight: '800', color: Colors.primary },
-  verifiedBadge: {
-    position: 'absolute', bottom: 0, right: 0,
-    backgroundColor: 'white', borderRadius: 12, padding: 2
-  },
-  userName: { fontSize: 20, fontWeight: '700', color: Colors.text, marginBottom: 4 },
-  userRole: { fontSize: 14, color: Colors.textSecondary, marginBottom: 12 },
+  avatarText: { fontSize: 38, fontWeight: '900', color: Colors.primary },
+  onlineBadge: { position: 'absolute', bottom: 5, right: 5, backgroundColor: 'white', borderRadius: 15 },
   
-  statusPill: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#E8F5E9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20
+  profileName: { fontSize: 22, fontWeight: '900', color: '#1E293B', marginBottom: 4 },
+  profileRole: { fontSize: 14, color: '#64748B', fontWeight: '600', marginBottom: 15 },
+  verifiedPill: { 
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', 
+    paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20 
   },
-  statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#4CAF50', marginRight: 6 },
-  statusText: { fontSize: 12, fontWeight: '600', color: '#2E7D32' },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#22C55E', marginRight: 8 },
+  verifiedText: { fontSize: 12, fontWeight: '800', color: '#15803D' },
 
-  // INFO CARD
-  sectionTitleContainer: { marginBottom: 12 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.text },
-
-  infoCard: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 8,
-    marginBottom: 24,
-    borderWidth: 1, borderColor: '#F0F0F0',
-  },
-  infoRow: { flexDirection: 'row', alignItems: 'center', padding: 16 },
-  iconBox: {
-    width: 44, height: 44, borderRadius: 12,
-    justifyContent: 'center', alignItems: 'center', marginRight: 16
-  },
-  infoTextContainer: { flex: 1 },
-  infoLabel: { fontSize: 12, color: Colors.textSecondary, marginBottom: 2 },
-  infoValue: { fontSize: 15, fontWeight: '600', color: Colors.text },
-  divider: { height: 1, backgroundColor: '#F5F5F5', marginLeft: 76 },
-
-  // BUTTONS & FOOTER
-  logoutButton: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#FFEBEE', paddingVertical: 16, borderRadius: 16,
-    gap: 8, marginBottom: 24,
-    borderWidth: 1, borderColor: '#FFCDD2'
-  },
-  logoutText: { fontSize: 15, fontWeight: '700', color: '#D32F2F' },
+  contentArea: { paddingHorizontal: 25, marginTop: 25 },
+  groupLabel: { fontSize: 11, fontWeight: '800', color: '#94A3B8', letterSpacing: 1.5, marginBottom: 12, marginLeft: 5 },
+  menuGroup: { backgroundColor: 'white', borderRadius: 25, padding: 10, marginBottom: 25, borderWidth: 1, borderColor: '#F1F5F9' },
   
-  copyrightText: { textAlign: 'center', fontSize: 12, color: '#BDBDBD', marginBottom: 20 }
+  infoRow: { flexDirection: 'row', alignItems: 'center', padding: 15 },
+  iconBox: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+  infoTexts: { flex: 1 },
+  infoLabel: { fontSize: 10, color: '#94A3B8', fontWeight: '800', marginBottom: 2 },
+  infoValue: { fontSize: 15, fontWeight: '700', color: '#1E293B' },
+  divider: { height: 1, backgroundColor: '#F8FAFC', marginHorizontal: 15 },
+
+  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 18 },
+  menuItemText: { flex: 1, marginLeft: 15, fontSize: 15, fontWeight: '700', color: '#475569' },
+  versionLabel: { fontSize: 12, color: '#CBD5E1', fontWeight: '700' },
+
+  logoutBtn: { 
+    backgroundColor: '#EF4444', padding: 20, borderRadius: 22, flexDirection: 'row', 
+    justifyContent: 'center', alignItems: 'center', gap: 12, elevation: 5 
+  },
+  logoutBtnText: { color: 'white', fontSize: 16, fontWeight: '900' },
+  copyright: { textAlign: 'center', color: '#CBD5E1', fontSize: 11, marginTop: 30, fontWeight: '600' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.8)', justifyContent: 'center', padding: 25 },
+  modalContent: { backgroundColor: 'white', borderRadius: 32, padding: 25 },
+  modalHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
+  modalTitle: { fontSize: 20, fontWeight: '900', color: '#1E293B' },
+  inputArea: { marginBottom: 25 },
+  inputLabel: { fontSize: 14, fontWeight: '800', color: '#64748B', marginBottom: 10 },
+  input: { backgroundColor: '#F8FAFC', borderRadius: 15, padding: 18, fontSize: 16, borderWidth: 1, borderColor: '#E2E8F0' },
+  btnSave: { backgroundColor: Colors.primary, padding: 20, borderRadius: 20, alignItems: 'center' },
+  btnSaveText: { color: 'white', fontWeight: '900', fontSize: 16 }
 });

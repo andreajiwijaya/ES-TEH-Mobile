@@ -24,6 +24,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const router = useRouter();
 
   const handleLogin = async () => {
@@ -52,11 +53,9 @@ export default function LoginScreen() {
         return;
       }
 
-      // Simpan sesi
       await AsyncStorage.setItem('@auth_token', token);
       await AsyncStorage.setItem('@user_data', JSON.stringify(user));
 
-      // LOGIKA NAVIGASI (Sesuai Struktur Folder Baru)
       const role = user.role?.toLowerCase();
       switch (role) {
         case 'karyawan': 
@@ -82,238 +81,378 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <StatusBar barStyle="dark-content" backgroundColor="#F0F4F8" />
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      {/* Background Decorations */}
+      <View style={styles.backgroundDecor}>
+        <View style={styles.leafDecor1}>
+          <Ionicons name="leaf" size={120} color={Colors.primary} style={{ opacity: 0.08, transform: [{ rotate: '25deg' }] }} />
+        </View>
+        <View style={styles.leafDecor2}>
+          <Ionicons name="leaf" size={80} color={Colors.primary} style={{ opacity: 0.06, transform: [{ rotate: '-45deg' }] }} />
+        </View>
+        <View style={styles.leafDecor3}>
+          <Ionicons name="leaf" size={100} color={Colors.primary} style={{ opacity: 0.05, transform: [{ rotate: '60deg' }] }} />
+        </View>
+      </View>
+
+      {/* FIX: KeyboardAvoidingView membungkus ScrollView */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
       >
-        
-        {/* HEADER LOGO SECTION */}
-        <View style={styles.headerSection}>
-          {/* LOGO CIRCLE */}
-          <View style={styles.logoCircleContainer}>
-            <Image 
-              source={require('../../assets/images/logo-esteh.png')} 
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
-          
-          <Text style={styles.brandTitle}>Es Teh Favorit Indonesia</Text>
-          <Text style={styles.brandSubtitle}>Integrated Business App</Text>
-        </View>
-
-        {/* LOGIN CARD */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Selamat Datang</Text>
-          <Text style={styles.cardSubtitle}>Silakan masuk ke akun Anda</Text>
-
-          {/* INPUT USERNAME */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Username</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="person-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Masukkan username"
-                placeholderTextColor="#BDBDBD"
-                value={username}
-                onChangeText={setUsername}
-                autoCapitalize="none"
-                editable={!loading}
-              />
-            </View>
-          </View>
-
-          {/* INPUT PASSWORD */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Masukkan kata sandi"
-                placeholderTextColor="#BDBDBD"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!passwordVisible}
-                editable={!loading}
-              />
-              <TouchableOpacity
-                style={styles.eyeIcon}
-                onPress={() => setPasswordVisible(!passwordVisible)}
-              >
-                <Ionicons 
-                  name={passwordVisible ? 'eye-off-outline' : 'eye-outline'} 
-                  size={20} 
-                  color={Colors.textSecondary} 
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled" // Memungkinkan klik tombol saat keyboard terbuka
+        >
+          {/* Header Section */}
+          <View style={styles.headerSection}>
+            <View style={styles.logoWrapper}>
+              <View style={styles.logoCircle}>
+                <Image 
+                  source={require('../../assets/images/logo-esteh.png')} 
+                  style={styles.logoImage}
+                  resizeMode="contain"
                 />
-              </TouchableOpacity>
+              </View>
+              <View style={styles.logoGlow} />
+            </View>
+            
+            <View style={styles.brandContainer}>
+              <Text style={styles.brandTitle}>Es Teh Favorit Indonesia</Text>
+              <View style={styles.divider} />
+              <Text style={styles.brandSubtitle}>Integrated Business Platform</Text>
             </View>
           </View>
 
-          {/* LOGIN BUTTON */}
-          <TouchableOpacity 
-            style={[styles.loginButton, loading && styles.loginButtonDisabled]} 
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={styles.loginButtonText}>Masuk Sistem</Text>
-            )}
-          </TouchableOpacity>
+          {/* Login Form Card */}
+          <View style={styles.formCard}>
+            <View style={styles.formHeader}>
+              <Text style={styles.formTitle}>Masuk ke Sistem</Text>
+              <Text style={styles.formSubtitle}>Silakan login untuk melanjutkan</Text>
+            </View>
 
-        </View>
+            {/* Username Input */}
+            <View style={styles.inputWrapper}>
+              <Text style={styles.inputLabel}>Username</Text>
+              <View style={[
+                styles.inputContainer,
+                focusedInput === 'username' && styles.inputContainerFocused
+              ]}>
+                <View style={styles.inputIconBox}>
+                  <Ionicons 
+                    name="person" 
+                    size={20} 
+                    color={focusedInput === 'username' ? Colors.primary : '#9CA3AF'} 
+                  />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Masukkan username"
+                  placeholderTextColor="#D1D5DB"
+                  value={username}
+                  onChangeText={setUsername}
+                  autoCapitalize="none"
+                  editable={!loading}
+                  onFocus={() => setFocusedInput('username')}
+                  onBlur={() => setFocusedInput(null)}
+                />
+              </View>
+            </View>
 
-        <Text style={styles.footerText}>© 2025 Es Teh Favorit Indonesia</Text>
+            {/* Password Input */}
+            <View style={styles.inputWrapper}>
+              <Text style={styles.inputLabel}>Password</Text>
+              <View style={[
+                styles.inputContainer,
+                focusedInput === 'password' && styles.inputContainerFocused
+              ]}>
+                <View style={styles.inputIconBox}>
+                  <Ionicons 
+                    name="lock-closed" 
+                    size={20} 
+                    color={focusedInput === 'password' ? Colors.primary : '#9CA3AF'} 
+                  />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Masukkan password"
+                  placeholderTextColor="#D1D5DB"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!passwordVisible}
+                  editable={!loading}
+                  onFocus={() => setFocusedInput('password')}
+                  onBlur={() => setFocusedInput(null)}
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setPasswordVisible(!passwordVisible)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons 
+                    name={passwordVisible ? 'eye-off' : 'eye'} 
+                    size={20} 
+                    color="#9CA3AF" 
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
 
-      </ScrollView>
-    </KeyboardAvoidingView>
+            {/* Login Button */}
+            <TouchableOpacity 
+              style={[styles.loginButton, loading && styles.loginButtonDisabled]} 
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator color="white" size="small" />
+                  <Text style={styles.loadingText}>Memproses...</Text>
+                </View>
+              ) : (
+                <View style={styles.buttonContent}>
+                  <Text style={styles.loginButtonText}>Login</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Footer */}
+          <View style={styles.footer}>
+            <View style={styles.footerDivider} />
+            <Text style={styles.footerText}>© 2025 Es Teh Favorit Indonesia</Text>
+            <Text style={styles.footerSubtext}>v1.0.0 • Powered by Innovation</Text>
+          </View>
+
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F4F8', 
+    backgroundColor: '#FFFFFF',
   },
+  backgroundDecor: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    zIndex: 0,
+  },
+  leafDecor1: { position: 'absolute', top: 40, right: -20 },
+  leafDecor2: { position: 'absolute', top: 200, left: -10 },
+  leafDecor3: { position: 'absolute', bottom: 100, right: 20 },
+
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
     padding: 24,
+    // Menghilangkan justifyContent: 'center' saat keyboard aktif agar tidak mental
+    justifyContent: 'center', 
   },
   
-  // HEADER
   headerSection: {
     alignItems: 'center',
-    marginBottom: 32, 
+    marginBottom: 40,
+    marginTop: Platform.OS === 'android' ? 40 : 0,
   },
-  logoCircleContainer: {
-    width: 120, 
-    height: 120, 
+  logoWrapper: {
+    position: 'relative',
+    marginBottom: 20,
+  },
+  logoCircle: {
+    width: 120,
+    height: 120,
     borderRadius: 60,
     backgroundColor: 'white',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
     elevation: 8,
     shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
+    borderWidth: 3,
+    borderColor: Colors.primary,
+  },
+  logoGlow: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: Colors.primary,
+    opacity: 0.1,
+    top: 0,
+    left: 0,
   },
   logoImage: {
-    width: '75%', 
-    height: '75%', 
+    width: '75%',
+    height: '75%',
+  },
+  brandContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
   },
   brandTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
     color: Colors.primary,
     letterSpacing: 0.5,
     textAlign: 'center',
-    marginBottom: 4,
+  },
+  divider: {
+    width: 60,
+    height: 3,
+    backgroundColor: Colors.primary,
+    borderRadius: 2,
+    marginVertical: 8,
   },
   brandSubtitle: {
-    fontSize: 16,
-    fontWeight: '500', 
-    color: Colors.textSecondary,
-    letterSpacing: 1.2, 
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
   },
 
-  // CARD
-  card: {
+  formCard: {
     backgroundColor: 'white',
     borderRadius: 24,
     padding: 24,
-    elevation: 4, 
-    shadowColor: '#000', 
+    elevation: 6,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    marginBottom: 24,
   },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 4,
+  formHeader: {
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  formTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1F2937',
+    marginBottom: 6,
     textAlign: 'center',
   },
-  cardSubtitle: {
+  formSubtitle: {
     fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: 24,
+    color: '#6B7280',
+    fontWeight: '500',
     textAlign: 'center',
   },
 
-  // INPUTS
-  inputGroup: {
-    marginBottom: 16,
+  inputWrapper: {
+    marginBottom: 20,
   },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 8,
-    marginLeft: 4,
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 10,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FAFAFA',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 50,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    height: 56,
   },
-  inputIcon: {
-    marginRight: 10,
+  inputContainerFocused: {
+    backgroundColor: '#FFFFFF',
+    borderColor: Colors.primary,
+  },
+  inputIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   input: {
     flex: 1,
     fontSize: 15,
-    color: Colors.text,
+    fontWeight: '500',
+    color: '#1F2937',
+    paddingVertical: 10, // Menambah area sentuh
   },
-  eyeIcon: {
+  eyeButton: {
     padding: 8,
   },
 
-  // BUTTON
   loginButton: {
     backgroundColor: Colors.primary,
-    borderRadius: 12,
-    height: 50,
+    borderRadius: 16,
+    height: 56,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 16, 
+    marginTop: 8,
+    elevation: 6,
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 12,
   },
   loginButtonDisabled: {
-    opacity: 0.7,
+    opacity: 0.6,
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   loginButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '600',
   },
 
-  // FOOTER
+  footer: {
+    alignItems: 'center',
+    marginTop: 16,
+    paddingBottom: 20,
+  },
+  footerDivider: {
+    width: 80,
+    height: 2,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 1,
+    marginBottom: 16,
+  },
   footerText: {
     textAlign: 'center',
-    marginTop: 32,
-    color: '#9E9E9E',
-    fontSize: 12,
+    color: '#9CA3AF',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  footerSubtext: {
+    textAlign: 'center',
+    color: '#D1D5DB',
+    fontSize: 11,
+    fontWeight: '500',
   },
 });

@@ -5,17 +5,14 @@
     "version": "1.0.0",
     "scheme": "estehpos",
     "orientation": "portrait",
-    
     "icon": "./assets/images/logo-esteh.png",
     "userInterfaceStyle": "light",
-    "backgroundColor": "#F0F4F8", 
-    
+    "backgroundColor": "#F0F4F8",
     "splash": {
       "image": "./assets/images/logo-esteh.png",
       "resizeMode": "contain",
       "backgroundColor": "#F0F4F8"
     },
-    
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.esteh.app"
@@ -23,7 +20,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo-esteh.png",
-        "backgroundColor": "#F0F4F8" 
+        "backgroundColor": "#F0F4F8"
       },
       "package": "com.esteh.app"
     },
@@ -40,7 +37,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#F0F4F8"
         }
-      ]
+      ],
+      "expo-web-browser"
     ]
   }
 }

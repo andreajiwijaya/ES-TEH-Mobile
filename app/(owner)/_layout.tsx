@@ -41,7 +41,7 @@ export default function OwnerTabsLayout() {
       <Tabs.Screen
         name="pegawai"
         options={{
-          title: 'Tim', 
+          title: 'Karyawan', 
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} color={color} name="people" />
           ),
