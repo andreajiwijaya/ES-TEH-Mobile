@@ -1,23 +1,62 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState, useCallback } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState, useMemo } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TextInput,
   Alert,
+  Animated,
   Platform,
-  ActivityIndicator,
   RefreshControl,
+  ScrollView,
   StatusBar,
-  TouchableOpacity
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router'; 
+import { authAPI, gudangAPI } from '../../services/api';
+import { Bahan, User } from '../../types';
 import { Colors } from '../../constants/Colors';
-import { Bahan } from '../../types'; 
-import { gudangAPI } from '../../services/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
+
+// Skeleton Shimmer Component
+const SkeletonShimmer = ({ width = '100%', height = 12, borderRadius = 8 }: { width?: string | number; height?: number; borderRadius?: number }) => {
+  const shimmerAnim = React.useMemo(() => new Animated.Value(-200), []);
+  
+  React.useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmerAnim, { toValue: 200, duration: 1000, useNativeDriver: true }),
+        Animated.timing(shimmerAnim, { toValue: -200, duration: 0, useNativeDriver: true }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [shimmerAnim]);
+
+  const skeletonStyle: any = { 
+    width, 
+    height, 
+    borderRadius, 
+    backgroundColor: '#E0E0E0', 
+    overflow: 'hidden' 
+  };
+
+  return (
+    <View style={skeletonStyle}>
+      <Animated.View
+        style={[
+          {
+            width: '30%',
+            height: '100%',
+            backgroundColor: 'rgba(255, 255, 255, 0.5)',
+          },
+          { transform: [{ translateX: shimmerAnim }] },
+        ]}
+      />
+    </View>
+  );
+};
 
 interface StockItem {
   id: string;
@@ -27,209 +66,579 @@ interface StockItem {
   status: 'Aman' | 'Menipis' | 'Kritis';
 }
 
+interface ActivityItem {
+  id: string;
+  type: 'masuk' | 'keluar' | 'permintaan';
+  icon: string;
+  color: string;
+  title: string;
+  description: string;
+  time: string;
+  amount: string;
+}
+
 export default function WarehouseOverviewScreen() {
   const router = useRouter();
-  
-  const [searchQuery, setSearchQuery] = useState('');
+
+  // State Management
+  const [user, setUser] = useState<User | null>(null);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [recentActivities, setRecentActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [todayIncoming, setTodayIncoming] = useState(0);
+  const [todayOutgoing, setTodayOutgoing] = useState(0);
+  const [pendingRequests, setPendingRequests] = useState(0);
+  const [totalSKU, setTotalSKU] = useState(0);
+  const [lowStockCount, setLowStockCount] = useState(0);
+  const [criticalCount, setCriticalCount] = useState(0);
 
-  const loadUserData = async () => {
-    const userData = await AsyncStorage.getItem('@user_data');
-    if (userData) setUser(JSON.parse(userData));
-  };
+  // Load User Data
+  const loadUserData = useCallback(async () => {
+    try {
+      const response = await authAPI.getMe();
+      if (response.data) {
+        setUser(response.data);
+      }
+    } catch (error) {
+      console.error('Gagal memuat data user:', error);
+    }
+  }, []);
 
-  const loadStok = useCallback(async (isRefresh = false) => {
+  // Load All Data from APIs
+  const loadAllData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     try {
-      const response = await gudangAPI.getStok();
-      if (response.data && Array.isArray(response.data)) {
-        const mappedItems: StockItem[] = response.data.map((item: any) => {
+      await loadUserData();
+
+      const [stokRes, masukRes, keluarRes, permintaanRes] = await Promise.all([
+        gudangAPI.getStok(),
+        gudangAPI.getBarangMasuk(),
+        gudangAPI.getBarangKeluar(),
+        gudangAPI.getPermintaanStok(),
+      ]);
+
+      // Process Stock Items
+      const mappedStocks: StockItem[] = [];
+      if (stokRes.data && Array.isArray(stokRes.data)) {
+        stokRes.data.forEach((item: any) => {
           const stok = Number(item.stok) || 0;
           const minStok = Number(item.bahan?.stok_minimum_gudang) || 0;
-          
-          let status: 'Aman' | 'Menipis' | 'Kritis' = 'Aman';
-          if (stok <= 0) status = 'Kritis';
-          else if (stok <= minStok * 0.3) status = 'Kritis';
-          else if (stok <= minStok) status = 'Menipis';
 
-          return {
+          let status: 'Aman' | 'Menipis' | 'Kritis' = 'Aman';
+          if (stok <= 0) {
+            status = 'Kritis';
+          } else if (stok <= minStok * 0.3) {
+            status = 'Kritis';
+          } else if (stok <= minStok) {
+            status = 'Menipis';
+          }
+
+          mappedStocks.push({
             id: `stok-${item.bahan_id}`,
             bahan_id: Number(item.bahan_id),
             stok: stok,
-            bahan: item.bahan || { nama: 'Unknown', satuan: 'Unit', stok_minimum_gudang: minStok, stok_minimum_outlet: 0 },
+            bahan: item.bahan || {
+              id: Number(item.bahan_id),
+              nama: 'Bahan Tidak Diketahui',
+              satuan: 'Unit',
+              stok_minimum_gudang: minStok,
+              stok_minimum_outlet: 0,
+            },
             status: status,
-          };
+          });
         });
-        setStockItems(mappedItems);
       }
-    } catch (error: any) {
-      console.log(error);
-      Alert.alert('Gagal Memuat', 'Terjadi kesalahan saat mengambil data stok.');
+      setStockItems(mappedStocks);
+      setTotalSKU(mappedStocks.length);
+      setLowStockCount(mappedStocks.filter((s) => s.status === 'Menipis').length);
+      setCriticalCount(mappedStocks.filter((s) => s.status === 'Kritis').length);
+
+      // Process Today's Counts
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      let incomingCount = 0;
+      if (masukRes.data && Array.isArray(masukRes.data)) {
+        incomingCount = masukRes.data.filter((item: any) => {
+          const itemDate = new Date(item.tanggal || item.created_at);
+          itemDate.setHours(0, 0, 0, 0);
+          return itemDate.getTime() === today.getTime();
+        }).length;
+      }
+
+      let outgoingCount = 0;
+      if (keluarRes.data && Array.isArray(keluarRes.data)) {
+        outgoingCount = keluarRes.data.filter((item: any) => {
+          const itemDate = new Date(item.tanggal_keluar || item.created_at);
+          itemDate.setHours(0, 0, 0, 0);
+          return itemDate.getTime() === today.getTime();
+        }).length;
+      }
+
+      let pendingCount = 0;
+      if (permintaanRes.data && Array.isArray(permintaanRes.data)) {
+        pendingCount = permintaanRes.data.filter((item: any) => {
+          const status = (item.status || '').toLowerCase();
+          return status === 'diajukan' || status === 'disetujui';
+        }).length;
+      }
+
+      setTodayIncoming(incomingCount);
+      setTodayOutgoing(outgoingCount);
+      setPendingRequests(pendingCount);
+
+      // Process Recent Activities
+      const activities: ActivityItem[] = [];
+
+      if (masukRes.data && Array.isArray(masukRes.data)) {
+        masukRes.data.slice(0, 3).forEach((item: any) => {
+          activities.push({
+            id: `masuk-${item.id}`,
+            type: 'masuk',
+            icon: 'arrow-down-circle',
+            color: '#22C55E',
+            title: 'Barang Masuk',
+            description: `${item.bahan?.nama || 'Bahan'} dari ${item.supplier || 'Supplier'}`,
+            time: item.tanggal || item.created_at,
+            amount: `${item.jumlah || 0} ${item.bahan?.satuan || 'gr'}`,
+          });
+        });
+      }
+
+      if (keluarRes.data && Array.isArray(keluarRes.data)) {
+        keluarRes.data.slice(0, 2).forEach((item: any) => {
+          activities.push({
+            id: `keluar-${item.id}`,
+            type: 'keluar',
+            icon: 'arrow-up-circle',
+            color: '#3B82F6',
+            title: 'Barang Keluar',
+            description: `${item.bahan?.nama || 'Bahan'} ke ${item.outlet?.nama || 'Outlet'}`,
+            time: item.tanggal_keluar || item.created_at,
+            amount: `${item.jumlah || 0} ${item.bahan?.satuan || 'gr'}`,
+          });
+        });
+      }
+
+      if (permintaanRes.data && Array.isArray(permintaanRes.data)) {
+        permintaanRes.data.slice(0, 2).forEach((item: any) => {
+          activities.push({
+            id: `permintaan-${item.id}`,
+            type: 'permintaan',
+            icon: 'document-text',
+            color: '#F59E0B',
+            title: 'Permintaan Stok',
+            description: `${item.bahan?.nama || 'Bahan'} dari ${item.outlet?.nama || 'Outlet'}`,
+            time: item.created_at,
+            amount: `${item.jumlah || 0} ${item.bahan?.satuan || 'gr'}`,
+          });
+        });
+      }
+
+      activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+      setRecentActivities(activities.slice(0, 5));
+    } catch (error) {
+      console.error('Gagal memuat data:', error);
+      Alert.alert('Gagal Memuat', 'Terjadi kesalahan saat mengambil data.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [loadUserData]);
 
-  // Sync Otomatis saat layar difokuskan
+  // Auto Load on Focus
   useFocusEffect(
     useCallback(() => {
-      loadUserData();
-      loadStok();
-    }, [loadStok])
+      loadAllData();
+    }, [loadAllData])
   );
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadStok(true);
-  };
+  // Helper Functions
+  const getGreeting = useCallback(() => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 11) return 'Pagi';
+    if (hour >= 11 && hour < 15) return 'Siang';
+    if (hour >= 15 && hour < 18) return 'Sore';
+    return 'Malam';
+  }, []);
 
-  const filteredItems = stockItems.filter(item =>
-    item.bahan.nama.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const totalSKU = stockItems.length;
-  const lowStockCount = stockItems.filter(item => item.status === 'Menipis').length;
-  const criticalCount = stockItems.filter(item => item.status === 'Kritis').length;
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Aman': return Colors.success;
-      case 'Menipis': return '#FB8C00'; 
-      case 'Kritis': return '#E53935'; 
-      default: return Colors.textSecondary;
+  const parseDateLocal = useCallback((s: string): Date => {
+    if (!s) return new Date();
+    const raw = s.toString().trim();
+    
+    // Backend mengirim waktu dalam UTC
+    // Format: "YYYY-MM-DD HH:mm:ss" atau "YYYY-MM-DDTHH:mm:ss.000000Z"
+    
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(raw)) {
+      // Format "YYYY-MM-DD HH:mm:ss" dari backend (UTC tanpa marker)
+      // Tambahkan Z untuk parse sebagai UTC
+      const normalized = raw.replace(' ', 'T') + 'Z';
+      return new Date(normalized);
+    } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(raw)) {
+      // Format ISO tanpa timezone, assume UTC
+      return new Date(raw + 'Z');
     }
-  };
+    
+    // Format lainnya (sudah ada Z atau timezone), parse langsung
+    return new Date(raw);
+  }, []);
 
+  const getUserInitial = useCallback(() => {
+    const username = user?.username || 'G';
+    return username.substring(0, 2).toUpperCase();
+  }, [user]);
+
+  const getAvatarColor = useCallback(() => {
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE'];
+    const username = user?.username || 'Guest';
+    const index = username.charCodeAt(0) % colors.length;
+    return colors[index];
+  }, [user]);
+
+  const getRelativeTime = useCallback((iso?: string) => {
+    if (!iso) return '—';
+    try {
+      const now = new Date();
+      const targetDate = parseDateLocal(iso);
+      
+      // Check if valid date
+      if (isNaN(targetDate.getTime())) return '—';
+      
+      const diffMs = now.getTime() - targetDate.getTime();
+      const diffSeconds = Math.floor(diffMs / 1000);
+      const diffMinutes = Math.floor(diffSeconds / 60);
+      const diffHours = Math.floor(diffMinutes / 60);
+      const diffDays = Math.floor(diffHours / 24);
+      
+      if (diffSeconds < 60) return 'baru saja';
+      if (diffMinutes < 60) return `${diffMinutes}m`;
+      if (diffHours < 24) return `${diffHours}h`;
+      if (diffDays < 7) return `${diffDays}d`;
+      return `${Math.floor(diffDays / 7)}w`;
+    } catch {
+      return '—';
+    }
+  }, [parseDateLocal]);
+
+  const getStatusColor = useCallback((status: string) => {
+    switch (status) {
+      case 'Aman':
+        return Colors.success;
+      case 'Menipis':
+        return '#F59E0B';
+      case 'Kritis':
+        return '#EF4444';
+      default:
+        return '#999';
+    }
+  }, []);
+
+  // Filtered Stocks (useMemo for performance)
+  const filteredStocks = useMemo(
+    () =>
+      stockItems.filter((item) =>
+        item.bahan.nama.toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    [stockItems, searchQuery]
+  );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadAllData(true);
+  }, [loadAllData]);
+
+  // JSX Render
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
-      
-      {/* --- HEADER --- */}
+
+      {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerTop}>
+        <View style={styles.headerContent}>
           <View>
-            <Text style={styles.welcomeText}>Halo, {user?.username || 'Staff'}</Text>
-            <Text style={styles.headerTitle}>Gudang Pusat</Text>
+            <Text style={styles.greeting}>
+              {user?.username ? `Selamat ${getGreeting()}, ${user.username}` : `Selamat ${getGreeting()}`}
+            </Text>
+            <Text style={styles.headerTitle}>Inventory Gudang</Text>
           </View>
-          <View style={styles.headerIconBg}>
-            <Ionicons name="notifications" size={20} color={Colors.primary} />
+          <View style={[styles.avatar, { backgroundColor: getAvatarColor() }]}>
+            <Text style={styles.avatarText}>{getUserInitial()}</Text>
           </View>
         </View>
 
-        <View style={styles.searchWrapper}>
-          <Ionicons name="search" size={20} color="#BDBDBD" />
-          <TextInput 
+        {/* Search Box */}
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={18} color="#999" />
+          <TextInput
             style={styles.searchInput}
-            placeholder="Cari nama bahan baku..."
-            placeholderTextColor="#BDBDBD"
+            placeholder="Cari bahan baku..."
+            placeholderTextColor="#AAA"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
         </View>
       </View>
 
-      <ScrollView 
-        style={styles.content}
+      <ScrollView
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[Colors.primary]}
+          />
+        }
+        contentContainerStyle={styles.scrollContent}
       >
-        {/* --- QUICK ACCESS (RE-DESIGNED) --- */}
+        {/* Stats Grid */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Ringkasan Hari Ini</Text>
+          {loading ? (
+            <View style={styles.statsGrid}>
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <View key={`skeleton-stat-${i}`} style={styles.statCard}>
+                  <SkeletonShimmer width={40} height={24} borderRadius={6} />
+                  <SkeletonShimmer width={60} height={10} borderRadius={4} />
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.statsGrid}>
+              <View style={[styles.statCard, styles.statCardPrimary]}>
+                <Text style={styles.statValueWhite}>{totalSKU}</Text>
+                <Text style={styles.statLabel}>Total SKU</Text>
+              </View>
+
+              <View style={[styles.statCard, styles.statCardGreen]}>
+                <Text style={[styles.statValue, { color: '#22C55E' }]}>
+                  {todayIncoming}
+                </Text>
+                <Text style={styles.statLabel}>Masuk Hari Ini</Text>
+              </View>
+
+              <View style={[styles.statCard, styles.statCardBlue]}>
+                <Text style={[styles.statValue, { color: '#3B82F6' }]}>
+                  {todayOutgoing}
+                </Text>
+                <Text style={styles.statLabel}>Keluar Hari Ini</Text>
+              </View>
+
+              <View style={[styles.statCard, styles.statCardOrange]}>
+                <Text style={[styles.statValue, { color: '#F59E0B' }]}>
+                  {pendingRequests}
+                </Text>
+                <Text style={styles.statLabel}>Permintaan</Text>
+              </View>
+
+              <View style={[styles.statCard, styles.statCardWarning]}>
+                <Text style={[styles.statValue, { color: '#F59E0B' }]}>
+                  {lowStockCount}
+                </Text>
+                <Text style={styles.statLabel}>Menipis</Text>
+              </View>
+
+              <View style={[styles.statCard, styles.statCardCritical]}>
+                <Text style={[styles.statValue, { color: '#EF4444' }]}>
+                  {criticalCount}
+                </Text>
+                <Text style={styles.statLabel}>Kritis</Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Quick Access */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Akses Cepat</Text>
-          <View style={styles.shortcutGrid}>
-            <TouchableOpacity 
-              style={styles.shortcutBtn} 
+          <View style={styles.quickAccessGrid}>
+            <TouchableOpacity
+              style={styles.quickAccessBtn}
+              onPress={() => router.push('/(gudang)/masuk')}
+            >
+              <View style={[styles.quickAccessIcon, { backgroundColor: '#D1FAE5' }]}>
+                <Ionicons name="arrow-down-circle" size={24} color="#22C55E" />
+              </View>
+              <Text style={styles.quickAccessText}>Barang Masuk</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickAccessBtn}
+              onPress={() => router.push('/(gudang)/keluar')}
+            >
+              <View style={[styles.quickAccessIcon, { backgroundColor: '#DBEAFE' }]}>
+                <Ionicons name="arrow-up-circle" size={24} color="#3B82F6" />
+              </View>
+              <Text style={styles.quickAccessText}>Barang Keluar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickAccessBtn}
+              onPress={() => router.push('/(gudang)/permintaan')}
+            >
+              <View style={[styles.quickAccessIcon, { backgroundColor: '#FEF3C7' }]}>
+                <Ionicons name="document-text" size={24} color="#F59E0B" />
+              </View>
+              <Text style={styles.quickAccessText}>Permintaan</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickAccessBtn}
               onPress={() => router.push('/(gudang)/bahan')}
             >
-              <View style={[styles.shortcutIcon, {backgroundColor: '#E8F5E9'}]}>
+              <View style={[styles.quickAccessIcon, { backgroundColor: '#E8F5E9' }]}>
                 <Ionicons name="cube" size={24} color={Colors.primary} />
               </View>
-              <Text style={styles.shortcutText}>Bahan</Text>
+              <Text style={styles.quickAccessText}>Kelola Bahan</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.shortcutBtn} 
-              onPress={() => router.push('/(gudang)/opname')}
+            <TouchableOpacity
+              style={styles.quickAccessBtn}
+              onPress={() => router.push('/(gudang)/kategori')}
             >
-              <View style={[styles.shortcutIcon, {backgroundColor: '#FFF3E0'}]}>
-                <Ionicons name="clipboard" size={24} color="#FB8C00" />
+              <View style={[styles.quickAccessIcon, { backgroundColor: '#F3E5F5' }]}>
+                <Ionicons name="pricetags" size={24} color="#7B1FA2" />
               </View>
-              <Text style={styles.shortcutText}>Opname</Text>
+              <Text style={styles.quickAccessText}>Kelola Kategori</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* --- STATS GRID --- */}
+        {/* Recent Activities */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Status Stok</Text>
-          <View style={styles.statsContainer}>
-            <View style={[styles.statCard, styles.statCardPrimary]}>
-              <Text style={styles.statValueWhite}>{totalSKU}</Text>
-              <Text style={styles.statLabelWhite}>Total SKU</Text>
-            </View>
-
-            <View style={[styles.statCard, styles.statCardWarning]}>
-              <Text style={[styles.statValue, { color: '#FB8C00' }]}>{lowStockCount}</Text>
-              <Text style={styles.statLabel}>Menipis</Text>
-            </View>
-
-            <View style={[styles.statCard, styles.statCardCritical]}>
-              <Text style={[styles.statValue, { color: '#E53935' }]}>{criticalCount}</Text>
-              <Text style={styles.statLabel}>Kritis</Text>
-            </View>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Aktivitas Terbaru</Text>
+            {!loading && recentActivities.length > 0 && (
+              <Text style={styles.sectionCount}>({recentActivities.length})</Text>
+            )}
           </View>
+          {loading ? (
+            <View>
+              {[1, 2, 3].map((i) => (
+                <View key={`skeleton-activity-${i}`} style={styles.activityCard}>
+                  <SkeletonShimmer width={40} height={40} borderRadius={10} />
+                  <View style={{ flex: 1, gap: 6, marginLeft: 12 }}>
+                    <SkeletonShimmer width="60%" height={12} borderRadius={4} />
+                    <SkeletonShimmer width="80%" height={10} borderRadius={4} />
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : recentActivities.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="time-outline" size={48} color="#E0E0E0" />
+              <Text style={styles.emptyText}>Belum ada aktivitas</Text>
+            </View>
+          ) : (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.activityScrollContent}
+            >
+              {recentActivities.map((activity) => (
+                <View key={activity.id} style={styles.activityCardHorizontal}>
+                  <View
+                    style={[
+                      styles.activityIcon,
+                      { backgroundColor: `${activity.color}20` },
+                    ]}
+                  >
+                    <Ionicons
+                      name={activity.icon as any}
+                      size={20}
+                      color={activity.color}
+                    />
+                  </View>
+                  <View style={styles.activityContent}>
+                    <Text style={styles.activityTitle}>{activity.title}</Text>
+                    <Text style={styles.activityDesc} numberOfLines={2}>{activity.description}</Text>
+                  </View>
+                  <View style={styles.activityRight}>
+                    <Text style={styles.activityAmount}>{activity.amount}</Text>
+                    <Text style={styles.activityTime}>
+                      {getRelativeTime(activity.time)}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          )}
         </View>
 
-        {/* --- INVENTORY LIST --- */}
+        {/* Stock Status List */}
         <View style={styles.section}>
-          <View style={styles.listHeader}>
-            <Text style={styles.sectionTitle}>Inventaris Gudang</Text>
-            <TouchableOpacity onPress={() => loadStok(true)}>
+          <View style={styles.sectionHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.sectionTitle}>Status Stok Terkini</Text>
+              {!loading && filteredStocks.length > 0 && (
+                <Text style={styles.sectionCount}>({filteredStocks.length})</Text>
+              )}
+            </View>
+            <TouchableOpacity onPress={() => loadAllData()}>
               <Ionicons name="refresh-circle" size={24} color={Colors.primary} />
             </TouchableOpacity>
           </View>
 
           {loading ? (
-            <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 20 }} />
-          ) : (
             <View>
-              {filteredItems.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <Ionicons name="search-outline" size={40} color="#E0E0E0" />
-                  <Text style={styles.emptyText}>Data tidak ditemukan</Text>
+              {[1, 2, 3].map((i) => (
+                <View key={`skeleton-stock-${i}`} style={styles.stockCard}>
+                  <View style={{ gap: 6 }}>
+                    <SkeletonShimmer width={120} height={14} borderRadius={4} />
+                    <SkeletonShimmer width={80} height={10} borderRadius={4} />
+                  </View>
+                  <SkeletonShimmer width={50} height={24} borderRadius={8} />
                 </View>
-              ) : (
-                filteredItems.map((item) => (
-                  <View key={item.id} style={styles.itemCard}>
-                    <View style={styles.itemLeft}>
-                      <View style={[styles.itemIconBg, { backgroundColor: item.status === 'Aman' ? '#F1F8E9' : '#FFEBEE' }]}>
-                        <Ionicons 
-                          name="beaker-outline" 
-                          size={20} 
-                          color={item.status === 'Aman' ? Colors.success : Colors.error} 
-                        />
-                      </View>
-                      <View>
-                        <Text style={styles.itemName}>{item.bahan.nama}</Text>
-                        <Text style={styles.itemMinStok}>Min: {item.bahan.stok_minimum_gudang} {item.bahan.satuan}</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.itemRight}>
-                      <Text style={styles.itemQty}>{item.stok} {item.bahan.satuan}</Text>
-                      <View style={[styles.statusPill, { backgroundColor: getStatusColor(item.status) }]}>
-                        <Text style={styles.statusPillText}>{item.status}</Text>
-                      </View>
+              ))}
+            </View>
+          ) : filteredStocks.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="search-outline" size={48} color="#E0E0E0" />
+              <Text style={styles.emptyText}>Data tidak ditemukan</Text>
+            </View>
+          ) : (
+            <ScrollView 
+              style={styles.stockScrollView}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled={true}
+            >
+              {filteredStocks.map((stock) => (
+                <View key={stock.id} style={styles.stockCard}>
+                  <View style={styles.stockLeft}>
+                    <Text style={styles.stockName}>{stock.bahan.nama}</Text>
+                    <Text style={styles.stockMinimum}>
+                      Min: {stock.bahan.stok_minimum_gudang.toLocaleString('id-ID')} {stock.bahan.satuan}
+                    </Text>
+                  </View>
+                  <View style={styles.stockRight}>
+                    {(() => {
+                      const unit = (stock.bahan.satuan || '').toLowerCase();
+                      let displayQty = `${stock.stok.toLocaleString('id-ID')} ${stock.bahan.satuan}`;
+                      if (unit !== 'gr') {
+                        const perUnitWeight = (Number(stock.bahan.berat_per_isi) || 0) * (Number(stock.bahan.isi_per_satuan) || 1);
+                        if (perUnitWeight > 0) {
+                          const packCount = Math.floor(Number(stock.stok) / perUnitWeight);
+                          displayQty = `${packCount.toLocaleString('id-ID')} ${stock.bahan.satuan}`;
+                        }
+                      }
+                      return <Text style={styles.stockQty}>{displayQty}</Text>;
+                    })()}
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        {
+                          backgroundColor: getStatusColor(stock.status),
+                        },
+                      ]}
+                    >
+                      <Text style={styles.statusText}>{stock.status}</Text>
                     </View>
                   </View>
-                ))
-              )}
-            </View>
+                </View>
+              ))}
+            </ScrollView>
           )}
         </View>
       </ScrollView>
@@ -238,59 +647,322 @@ export default function WarehouseOverviewScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  container: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+  },
   header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
     paddingHorizontal: 24,
-    paddingBottom: 35, 
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    paddingBottom: 32,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
   },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
-  welcomeText: { fontSize: 14, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: 'white' },
-  headerIconBg: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
-  searchWrapper: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 15,
-    paddingHorizontal: 16, height: 50, marginBottom: -60, elevation: 4, shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4,
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  searchInput: { flex: 1, marginLeft: 10, fontSize: 14, fontWeight: '500' },
-  content: { flex: 1, marginTop: 40 },
-  section: { paddingHorizontal: 24, marginBottom: 25 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#333', marginBottom: 15 },
-  shortcutGrid: { flexDirection: 'row', gap: 15 },
-  shortcutBtn: { 
-    flex: 1, backgroundColor: 'white', padding: 15, borderRadius: 20, alignItems: 'center',
-    borderWidth: 1, borderColor: '#F0F0F0', elevation: 2
+  greeting: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '500',
+    marginBottom: 4,
   },
-  shortcutIcon: { width: 50, height: 50, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
-  shortcutText: { fontSize: 14, fontWeight: '700', color: '#444' },
-  statsContainer: { flexDirection: 'row', gap: 10 },
-  statCard: { flex: 1, borderRadius: 18, padding: 15, elevation: 2 },
-  statCardPrimary: { backgroundColor: Colors.primary },
-  statCardWarning: { backgroundColor: 'white', borderWidth: 1, borderColor: '#FFE0B2' },
-  statCardCritical: { backgroundColor: 'white', borderWidth: 1, borderColor: '#FFCDD2' },
-  statValueWhite: { fontSize: 20, fontWeight: '800', color: 'white' },
-  statLabelWhite: { fontSize: 11, color: 'rgba(255,255,255,0.9)', fontWeight: '600' },
-  statValue: { fontSize: 20, fontWeight: '800' },
-  statLabel: { fontSize: 11, color: '#777', fontWeight: '600' },
-  listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  itemCard: {
-    backgroundColor: 'white', borderRadius: 18, padding: 15, marginBottom: 12,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    borderWidth: 1, borderColor: '#F0F0F0'
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: 'white',
   },
-  itemLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  itemIconBg: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  itemName: { fontSize: 15, fontWeight: '700', color: '#333' },
-  itemMinStok: { fontSize: 11, color: '#999', marginTop: 2 },
-  itemRight: { alignItems: 'flex-end' },
-  itemQty: { fontSize: 15, fontWeight: '800', color: '#333', marginBottom: 4 },
-  statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  statusPillText: { color: 'white', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  emptyContainer: { alignItems: 'center', paddingVertical: 30 },
-  emptyText: { marginTop: 10, color: '#AAA', fontWeight: '600' },
-  loadingText: { marginTop: 10, color: '#777' }
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  avatarText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: 'white',
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 48,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingVertical: 24,
+    paddingBottom: 40,
+  },
+  section: {
+    paddingHorizontal: 24,
+    marginBottom: 28,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 16,
+  },
+  sectionCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#999',
+    marginLeft: 6,
+    marginBottom: 16,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  statCard: {
+    flexBasis: '31%',
+    backgroundColor: 'white',
+    borderRadius: 18,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  statCardPrimary: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  statCardGreen: {
+    borderColor: '#D1FAE5',
+  },
+  statCardBlue: {
+    borderColor: '#DBEAFE',
+  },
+  statCardOrange: {
+    borderColor: '#FEF3C7',
+  },
+  statCardWarning: {
+    borderColor: '#FFE0B2',
+  },
+  statCardCritical: {
+    borderColor: '#FFCDD2',
+  },
+  statValueWhite: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: 'white',
+    marginBottom: 6,
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#777',
+    textAlign: 'center',
+  },
+  quickAccessGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  quickAccessBtn: {
+    flexBasis: '48%',
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  quickAccessIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  quickAccessText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#333',
+    textAlign: 'center',
+  },
+  activityScrollContent: {
+    paddingRight: 24,
+  },
+  activityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  activityCardHorizontal: {
+    flexDirection: 'column',
+    backgroundColor: 'white',
+    borderRadius: 18,
+    padding: 14,
+    marginRight: 12,
+    width: 240,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  activityIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activityContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  activityTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 2,
+  },
+  activityDesc: {
+    fontSize: 12,
+    color: '#777',
+    marginBottom: 2,
+  },
+  activityRight: {
+    alignItems: 'flex-end',
+    marginLeft: 8,
+  },
+  activityAmount: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#999',
+    marginBottom: 2,
+  },
+  activityTime: {
+    fontSize: 10,
+    color: '#AAA',
+    fontWeight: '600',
+  },
+  stockScrollView: {
+    maxHeight: 400,
+  },
+  stockCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  stockLeft: {
+    flex: 1,
+  },
+  stockName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 4,
+  },
+  stockMinimum: {
+    fontSize: 11,
+    color: '#999',
+  },
+  stockRight: {
+    alignItems: 'flex-end',
+  },
+  stockQty: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#333',
+    marginBottom: 6,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'white',
+    textTransform: 'uppercase',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#AAA',
+    fontWeight: '600',
+  },
 });

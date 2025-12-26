@@ -3,38 +3,39 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import {
-  LoginResponse,
-  FileAsset,
-  CreateOutletPayload,
-  UpdateOutletPayload,
-  CreateUserPayload,
-  UpdateUserPayload,
-  CreateBahanPayload,
-  UpdateBahanPayload,
-  CreateBarangMasukPayload,
-  UpdateBarangMasukPayload,
-  CreateBarangKeluarPayload,
-  UpdateBarangKeluarPayload,
-  UpdatePermintaanStokPayload,
-  CreateProductPayload,
-  UpdateProductPayload,
-  CreateTransaksiPayload,
-  UpdateTransaksiPayload,
-  CreatePermintaanStokPayload,
-  UpdatePermintaanStokKaryawanPayload,
-  TerimaBarangKeluarResponse,
-  Outlet,
-  User,
   Bahan,
-  BahanGudang, 
-  BarangMasuk,
+  BahanGudang,
   BarangKeluar,
+  BarangMasuk,
+  CreateBahanPayload,
+  CreateBarangMasukPayload,
+  CreateKategoriPayload,
+  CreateOutletPayload,
+  CreatePermintaanStokPayload,
+  CreateProductPayload,
+  CreateTransaksiPayload,
+  CreateUserPayload,
+  DashboardData,
+  FileAsset,
+  Kategori,
+  LaporanResponse,
+  LoginResponse,
+  Outlet,
   PermintaanStok,
   Product,
-  Transaksi,
   StokOutletItem,
-  DashboardData,
-  LaporanResponse,
+  TerimaBarangKeluarResponse,
+  Transaksi,
+  UpdateBahanPayload,
+  UpdateBarangMasukPayload,
+  UpdateKategoriPayload,
+  UpdateOutletPayload,
+  UpdatePermintaanStokKaryawanPayload,
+  UpdatePermintaanStokPayload,
+  UpdateProductPayload,
+  UpdateTransaksiPayload,
+  UpdateUserPayload,
+  User,
 } from '../types';
 
 // Base URL
@@ -258,7 +259,6 @@ export const ownerAPI = {
     makeRequest(`/laporan/export?start_date=${startDate}&end_date=${endDate}`),
   getDashboard: async () => makeRequest<DashboardData>('/dashboard'),
 
-  // SINKRONISASI: Menambahkan endpoint stok-detail untuk laporan owner
   getStokDetail: async () => makeRequest<any>('/stok-detail'), 
 };
 
@@ -283,53 +283,30 @@ export const gudangAPI = {
 
   getBarangKeluar: async () => makeRequest<BarangKeluar[]>('/gudang/barang-keluar'),
   getBarangKeluarById: async (id: number) => makeRequest<BarangKeluar>(`/gudang/barang-keluar/${id}`),
-  
-  createBarangKeluar: async (data: CreateBarangKeluarPayload) =>
-    makeRequest<BarangKeluar>('/gudang/barang-keluar', { method: 'POST', body: JSON.stringify(data) }),
-
-  updateBarangKeluar: async (id: number, data: UpdateBarangKeluarPayload) => {
-    if (data.bukti_foto) {
-      const formData = new FormData();
-      if (data.jumlah !== undefined && data.jumlah !== null) formData.append('jumlah', data.jumlah.toString());
-      const file = prepareImageFile(data.bukti_foto);
-      if (file) formData.append('bukti_foto', file);
-      formData.append('_method', 'PUT');
-      return makeFormDataRequest<BarangKeluar>(`/gudang/barang-keluar/${id}`, formData, 'POST');
-    }
-    return makeRequest<BarangKeluar>(`/gudang/barang-keluar/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ jumlah: data.jumlah }),
-    });
-  },
-
-  deleteBarangKeluar: async (id: number) => makeRequest(`/gudang/barang-keluar/${id}`, { method: 'DELETE' }),
-
-  setBarangKeluarStatus: async (id: number, status: string) =>
-    makeRequest(`/gudang/barang-keluar/${id}`, { method: 'PUT', body: JSON.stringify({ status }) }),
-
   getStok: async () => makeRequest('/gudang/stok'),
 
   getPermintaanStok: async () => makeRequest<PermintaanStok[]>('/gudang/permintaan-stok'),
   getPermintaanStokById: async (id: number) => makeRequest<PermintaanStok>(`/gudang/permintaan-stok/${id}`),
   
+  // Endpoint Update Permintaan (Mengikuti flow Enum Nopal: diajukan, dikirim, diterima)
   updatePermintaanStok: async (id: number, data: UpdatePermintaanStokPayload) => {
-    const candidates = [String((data as any).status), 'disetujui', 'approved', 'rejected'];
-    let lastErr: any = null;
-
-    for (const candidate of candidates) {
-      try {
-        const res = await makeRequest<PermintaanStok>(`/gudang/permintaan-stok/${id}`, {
-          method: 'PUT',
-          body: JSON.stringify({ status: candidate }),
-        });
-        if (!res.error) return res;
-        lastErr = res.error;
-      } catch (err: any) {
-        lastErr = err;
-      }
-    }
-    return { error: lastErr?.toString() || 'Gagal memperbarui status permintaan' } as ApiResponse<PermintaanStok>;
+    return makeRequest<PermintaanStok>(`/gudang/permintaan-stok/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   },
+
+  // Update status permintaan stok lintas role (diajukan -> disetujui/ditolak -> dikirim)
+  updatePermintaanStokStatus: async (id: number, data: UpdatePermintaanStokPayload) =>
+    makeRequest<PermintaanStok>(`/permintaan-stok/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  // Kategori (Gudang)
+  getKategori: async () => makeRequest<Kategori[]>('/gudang/kategori'),
+  createKategori: async (data: CreateKategoriPayload) =>
+    makeRequest<Kategori>('/gudang/kategori', { method: 'POST', body: JSON.stringify(data) }),
+  updateKategori: async (id: number, data: UpdateKategoriPayload) =>
+    makeRequest<Kategori>(`/gudang/kategori/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteKategori: async (id: number) => makeRequest(`/gudang/kategori/${id}`, { method: 'DELETE' }),
 };
 
 // ==================== KARYAWAN / KASIR APIs ====================
@@ -337,12 +314,15 @@ export const gudangAPI = {
 export const karyawanAPI = {
   getProduk: async () => makeRequest<Product[]>('/produk'),
   getProdukById: async (id: number) => makeRequest<Product>(`/produk/${id}`),
+  // Kategori untuk karyawan (umum, non-gudang)
+  getKategori: async () => makeRequest<Kategori[]>('/kategori'),
 
   createProduk: async (data: CreateProductPayload) => {
     const formData = new FormData();
     formData.append('nama', data.nama);
     formData.append('harga', data.harga.toString());
     formData.append('category', data.category || 'Minuman');
+    formData.append('kategori_id', data.kategori_id.toString());
 
     if (data.komposisi && data.komposisi.length > 0) {
       data.komposisi.forEach((item, index) => {
@@ -362,6 +342,7 @@ export const karyawanAPI = {
     if (data.nama) formData.append('nama', data.nama);
     if (data.harga) formData.append('harga', data.harga.toString());
     if (data.category) formData.append('category', data.category);
+    if (data.kategori_id) formData.append('kategori_id', data.kategori_id.toString());
 
     if (data.komposisi && data.komposisi.length > 0) {
       data.komposisi.forEach((item, index) => {
@@ -424,6 +405,7 @@ export const karyawanAPI = {
   getStokOutlet: async () => makeRequest<StokOutletItem[]>('/stok/outlet'),
   getBahanGudang: async () => makeRequest<BahanGudang[]>('/bahan-gudang'),
 
+  // Endpoint Konfirmasi Terima Barang (Post /api/barang-keluar/{id}/terima)
   terimaBarangKeluar: async (id: number, bukti_foto?: FileAsset | null) => {
     if (bukti_foto) {
       const formData = new FormData();
@@ -432,10 +414,6 @@ export const karyawanAPI = {
       return makeFormDataRequest<TerimaBarangKeluarResponse>(`/barang-keluar/${id}/terima`, formData, 'POST');
     }
     return makeRequest<TerimaBarangKeluarResponse>(`/barang-keluar/${id}/terima`, { method: 'POST' });
-  },
-
-  tolakBarangKeluar: async (id: number) => {
-    return gudangAPI.setBarangKeluarStatus(id, 'cancelled');
   },
 };
 

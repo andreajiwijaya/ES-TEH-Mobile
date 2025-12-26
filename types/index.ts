@@ -31,9 +31,19 @@ export interface Outlet {
   id: number;
   nama: string;
   alamat: string;
-  // sometimes returned as 0/1 from Laravel, sometimes boolean — accept both
-  is_active: boolean | number;
+  is_active?: boolean | number;
+  stok_minimum_gudang?: number;
+  isi_per_satuan?: number;
+  berat_per_isi?: number;
   users_count?: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+// ==================== KATEGORI ====================
+export interface Kategori {
+  id: number;
+  nama: string;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -43,18 +53,25 @@ export interface Bahan {
   id: number;
   nama: string;
   satuan: string;
+  isi_per_satuan?: number;
+  berat_per_isi?: number;
   stok_minimum_gudang: number;
   stok_minimum_outlet: number;
   created_at?: string | null;
   updated_at?: string | null;
 }
 
-// Referensi bahan yang diambil untuk tujuan lookup oleh karyawan
 export interface BahanGudang {
   id: number;
   nama: string;
   satuan: string;
+  isi_per_satuan?: number;
+  berat_per_isi?: number;
+  stok?: number;
+  kategori_id?: number | null;
+  kategori?: Kategori | null;
 }
+
 export interface Komposisi {
   id?: number;
   produk_id?: number;
@@ -70,10 +87,12 @@ export interface Product {
   gambar?: string | FileAsset | null;
   is_available?: boolean;
   category?: string | null;
+  kategori_id?: number | null;
+  kategori?: Kategori | null;
   komposisi?: Komposisi[] | null;
 }
 
-// ==================== STOk OUTLET ====================
+// ==================== STOK OUTLET ====================
 export interface StokOutletItem {
   id: number;
   outlet_id?: number | null;
@@ -83,15 +102,7 @@ export interface StokOutletItem {
   bahan?: Bahan | null;
 }
 
-// ==================== TRANSAKSI & CART ====================
-export interface OrderItem {
-  id: string;
-  produk_id: number;
-  quantity: number;
-  subtotal: number;
-  notes?: string;
-}
-
+// ==================== TRANSAKSI ====================
 export interface TransaksiItemPayload {
   produk_id: number;
   quantity: number;
@@ -133,37 +144,21 @@ export interface BarangMasuk {
   bahan?: Bahan | null;
 }
 
-export type BarangKeluarStatus =
-  | 'pending'
-  | 'in_transit'
-  | 'received'
-  | 'diterima'
-  | 'cancelled'
-  | string;
+export type PermintaanStokStatus = 'diajukan' | 'disetujui' | 'ditolak' | 'dikirim' | 'diterima' | string;
 
 export interface BarangKeluar {
   id: number;
   permintaan_id?: number | null;
-  gudang_id?: number | null;
   outlet_id?: number | null;
   jumlah?: number | null;
   tanggal_keluar?: string | null;
-  status?: BarangKeluarStatus;
+  status?: PermintaanStokStatus;
   bukti_foto?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   bahan?: Bahan | null;
   outlet?: Outlet | null;
 }
-
-export type PermintaanStokStatus =
-  | 'pending'
-  | 'approved'
-  | 'rejected'
-  | 'completed'
-  | 'cancelled'
-  | 'diterima'
-  | string;
 
 export interface PermintaanStok {
   id: number;
@@ -173,32 +168,30 @@ export interface PermintaanStok {
   status: PermintaanStokStatus;
   bahan?: Bahan | null;
   outlet?: Outlet | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 // ==================== LAPORAN & DASHBOARD ====================
 export interface LaporanItem {
   tanggal: string;
-  total_transaksi?: number;
-  pendapatan?: number;
+  total_pemasukan?: number;
 }
 
 export interface LaporanResponse {
   message?: string;
-  periode?: string;
   total_pendapatan?: number;
   detail_per_hari?: LaporanItem[];
 }
 
 export interface DashboardData {
-  total_outlet?: number;
-  total_karyawan?: number;
-  pendapatan_hari_ini?: number;
-  stok_kritis_gudang?: number;
+  permintaan_pending: number;
+  jumlah_stok_kritis: number;
+  pendapatan_hari_ini: number;
+  stok_gudang?: any[];
 }
 
 // ==================== API PAYLOAD TYPES ====================
-
-// OWNER
 export interface CreateOutletPayload {
   nama: string;
   alamat: string;
@@ -215,20 +208,21 @@ export interface CreateUserPayload {
   username: string;
   password: string;
   role: 'karyawan' | 'gudang' | 'owner' | 'supervisor';
-  outlet_id: number;
+  outlet_id?: number;
 }
 
 export interface UpdateUserPayload {
   username?: string;
   password?: string;
   role?: 'karyawan' | 'gudang' | 'owner' | 'supervisor';
-  outlet_id?: number;
+  outlet_id?: number | null;
 }
 
-// GUDANG
 export interface CreateBahanPayload {
   nama: string;
   satuan: string;
+  isi_per_satuan: number;
+  berat_per_isi: number;
   stok_minimum_gudang: number;
   stok_minimum_outlet: number;
 }
@@ -236,6 +230,8 @@ export interface CreateBahanPayload {
 export interface UpdateBahanPayload {
   nama?: string;
   satuan?: string;
+  isi_per_satuan?: number;
+  berat_per_isi?: number;
   stok_minimum_gudang?: number;
   stok_minimum_outlet?: number;
 }
@@ -252,25 +248,24 @@ export interface UpdateBarangMasukPayload {
   supplier?: string;
 }
 
-export interface CreateBarangKeluarPayload {
-  permintaan_id: number;
+export interface CreateKategoriPayload {
+  nama: string;
 }
 
-export interface UpdateBarangKeluarPayload {
-  jumlah?: number;
-  bukti_foto?: FileAsset | null;
+export interface UpdateKategoriPayload {
+  nama: string;
 }
 
 export interface UpdatePermintaanStokPayload {
-  status: 'approved' | 'rejected' | 'completed' | 'pending';
+  status: 'diajukan' | 'disetujui' | 'ditolak' | 'dikirim' | 'diterima';
 }
 
-// KARYAWAN
 export interface CreateProductPayload {
   nama: string;
   harga: number;
   gambar?: FileAsset | null;
   category?: string;
+  kategori_id: number;
   komposisi: { bahan_id: number; quantity: number }[];
 }
 
@@ -279,7 +274,18 @@ export interface UpdateProductPayload {
   harga?: number;
   gambar?: FileAsset | null;
   category?: string;
+  kategori_id?: number;
   komposisi?: { bahan_id: number; quantity: number }[];
+}
+
+export interface CreatePermintaanStokPayload {
+  bahan_id: number;
+  jumlah: number;
+}
+
+export interface UpdatePermintaanStokKaryawanPayload {
+  bahan_id?: number;
+  jumlah?: number;
 }
 
 export interface CreateTransaksiPayload {
@@ -296,17 +302,6 @@ export interface UpdateTransaksiPayload {
   items?: TransaksiItemPayload[] | string;
 }
 
-export interface CreatePermintaanStokPayload {
-  bahan_id: number;
-  jumlah: number;
-}
-
-export interface UpdatePermintaanStokKaryawanPayload {
-  bahan_id?: number;
-  jumlah?: number;
-}
-
-// RESPONSE TYPES
 export interface TerimaBarangKeluarResponse {
   message: string;
   data: BarangKeluar;

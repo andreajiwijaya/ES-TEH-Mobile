@@ -9,13 +9,12 @@ export default function WarehouseTabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: '#B0BEC5',
+        tabBarInactiveTintColor: '#9CA3AF',
         tabBarShowLabel: true,
         tabBarHideOnKeyboard: true,
         tabBarStyle: styles.tabBar,
         tabBarItemStyle: styles.tabItem,
         tabBarLabelStyle: styles.tabLabel,
-        // FIX: unmountOnBlur dihapus dari sini karena menyebabkan error TS2353
       }}
     >
       {/* 1. Dashboard */}
@@ -29,11 +28,11 @@ export default function WarehouseTabsLayout() {
         }}
       />
 
-      {/* 2. Permintaan (Inbox Approval) */}
+      {/* 2. Permintaan */}
       <Tabs.Screen
         name="permintaan"
         options={{
-          title: 'Request',
+          title: 'Permintaan',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} color={color} name="git-pull-request" />
           ),
@@ -74,21 +73,30 @@ export default function WarehouseTabsLayout() {
       />
 
       {/* --- MENU TERSEMBUNYI --- */}
-      <Tabs.Screen name="opname" options={{ href: null }} />
       <Tabs.Screen name="bahan" options={{ href: null }} />
+      <Tabs.Screen name="kategori" options={{ href: null }} />
 
     </Tabs>
   );
 }
 
-const TabIcon = ({ focused, color, name }: { focused: boolean; color: string; name: keyof typeof Ionicons.glyphMap }) => {
+const TabIcon = ({ 
+  focused, 
+  color, 
+  name 
+}: { 
+  focused: boolean; 
+  color: string; 
+  name: keyof typeof Ionicons.glyphMap 
+}) => {
   return (
     <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
       <Ionicons 
         name={focused ? name : (`${name}-outline` as any)} 
-        size={22} 
+        size={24} 
         color={color} 
       />
+      {focused && <View style={styles.activeIndicator} />}
     </View>
   );
 };
@@ -97,23 +105,44 @@ const styles = StyleSheet.create({
   tabBar: {
     backgroundColor: '#FFFFFF',
     borderTopWidth: 0, 
-    elevation: 20,
+    elevation: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    height: Platform.OS === 'ios' ? 90 : 70,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 12,
-    paddingTop: 10,
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    height: Platform.OS === 'ios' ? 88 : 68,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 10,
+    paddingTop: 8,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
-  tabItem: { paddingVertical: 4 },
-  tabLabel: { fontSize: 10, fontWeight: '700', marginTop: 2 },
+  tabItem: { 
+    paddingVertical: 6,
+  },
+  tabLabel: { 
+    fontSize: 11, 
+    fontWeight: '700', 
+    marginTop: 4,
+    letterSpacing: 0.2,
+  },
   iconContainer: {
-    width: 42, height: 42, alignItems: 'center', justifyContent: 'center',
-    borderRadius: 21, marginBottom: 2,
+    width: 48, 
+    height: 48, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    borderRadius: 16,
+    marginBottom: 2,
+    position: 'relative',
   },
   iconContainerActive: {
-    backgroundColor: '#E8F5E9',
-    transform: [{ scale: 1.1 }],
+    backgroundColor: 'rgba(76, 175, 80, 0.12)',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    width: 24,
+    height: 3,
+    backgroundColor: Colors.primary,
+    borderRadius: 2,
   },
 });

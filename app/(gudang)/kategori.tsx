@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { authAPI, gudangAPI } from '../../services/api';
-import { Bahan, User } from '../../types';
+import { Kategori, User } from '../../types';
 
 // Skeleton Shimmer Component
 const SkeletonShimmer = ({ width = '100%', height = 12, borderRadius = 8 }: { width?: string | number; height?: number; borderRadius?: number }) => {
@@ -62,11 +62,11 @@ const SkeletonShimmer = ({ width = '100%', height = 12, borderRadius = 8 }: { wi
   );
 };
 
-export default function MasterBahanScreen() {
+export default function KategoriScreen() {
   // --- STATE ---
   const [user, setUser] = useState<User | null>(null);
-  const [bahanList, setBahanList] = useState<Bahan[]>([]);
-  const [filteredList, setFilteredList] = useState<Bahan[]>([]);
+  const [kategoriList, setKategoriList] = useState<Kategori[]>([]);
+  const [filteredList, setFilteredList] = useState<Kategori[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [loading, setLoading] = useState(true);
@@ -81,11 +81,6 @@ export default function MasterBahanScreen() {
   // Form Data
   const [formData, setFormData] = useState({
     nama: '',
-    satuan: '',
-    isi_per_satuan: '',
-    berat_per_isi: '',
-    stok_minimum_gudang: '',
-    stok_minimum_outlet: '',
   });
 
   // --- HELPER FUNCTIONS ---
@@ -119,15 +114,14 @@ export default function MasterBahanScreen() {
     try {
       await loadUserData();
 
-      const bahanRes = await gudangAPI.getBahan();
-
-      if (bahanRes.data && Array.isArray(bahanRes.data)) {
-        const sortedData = bahanRes.data.sort((a: any, b: any) => b.id - a.id);
-        setBahanList(sortedData);
+      const response = await gudangAPI.getKategori();
+      if (response.data && Array.isArray(response.data)) {
+        const sortedData = response.data.sort((a: any, b: any) => b.id - a.id);
+        setKategoriList(sortedData);
         setFilteredList(sortedData);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Gagal memuat data bahan');
+      Alert.alert('Error', error.message || 'Gagal memuat data kategori');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -145,9 +139,9 @@ export default function MasterBahanScreen() {
   const handleSearch = (text: string) => {
     setSearchQuery(text);
     if (text.trim() === '') {
-      setFilteredList(bahanList);
+      setFilteredList(kategoriList);
     } else {
-      const filtered = bahanList.filter((item) =>
+      const filtered = kategoriList.filter((item) =>
         item.nama.toLowerCase().includes(text.toLowerCase())
       );
       setFilteredList(filtered);
@@ -162,63 +156,42 @@ export default function MasterBahanScreen() {
   // --- ACTIONS ---
   const openCreateModal = () => {
     setIsEditMode(false);
-    setFormData({
-      nama: '',
-      satuan: '',
-      isi_per_satuan: '',
-      berat_per_isi: '',
-      stok_minimum_gudang: '',
-      stok_minimum_outlet: '',
-    });
+    setFormData({ nama: '' });
     setSelectedId(null);
     setShowModal(true);
   };
 
-  const openEditModal = (item: Bahan) => {
+  const openEditModal = (item: Kategori) => {
     setIsEditMode(true);
     setSelectedId(item.id);
     setFormData({
       nama: item.nama,
-      satuan: item.satuan,
-      isi_per_satuan: item.isi_per_satuan?.toString() || '',
-      berat_per_isi: item.berat_per_isi?.toString() || '',
-      stok_minimum_gudang: item.stok_minimum_gudang.toString(),
-      stok_minimum_outlet: item.stok_minimum_outlet.toString(),
     });
     setShowModal(true);
   };
 
   const handleSave = async () => {
-    if (!formData.nama || !formData.satuan) {
-      Alert.alert('Validasi', 'Nama bahan dan satuan wajib diisi!');
-      return;
-    }
-    if (!formData.isi_per_satuan || !formData.berat_per_isi) {
-      Alert.alert('Validasi', 'Isi per satuan dan berat per isi wajib diisi!');
+    if (!formData.nama.trim()) {
+      Alert.alert('Validasi', 'Nama kategori wajib diisi!');
       return;
     }
 
     setProcessing(true);
     try {
       const payload = {
-        nama: formData.nama,
-        satuan: formData.satuan,
-        isi_per_satuan: parseFloat(formData.isi_per_satuan) || 0,
-        berat_per_isi: parseFloat(formData.berat_per_isi) || 0,
-        stok_minimum_gudang: parseInt(formData.stok_minimum_gudang) || 0,
-        stok_minimum_outlet: parseInt(formData.stok_minimum_outlet) || 0,
+        nama: formData.nama.trim(),
       };
 
       let response;
       if (isEditMode && selectedId) {
-        response = await gudangAPI.updateBahan(selectedId, payload);
+        response = await gudangAPI.updateKategori(selectedId, payload);
       } else {
-        response = await gudangAPI.createBahan(payload);
+        response = await gudangAPI.createKategori(payload);
       }
 
       if (response.error) throw new Error(response.error);
 
-      Alert.alert('Sukses', `Data bahan berhasil ${isEditMode ? 'diperbarui' : 'ditambahkan'}`);
+      Alert.alert('Sukses', `Kategori berhasil ${isEditMode ? 'diperbarui' : 'ditambahkan'}`);
       setShowModal(false);
       loadData(true);
     } catch (error: any) {
@@ -229,7 +202,7 @@ export default function MasterBahanScreen() {
   };
 
   const handleDelete = (id: number) => {
-    Alert.alert('Hapus Bahan', 'Yakin ingin menghapus bahan ini?', [
+    Alert.alert('Hapus Kategori', 'Yakin ingin menghapus kategori ini?', [
       { text: 'Batal', style: 'cancel' },
       {
         text: 'Hapus',
@@ -237,9 +210,9 @@ export default function MasterBahanScreen() {
         onPress: async () => {
           setLoading(true);
           try {
-            const res = await gudangAPI.deleteBahan(id);
+            const res = await gudangAPI.deleteKategori(id);
             if (res.error) throw new Error(res.error);
-            Alert.alert('Terhapus', 'Data bahan berhasil dihapus.');
+            Alert.alert('Terhapus', 'Kategori berhasil dihapus.');
             loadData(true);
           } catch (error: any) {
             setLoading(false);
@@ -258,8 +231,8 @@ export default function MasterBahanScreen() {
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View>
-            <Text style={styles.greeting}>Manajemen Bahan</Text>
-            <Text style={styles.headerTitle}>Katalog Bahan Baku</Text>
+            <Text style={styles.greeting}>Manajemen Kategori</Text>
+            <Text style={styles.headerTitle}>Katalog Kategori</Text>
           </View>
           <View style={[styles.avatarCircle, { backgroundColor: getAvatarColor() }]}>
             <Text style={styles.avatarText}>{getUserInitial()}</Text>
@@ -271,7 +244,7 @@ export default function MasterBahanScreen() {
           <Ionicons name="search" size={18} color="#999" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Cari bahan baku..."
+            placeholder="Cari kategori..."
             placeholderTextColor="#AAA"
             value={searchQuery}
             onChangeText={handleSearch}
@@ -288,30 +261,19 @@ export default function MasterBahanScreen() {
       <View style={styles.content}>
         {loading && !refreshing ? (
           <View>
-            {[1, 2, 3, 4, 5].map((i) => (
+            {[1, 2, 3, 4, 5, 6].map((i) => (
               <View key={`skeleton-${i}`} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.titleRow}>
+                <View style={styles.cardContent}>
+                  <View style={styles.categoryInfo}>
                     <SkeletonShimmer width={48} height={48} borderRadius={12} />
                     <View style={{ flex: 1, gap: 6, marginLeft: 12 }}>
-                      <SkeletonShimmer width="70%" height={16} borderRadius={4} />
-                      <SkeletonShimmer width="50%" height={12} borderRadius={4} />
+                      <SkeletonShimmer width="60%" height={16} borderRadius={4} />
+                      <SkeletonShimmer width="40%" height={12} borderRadius={4} />
                     </View>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     <SkeletonShimmer width={36} height={36} borderRadius={10} />
                     <SkeletonShimmer width={36} height={36} borderRadius={10} />
-                  </View>
-                </View>
-                <View style={styles.divider} />
-                <View style={styles.statsRow}>
-                  <View style={styles.statItem}>
-                    <SkeletonShimmer width={60} height={10} borderRadius={4} />
-                    <SkeletonShimmer width={80} height={14} borderRadius={4} style={{ marginTop: 6 }} />
-                  </View>
-                  <View style={styles.statItem}>
-                    <SkeletonShimmer width={60} height={10} borderRadius={4} />
-                    <SkeletonShimmer width={80} height={14} borderRadius={4} style={{ marginTop: 6 }} />
                   </View>
                 </View>
               </View>
@@ -326,23 +288,23 @@ export default function MasterBahanScreen() {
             contentContainerStyle={{ paddingBottom: 100 }}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Ionicons name="cube-outline" size={64} color="#E0E0E0" />
-                <Text style={styles.emptyText}>Belum ada data bahan</Text>
+                <Ionicons name="pricetags-outline" size={64} color="#E0E0E0" />
+                <Text style={styles.emptyText}>Belum ada kategori</Text>
                 <Text style={styles.emptySubText}>Tap tombol + untuk menambahkan</Text>
               </View>
             }
             renderItem={({ item }) => (
               <View style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.titleRow}>
+                <View style={styles.cardContent}>
+                  <View style={styles.categoryInfo}>
                     <View style={styles.iconBox}>
-                      <Ionicons name="cube" size={22} color={Colors.primary} />
+                      <Ionicons name="pricetag" size={22} color={Colors.primary} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.cardTitle} numberOfLines={1}>
                         {item.nama}
                       </Text>
-                      <Text style={styles.cardSubTitle}>Satuan: {item.satuan}</Text>
+                      <Text style={styles.cardSubTitle}>ID: {item.id}</Text>
                     </View>
                   </View>
 
@@ -355,43 +317,6 @@ export default function MasterBahanScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
-
-                <View style={styles.divider} />
-
-                <View style={styles.statsRow}>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>Min. Gudang</Text>
-                    <Text style={styles.statValue}>
-                      {item.stok_minimum_gudang} {item.satuan}
-                    </Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>Min. Outlet</Text>
-                    <Text style={styles.statValue}>
-                      {item.stok_minimum_outlet} {item.satuan}
-                    </Text>
-                  </View>
-                </View>
-
-                {(item.isi_per_satuan || item.berat_per_isi) && (
-                  <>
-                    <View style={styles.divider} />
-                    <View style={styles.infoRow}>
-                      <View style={styles.infoItem}>
-                        <Ionicons name="layers-outline" size={14} color="#999" />
-                        <Text style={styles.infoText}>
-                          {item.isi_per_satuan ? `${item.isi_per_satuan} unit` : '-'}
-                        </Text>
-                      </View>
-                      <View style={styles.infoItem}>
-                        <Ionicons name="barbell-outline" size={14} color="#999" />
-                        <Text style={styles.infoText}>
-                          {item.berat_per_isi ? `${item.berat_per_isi} gr` : '-'}
-                        </Text>
-                      </View>
-                    </View>
-                  </>
-                )}
               </View>
             )}
           />
@@ -408,7 +333,7 @@ export default function MasterBahanScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{isEditMode ? 'Edit Bahan' : 'Tambah Bahan Baru'}</Text>
+              <Text style={styles.modalTitle}>{isEditMode ? 'Edit Kategori' : 'Tambah Kategori Baru'}</Text>
               <TouchableOpacity onPress={() => setShowModal(false)}>
                 <Ionicons name="close-circle" size={28} color="#999" />
               </TouchableOpacity>
@@ -416,75 +341,14 @@ export default function MasterBahanScreen() {
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Nama Bahan *</Text>
+                <Text style={styles.label}>Nama Kategori *</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Contoh: Gula Pasir"
+                  placeholder="Contoh: Makanan, Minuman, dll"
                   placeholderTextColor="#AAA"
                   value={formData.nama}
                   onChangeText={(t) => setFormData({ ...formData, nama: t })}
                 />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Satuan *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="kg, pcs, liter, dll"
-                  placeholderTextColor="#AAA"
-                  value={formData.satuan}
-                  onChangeText={(t) => setFormData({ ...formData, satuan: t })}
-                />
-              </View>
-
-              <View style={styles.rowInputs}>
-                <View style={{ flex: 1, marginRight: 10 }}>
-                  <Text style={styles.label}>Isi per Satuan *</Text>
-                  <TextInput
-                    style={styles.input}
-                    keyboardType="numeric"
-                    placeholder="Contoh: 12"
-                    placeholderTextColor="#AAA"
-                    value={formData.isi_per_satuan}
-                    onChangeText={(t) => setFormData({ ...formData, isi_per_satuan: t })}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Berat per Isi (gr) *</Text>
-                  <TextInput
-                    style={styles.input}
-                    keyboardType="numeric"
-                    placeholder="Contoh: 250"
-                    placeholderTextColor="#AAA"
-                    value={formData.berat_per_isi}
-                    onChangeText={(t) => setFormData({ ...formData, berat_per_isi: t })}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.rowInputs}>
-                <View style={{ flex: 1, marginRight: 10 }}>
-                  <Text style={styles.label}>Stok Min. Gudang</Text>
-                  <TextInput
-                    style={styles.input}
-                    keyboardType="numeric"
-                    placeholder="0"
-                    placeholderTextColor="#AAA"
-                    value={formData.stok_minimum_gudang}
-                    onChangeText={(t) => setFormData({ ...formData, stok_minimum_gudang: t })}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Stok Min. Outlet</Text>
-                  <TextInput
-                    style={styles.input}
-                    keyboardType="numeric"
-                    placeholder="0"
-                    placeholderTextColor="#AAA"
-                    value={formData.stok_minimum_outlet}
-                    onChangeText={(t) => setFormData({ ...formData, stok_minimum_outlet: t })}
-                  />
-                </View>
               </View>
 
               <Text style={styles.helperText}>* Wajib diisi</Text>
@@ -496,7 +360,7 @@ export default function MasterBahanScreen() {
               ) : (
                 <>
                   <Ionicons name="checkmark-circle" size={20} color="white" style={{ marginRight: 8 }} />
-                  <Text style={styles.btnSaveText}>{isEditMode ? 'Update Bahan' : 'Simpan Bahan'}</Text>
+                  <Text style={styles.btnSaveText}>{isEditMode ? 'Update Kategori' : 'Simpan Kategori'}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -593,12 +457,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
   },
-  cardHeader: {
+  cardContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  titleRow: {
+  categoryInfo: {
     flexDirection: 'row',
     gap: 12,
     alignItems: 'center',
@@ -608,7 +472,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#F3E5F5',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -637,45 +501,6 @@ const styles = StyleSheet.create({
   },
   deleteBtnBg: {
     backgroundColor: '#FEE2E2',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#F5F5F5',
-    marginVertical: 12,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  statItem: {
-    flex: 1,
-  },
-  statLabel: {
-    fontSize: 10,
-    color: '#999',
-    marginBottom: 4,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  statValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#555',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  infoText: {
-    fontSize: 12,
-    color: '#777',
-    fontWeight: '600',
   },
   emptyState: {
     alignItems: 'center',
@@ -720,7 +545,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
     padding: 24,
-    maxHeight: '85%',
+    maxHeight: '70%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -755,10 +580,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
     color: '#333',
     fontWeight: '500',
-  },
-  rowInputs: {
-    flexDirection: 'row',
-    marginBottom: 16,
   },
   helperText: {
     fontSize: 11,

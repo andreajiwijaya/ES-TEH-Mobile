@@ -1,52 +1,108 @@
-import { Ionicons } from '@expo/vector-icons';
-import React, { useState, useCallback } from 'react'; // FIX: useEffect dihapus karena diganti useFocusEffect
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   FlatList,
-  TextInput,
-  Modal,
-  Alert,
+  TouchableOpacity,
+  StyleSheet,
   Platform,
-  ActivityIndicator,
+  Alert,
+  StatusBar,
   RefreshControl,
-  KeyboardAvoidingView,
-  StatusBar
+  Modal,
+  ScrollView,
+  TextInput,
+  Animated,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router'; // FIX: Tambahkan import ini
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import { BarangMasuk, Bahan } from '../../types';
-import { gudangAPI } from '../../services/api';
+import { authAPI, gudangAPI } from '../../services/api';
+import { BarangMasuk, Bahan, User } from '../../types';
+import { useFocusEffect } from 'expo-router';
 
-// Interface Lokal untuk UI
-interface IncomingGoodsItem extends BarangMasuk {
-  bahan: Bahan;
-}
+// ==================== SKELETON SHIMMER ====================
+const SkeletonShimmer = ({ 
+  width = '100%', 
+  height = 12, 
+  borderRadius = 8 
+}: { 
+  width?: number | string; 
+  height?: number; 
+  borderRadius?: number;
+}) => {
+  const shimmerAnim = React.useMemo(() => new Animated.Value(-200), []);
 
+  React.useEffect(() => {
+    const animation = Animated.loop(
+      Animated.timing(shimmerAnim, {
+        toValue: 200,
+        duration: 1000,
+        useNativeDriver: true,
+      })
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [shimmerAnim]);
+
+  return (
+    <View style={[styles.skeletonBar, { width, height, borderRadius }]}>
+      <Animated.View
+        style={[
+          styles.skeletonHighlight,
+          { transform: [{ translateX: shimmerAnim }] },
+        ]}
+      />
+    </View>
+  );
+};
+
+// ==================== MAIN COMPONENT ====================
 export default function BarangMasukScreen() {
-  // --- STATE ---
-  const [incomingGoods, setIncomingGoods] = useState<IncomingGoodsItem[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [incomingGoods, setIncomingGoods] = useState<BarangMasuk[]>([]);
   const [bahanList, setBahanList] = useState<Bahan[]>([]);
-
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processing, setProcessing] = useState(false);
 
-  // Modal Create
-  const [showAddModal, setShowAddModal] = useState(false);
+  // Modal Create/Update
+  const [showModal, setShowModal] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<BarangMasuk | null>(null);
   const [showBahanModal, setShowBahanModal] = useState(false);
   const [selectedBahan, setSelectedBahan] = useState<Bahan | null>(null);
   const [jumlah, setJumlah] = useState('');
-  const [suplier, setSuplier] = useState('');
+  const [supplier, setSupplier] = useState('');
 
-  // Modal Update
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<IncomingGoodsItem | null>(null);
+  // Modal Detail
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [detailItem, setDetailItem] = useState<BarangMasuk | null>(null);
 
-  // --- HELPER FUNCTIONS ---
+  // Avatar helpers
+  const getAvatarColor = () => {
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE'];
+    const username = user?.username || 'Guest';
+    const index = username.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
+
+  const getUserInitial = () => {
+    const username = user?.username || 'G';
+    return username.charAt(0).toUpperCase();
+  };
+
+  // Load Data
+  const loadUserData = useCallback(async () => {
+    try {
+      const response = await authAPI.getMe();
+      if (response.data) {
+        setUser(response.data);
+      }
+    } catch (error) {
+      console.error('Load user error:', error);
+    }
+  }, []);
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
@@ -57,46 +113,29 @@ export default function BarangMasukScreen() {
       ]);
 
       if (barangMasukResponse.data && Array.isArray(barangMasukResponse.data)) {
-        // Sort by tanggal terbaru (descending)
         const sortedData = barangMasukResponse.data.sort((a: any, b: any) => 
-            new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime()
+          new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime()
         );
-
-        const mappedItems: IncomingGoodsItem[] = sortedData.map((item: any) => ({
-          id: item.id,
-          bahan_id: item.bahan_id,
-          jumlah: Number(item.jumlah) || 0,
-          tanggal: item.tanggal,
-          supplier: item.supplier || item.suplier || 'Unknown',
-          bahan: item.bahan || { 
-            id: item.bahan_id, 
-            nama: 'Bahan Dihapus', 
-            satuan: 'Unit',
-            stok_minimum_gudang: 0, 
-            stok_minimum_outlet: 0 
-          },
-        }));
-        setIncomingGoods(mappedItems);
+        setIncomingGoods(sortedData);
       }
 
       if (bahanResponse.data && Array.isArray(bahanResponse.data)) {
         setBahanList(bahanResponse.data);
       }
-
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Gagal memuat data');
+      console.error('Load data error:', error);
+      Alert.alert('Error', 'Gagal memuat data');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  // --- USE FOCUS EFFECT (FIX) ---
-  // Ini akan memicu reload data otomatis setiap kali layar ini tampil/fokus
   useFocusEffect(
     useCallback(() => {
+      loadUserData();
       loadData();
-    }, [loadData])
+    }, [loadUserData, loadData])
   );
 
   const onRefresh = () => {
@@ -104,438 +143,1024 @@ export default function BarangMasukScreen() {
     loadData(true);
   };
 
-  // --- ACTIONS ---
+  // Filtered Data
+  const filteredData = useMemo(() => {
+    if (!searchQuery) return incomingGoods;
+    
+    const q = searchQuery.toLowerCase();
+    return incomingGoods.filter(item => {
+      const bahanNama = (item.bahan?.nama || '').toLowerCase();
+      const supplierNama = (item.supplier || '').toLowerCase();
+      return bahanNama.includes(q) || supplierNama.includes(q);
+    });
+  }, [incomingGoods, searchQuery]);
+  // Helper: Parse UTC date from backend
+  const parseDateLocal = (s: string): Date => {
+    if (!s) return new Date();
+    const raw = s.toString().trim();
+    
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(raw)) {
+      const normalized = raw.replace(' ', 'T') + 'Z';
+      return new Date(normalized);
+    } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(raw)) {
+      return new Date(raw + 'Z');
+    }
+    return new Date(raw);
+  };
 
-  const handleAdd = async () => {
-    if (!selectedBahan || !jumlah || !suplier) {
-      Alert.alert('Validasi', 'Mohon lengkapi semua data (Bahan, Jumlah, Supplier)');
+
+  // Summary Stats
+  const summaryStats = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const todayCount = incomingGoods.filter(item => {
+      const d = parseDateLocal(item.tanggal);
+      return d >= today;
+    }).length;
+
+    const monthCount = incomingGoods.filter(item => {
+      const d = parseDateLocal(item.tanggal);
+      return d >= thisMonth;
+    }).length;
+
+    const totalItems = incomingGoods.reduce((sum, item) => sum + (item.jumlah || 0), 0);
+
+    // Supplier terbanyak
+    const supplierCounts = incomingGoods.reduce((acc: Record<string, number>, item) => {
+      const sup = (item.supplier || '').trim();
+      if (sup) acc[sup] = (acc[sup] || 0) + 1;
+      return acc;
+    }, {});
+    const topSupplier = Object.entries(supplierCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
+
+    return { todayCount, monthCount, totalItems, topSupplier };
+  }, [incomingGoods]);
+
+  // Actions
+  const openCreateModal = () => {
+    setIsEditMode(false);
+    setSelectedItem(null);
+    setSelectedBahan(null);
+    setJumlah('');
+    setSupplier('');
+    setShowModal(true);
+  };
+
+  const openEditModal = (item: BarangMasuk) => {
+    setIsEditMode(true);
+    setSelectedItem(item);
+    setSelectedBahan(item.bahan || null);
+    setJumlah(item.jumlah.toString());
+    setSupplier(item.supplier || '');
+    setShowModal(true);
+  };
+
+  const handleSave = async () => {
+    if (!selectedBahan || !jumlah || !supplier) {
+      Alert.alert('Validasi', 'Mohon lengkapi semua data');
       return;
     }
 
     const qty = parseFloat(jumlah);
     if (isNaN(qty) || qty <= 0) {
-        Alert.alert('Validasi', 'Jumlah harus angka lebih dari 0');
-        return;
+      Alert.alert('Validasi', 'Jumlah harus angka lebih dari 0');
+      return;
     }
 
     setProcessing(true);
     try {
-      const response = await gudangAPI.createBarangMasuk({
-        bahan_id: selectedBahan.id,
-        jumlah: qty,
-        supplier: suplier,
-      });
-
-      if (response.error) throw new Error(response.error);
-
-      Alert.alert('Sukses', 'Barang masuk berhasil dicatat');
-      setShowAddModal(false);
-      resetForm();
+      if (isEditMode && selectedItem) {
+        const response = await gudangAPI.updateBarangMasuk(selectedItem.id, {
+          bahan_id: selectedBahan.id,
+          jumlah: qty,
+          supplier,
+        });
+        if (response.error) throw new Error(response.error);
+        Alert.alert('Sukses', 'Data berhasil diperbarui');
+      } else {
+        const response = await gudangAPI.createBarangMasuk({
+          bahan_id: selectedBahan.id,
+          jumlah: qty,
+          supplier,
+        });
+        if (response.error) throw new Error(response.error);
+        Alert.alert('Sukses', 'Barang masuk berhasil dicatat');
+      }
+      
+      setShowModal(false);
       loadData(true);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Gagal mencatat barang masuk');
+      Alert.alert('Error', error.message || 'Gagal menyimpan data');
     } finally {
       setProcessing(false);
     }
   };
 
-  const handleOpenUpdate = (item: IncomingGoodsItem) => {
-    setSelectedItem(item);
-    setJumlah(item.jumlah.toString());
-    setSuplier(item.supplier);
-    const bahan = bahanList.find(b => b.id === item.bahan_id) || item.bahan;
-    setSelectedBahan(bahan);
-    setShowUpdateModal(true);
-  };
-
-  const handleUpdate = async () => {
-    if (!selectedItem || !selectedBahan) return;
-
-    setProcessing(true);
-    try {
-      const response = await gudangAPI.updateBarangMasuk(selectedItem.id, {
-        bahan_id: selectedBahan.id,
-        jumlah: parseFloat(jumlah),
-        supplier: suplier
-      });
-
-      if (response.error) throw new Error(response.error);
-
-      Alert.alert('Sukses', 'Data barang masuk diperbarui');
-      setShowUpdateModal(false);
-      resetForm();
-      loadData(true);
-    } catch (error: any) {
-      Alert.alert('Gagal', error.message);
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleDelete = (id: number) => {
-    Alert.alert('Hapus', 'Yakin ingin menghapus data ini? Stok gudang akan berkurang otomatis.', [
+  const handleDelete = (item: BarangMasuk) => {
+    Alert.alert(
+      'Hapus Data',
+      `Yakin ingin menghapus data ${item.bahan?.nama || 'item'} ini?`,
+      [
         { text: 'Batal', style: 'cancel' },
-        { 
-            text: 'Hapus', 
-            style: 'destructive', 
-            onPress: async () => {
-                setLoading(true);
-                const res = await gudangAPI.deleteBarangMasuk(id);
-                setLoading(false);
-                
-                if (res.error) Alert.alert('Gagal', res.error);
-                else {
-                    Alert.alert('Terhapus', 'Data barang masuk dihapus.');
-                    loadData(true);
-                }
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await gudangAPI.deleteBarangMasuk(item.id);
+              if (res.error) throw new Error(res.error);
+              Alert.alert('Sukses', 'Data berhasil dihapus');
+              loadData(true);
+            } catch (error: any) {
+              Alert.alert('Gagal', error.message || 'Tidak dapat menghapus data');
             }
-        }
-    ]);
+          },
+        },
+      ]
+    );
   };
 
-  const resetForm = () => {
-    setSelectedBahan(null);
-    setJumlah('');
-    setSuplier('');
-    setSelectedItem(null);
+  const openDetailModal = (item: BarangMasuk) => {
+    setDetailItem(item);
+    setShowDetailModal(true);
   };
 
-  // --- HELPERS UI ---
+  // Helpers
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+    const date = parseDateLocal(dateString);
     return new Intl.DateTimeFormat('id-ID', {
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit'
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Jakarta',
     }).format(date);
+  };
+
+  const getRelativeTime = (dateString: string) => {
+    const d = parseDateLocal(dateString);
+    const diffMs = Date.now() - d.getTime();
+    const m = Math.floor(diffMs / 60000);
+    if (m < 1) return 'baru saja';
+    if (m < 60) return `${m} menit lalu`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h} jam lalu`;
+    const days = Math.floor(h / 24);
+    return `${days} hari lalu`;
   };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
       
-      {/* HEADER GREEN DNA */}
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View>
-            <Text style={styles.headerTitle}>Barang Masuk</Text>
-            <Text style={styles.headerSubtitle}>Catat penerimaan stok dari supplier</Text>
+            <Text style={styles.greeting}>Manajemen Barang</Text>
+            <Text style={styles.headerTitle}>Stok Masuk</Text>
           </View>
-          <View style={styles.headerIconBg}>
-            <Ionicons name="arrow-down-circle" size={24} color={Colors.primary} />
+          <View style={[styles.avatarCircle, { backgroundColor: getAvatarColor() }]}>
+            <Text style={styles.avatarText}>{getUserInitial()}</Text>
           </View>
         </View>
       </View>
 
-      <ScrollView 
-        style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
-        contentContainerStyle={{ paddingBottom: 100 }}
-      >
-        {/* Action Button */}
-        <View style={styles.actionContainer}>
-            <TouchableOpacity style={styles.addButton} onPress={() => { resetForm(); setShowAddModal(true); }}>
-                <Ionicons name="add-circle" size={22} color="white" />
-                <Text style={styles.addButtonText}>Catat Penerimaan Baru</Text>
+      <View style={styles.content}>
+        {/* Search */}
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={20} color="#999" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Cari bahan atau supplier..."
+            placeholderTextColor="#999"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color="#999" />
             </TouchableOpacity>
+          )}
         </View>
 
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingText}>Memuat data...</Text>
+        {/* Summary Cards */}
+        {loading && !refreshing ? (
+          <View style={styles.summaryGrid}>
+            {[1, 2, 3, 4].map((i) => (
+              <View key={`skeleton-summary-${i}`} style={styles.summaryCard}>
+                <SkeletonShimmer width={40} height={40} borderRadius={20} />
+                <SkeletonShimmer width={50} height={24} borderRadius={8} />
+                <SkeletonShimmer width={70} height={14} borderRadius={6} />
+              </View>
+            ))}
           </View>
         ) : (
-          <>
-            {/* SUMMARY CARDS */}
-            <View style={styles.summaryCards}>
-              <View style={styles.summaryCard}>
-                <View style={[styles.iconCircle, { backgroundColor: '#E8F5E9' }]}>
-                    <Ionicons name="arrow-down" size={20} color={Colors.success} />
-                </View>
-                <Text style={styles.summaryValue}>
-                  {incomingGoods.filter(item => {
-                    const today = new Date();
-                    const itemDate = new Date(item.tanggal);
-                    return itemDate.getDate() === today.getDate() &&
-                           itemDate.getMonth() === today.getMonth() &&
-                           itemDate.getFullYear() === today.getFullYear();
-                  }).length}
-                </Text>
-                <Text style={styles.summaryLabel}>Masuk Hari Ini</Text>
+          <View style={styles.summaryGrid}>
+            <View style={styles.summaryCard}>
+              <View style={[styles.summaryIcon, { backgroundColor: 'rgba(255,143,0,0.15)' }]}>
+                <Ionicons name="calendar-outline" size={22} color="#FF8F00" />
               </View>
-              <View style={styles.summaryCard}>
-                <View style={[styles.iconCircle, { backgroundColor: '#E3F2FD' }]}>
-                    <Ionicons name="calendar" size={20} color={Colors.primary} />
-                </View>
-                <Text style={styles.summaryValue}>{incomingGoods.length}</Text>
-                <Text style={styles.summaryLabel}>Total Bulan Ini</Text>
-              </View>
+              <Text style={styles.summaryValue}>{summaryStats.todayCount}</Text>
+              <Text style={styles.summaryLabel}>Hari Ini</Text>
             </View>
 
-            {/* LIST DATA */}
-            <View style={styles.listSection}>
-              <Text style={styles.sectionTitle}>Riwayat Pemasukan</Text>
-
-              <FlatList
-                data={incomingGoods}
-                keyExtractor={item => item.id.toString()}
-                scrollEnabled={false}
-                ListEmptyComponent={
-                  <View style={styles.emptyContainer}>
-                    <Ionicons name="cube-outline" size={48} color="#ccc" />
-                    <Text style={styles.emptyText}>Tidak ada data barang masuk.</Text>
-                  </View>
-                }
-                renderItem={({ item }) => (
-                  <View style={styles.goodsCard}>
-                    <View style={styles.goodsHeader}>
-                      <View>
-                        <Text style={styles.goodsId}>ID Masuk #{item.id}</Text>
-                        <Text style={styles.goodsDate}>{formatDate(item.tanggal.toString())}</Text>
-                      </View>
-                      <View style={styles.goodsStatus}>
-                        <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
-                        <Text style={styles.goodsStatusText}>Success</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.divider} />
-
-                    <View style={styles.goodsDetails}>
-                      <View style={styles.goodsDetailRow}>
-                        <Ionicons name="cube-outline" size={16} color={Colors.textSecondary} />
-                        <Text style={styles.goodsDetailLabel}>Bahan:</Text>
-                        <Text style={styles.goodsDetailValue}>{item.bahan.nama}</Text>
-                      </View>
-                      <View style={styles.goodsDetailRow}>
-                        <Ionicons name="layers-outline" size={16} color={Colors.textSecondary} />
-                        <Text style={styles.goodsDetailLabel}>Jumlah:</Text>
-                        <Text style={styles.goodsHighlight}>
-                          {item.jumlah} {item.bahan.satuan}
-                        </Text>
-                      </View>
-                      <View style={styles.goodsDetailRow}>
-                        <Ionicons name="business-outline" size={16} color={Colors.textSecondary} />
-                        <Text style={styles.goodsDetailLabel}>Supplier:</Text>
-                        <Text style={styles.goodsDetailValue}>{item.supplier}</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.goodsActions}>
-                        <TouchableOpacity style={styles.actionButton} onPress={() => handleOpenUpdate(item)}>
-                            <Ionicons name="create-outline" size={16} color={Colors.warning} />
-                            <Text style={[styles.actionButtonText, {color: Colors.warning}]}>Edit</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.actionButton, styles.deleteBtn]} onPress={() => handleDelete(item.id)}>
-                            <Ionicons name="trash-outline" size={16} color={Colors.error} />
-                            <Text style={[styles.actionButtonText, {color: Colors.error}]}>Hapus</Text>
-                        </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-              />
+            <View style={styles.summaryCard}>
+              <View style={[styles.summaryIcon, { backgroundColor: 'rgba(46,125,50,0.15)' }]}>
+                <Ionicons name="bar-chart-outline" size={22} color="#2E7D32" />
+              </View>
+              <Text style={styles.summaryValue}>{summaryStats.monthCount}</Text>
+              <Text style={styles.summaryLabel}>Bulan Ini</Text>
             </View>
-          </>
+
+            <View style={styles.summaryCard}>
+              <View style={[styles.summaryIcon, { backgroundColor: 'rgba(21,101,192,0.15)' }]}>
+                <Ionicons name="cube-outline" size={22} color="#1565C0" />
+              </View>
+              <Text style={styles.summaryValue}>{summaryStats.totalItems}</Text>
+              <Text style={styles.summaryLabel}>Total Item</Text>
+            </View>
+
+            <View style={styles.summaryCard}>
+              <View style={[styles.summaryIcon, { backgroundColor: 'rgba(156,39,176,0.15)' }]}>
+                <Ionicons name="business-outline" size={22} color="#9C27B0" />
+              </View>
+              <Text style={styles.summaryValue} numberOfLines={1}>{summaryStats.topSupplier}</Text>
+              <Text style={styles.summaryLabel}>Top Supplier</Text>
+            </View>
+          </View>
         )}
-      </ScrollView>
 
-      {/* --- MODAL ADD / EDIT --- */}
-      <Modal
-        visible={showAddModal || showUpdateModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => { setShowAddModal(false); setShowUpdateModal(false); }}
+        {/* List */}
+        {loading && !refreshing ? (
+          <View>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <View key={`skeleton-${i}`} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <SkeletonShimmer width={120} height={16} borderRadius={8} />
+                  <SkeletonShimmer width={80} height={14} borderRadius={6} />
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.itemRow}>
+                  <SkeletonShimmer width={48} height={48} borderRadius={12} />
+                  <View style={{ flex: 1, gap: 8 }}>
+                    <SkeletonShimmer width="70%" height={16} borderRadius={8} />
+                    <SkeletonShimmer width="50%" height={14} borderRadius={6} />
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <FlatList
+            data={filteredData}
+            keyExtractor={item => item.id.toString()}
+            refreshControl={
+              <RefreshControl 
+                refreshing={refreshing} 
+                onRefresh={onRefresh} 
+                colors={[Colors.primary]} 
+              />
+            }
+            contentContainerStyle={{ paddingBottom: 100 }}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Ionicons name="cube-outline" size={64} color="#E2E8F0" />
+                <Text style={styles.emptyText}>Belum ada barang masuk</Text>
+                <Text style={styles.emptySubText}>
+                  {searchQuery ? 'Tidak ada hasil pencarian' : 'Tambah barang masuk baru dengan tombol + di bawah'}
+                </Text>
+              </View>
+            }
+            renderItem={({ item }) => (
+              <TouchableOpacity 
+                style={styles.card} 
+                activeOpacity={0.7}
+                onPress={() => openDetailModal(item)}
+              >
+                {/* Header */}
+                <View style={styles.cardHeader}>
+                  <View>
+                    <Text style={styles.cardTitle}>{item.bahan?.nama || 'Bahan Dihapus'}</Text>
+                    <Text style={styles.cardTime}>{getRelativeTime(item.tanggal)}</Text>
+                  </View>
+                  <View style={styles.statusBadge}>
+                    <Ionicons name="checkmark-circle" size={14} color="#2E7D32" />
+                    <Text style={styles.statusText}>MASUK</Text>
+                  </View>
+                </View>
+
+                <View style={styles.divider} />
+
+                {/* Item Info */}
+                <View style={styles.itemRow}>
+                  <View style={styles.itemIcon}>
+                    <Ionicons name="cube" size={24} color={Colors.primary} />
+                  </View>
+                  <View style={styles.itemInfo}>
+                    <Text style={styles.itemLabel}>Jumlah</Text>
+                    <Text style={styles.itemValue}>
+                      {item.jumlah} {item.bahan?.satuan || 'pcs'}
+                    </Text>
+                  </View>
+                  <View style={styles.itemInfo}>
+                    <Text style={styles.itemLabel}>Supplier</Text>
+                    <Text style={styles.itemValue} numberOfLines={1}>
+                      {item.supplier || '—'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Actions */}
+                <View style={styles.cardActions}>
+                  <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={() => openEditModal(item)}
+                  >
+                    <Ionicons name="create-outline" size={18} color="#1565C0" />
+                    <Text style={styles.actionBtnText}>Edit</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.deleteBtnBg]}
+                    onPress={() => handleDelete(item)}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                    <Text style={[styles.actionBtnText, { color: '#EF4444' }]}>Hapus</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            )}
+          />
+        )}
+      </View>
+
+      {/* FAB */}
+      <TouchableOpacity style={styles.fab} onPress={openCreateModal}>
+        <Ionicons name="add" size={28} color="white" />
+      </TouchableOpacity>
+
+      {/* Modal Create/Edit */}
+      <Modal 
+        visible={showModal} 
+        transparent 
+        animationType="fade" 
+        onRequestClose={() => setShowModal(false)}
       >
-        <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.modalOverlay}
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setShowModal(false)}
         >
-          <View style={styles.modalContent}>
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHandle} />
+            
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {showAddModal ? 'Catat Barang Masuk' : 'Edit Barang Masuk'}
+                {isEditMode ? 'Edit Barang Masuk' : 'Tambah Barang Masuk'}
               </Text>
-              <TouchableOpacity onPress={() => { setShowAddModal(false); setShowUpdateModal(false); }}>
-                <Ionicons name="close" size={24} color={Colors.text} />
+              <TouchableOpacity onPress={() => setShowModal(false)}>
+                <Ionicons name="close-circle" size={28} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Pilih Bahan</Text>
+            <View style={styles.divider} />
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Bahan */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Bahan Baku *</Text>
                 <TouchableOpacity 
                   style={styles.selectButton}
                   onPress={() => setShowBahanModal(true)}
                 >
-                  <Text style={[styles.selectButtonText, !selectedBahan && {color: '#999'}]}>
-                    {selectedBahan ? selectedBahan.nama : 'Pilih Bahan Baku'}
+                  <Text style={[styles.selectButtonText, !selectedBahan && { color: '#999' }]}>
+                    {selectedBahan?.nama || 'Pilih bahan baku...'}
                   </Text>
-                  <Ionicons name="chevron-down" size={20} color={Colors.textSecondary} />
+                  <Ionicons name="chevron-down" size={20} color="#999" />
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Jumlah Masuk ({selectedBahan?.satuan || 'Unit'})</Text>
+              {/* Jumlah */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Jumlah *</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Contoh: 100"
+                  placeholder="Masukkan jumlah..."
+                  keyboardType="numeric"
                   value={jumlah}
                   onChangeText={setJumlah}
-                  keyboardType="numeric"
                 />
+                {selectedBahan && (
+                  <Text style={styles.helperText}>Satuan: {selectedBahan.satuan}</Text>
+                )}
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Nama Supplier</Text>
+              {/* Supplier */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Supplier *</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Contoh: Toko Jaya Abadi"
-                  value={suplier}
-                  onChangeText={setSuplier}
+                  placeholder="Nama supplier..."
+                  value={supplier}
+                  onChangeText={setSupplier}
                 />
               </View>
+
+              <Text style={styles.helperText}>* Wajib diisi</Text>
             </ScrollView>
 
-            <View style={styles.modalFooter}>
+            <View style={styles.divider} />
+
+            {/* Actions */}
+            <View style={styles.modalActions}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => { setShowAddModal(false); setShowUpdateModal(false); }}
+                style={[styles.actionBtn, styles.cancelBtn]}
+                onPress={() => setShowModal(false)}
                 disabled={processing}
               >
-                <Text style={styles.cancelButtonText}>Batal</Text>
+                <Ionicons name="close-circle" size={20} color="#64748B" />
+                <Text style={styles.cancelBtnText}>Batal</Text>
               </TouchableOpacity>
-              
               <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton, processing && styles.saveButtonDisabled]}
-                onPress={showAddModal ? handleAdd : handleUpdate}
+                style={[styles.actionBtn, styles.saveBtn]}
+                onPress={handleSave}
                 disabled={processing}
               >
-                {processing ? (
-                  <ActivityIndicator color={Colors.backgroundLight} />
-                ) : (
-                  <Text style={styles.saveButtonText}>Simpan Data</Text>
-                )}
+                <Ionicons name="checkmark-circle" size={20} color="white" />
+                <Text style={styles.saveBtnText}>
+                  {processing ? 'Menyimpan...' : isEditMode ? 'Update' : 'Simpan'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </TouchableOpacity>
       </Modal>
 
-      {/* --- MODAL PILIH BAHAN --- */}
-      <Modal
-        visible={showBahanModal}
-        transparent
-        animationType="slide"
+      {/* Modal Pilih Bahan */}
+      <Modal 
+        visible={showBahanModal} 
+        transparent 
+        animationType="fade" 
         onRequestClose={() => setShowBahanModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, {maxHeight: '70%'}]}>
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setShowBahanModal(false)}
+        >
+          <View style={[styles.modalContent, { maxHeight: '70%' }]} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHandle} />
+            
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Pilih Bahan Baku</Text>
               <TouchableOpacity onPress={() => setShowBahanModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.text} />
+                <Ionicons name="close-circle" size={28} color="#94A3B8" />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.modalBody}>
-              {bahanList.length === 0 ? (
-                  <Text style={{textAlign:'center', color:'#999', padding: 20}}>Belum ada data bahan.</Text>
-              ) : (
-                  bahanList.map((bahan) => (
-                    <TouchableOpacity
-                      key={bahan.id}
-                      style={[
-                        styles.bahanOption,
-                        selectedBahan?.id === bahan.id && styles.bahanOptionSelected,
-                      ]}
-                      onPress={() => {
-                        setSelectedBahan(bahan);
-                        setShowBahanModal(false);
-                      }}
-                    >
-                      <View>
-                        <Text style={styles.bahanOptionText}>{bahan.nama}</Text>
-                        <Text style={{fontSize:12, color: Colors.textSecondary}}>Satuan: {bahan.satuan}</Text>
-                      </View>
-                      {selectedBahan?.id === bahan.id && (
-                        <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
-                      )}
-                    </TouchableOpacity>
-                  ))
+
+            <View style={styles.divider} />
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {bahanList.map((bahan) => (
+                <TouchableOpacity
+                  key={bahan.id}
+                  style={[
+                    styles.bahanOption,
+                    selectedBahan?.id === bahan.id && styles.bahanOptionActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedBahan(bahan);
+                    setShowBahanModal(false);
+                  }}
+                >
+                  <View style={styles.bahanInfo}>
+                    <Text style={styles.bahanName}>{bahan.nama}</Text>
+                    <Text style={styles.bahanSatuan}>Satuan: {bahan.satuan}</Text>
+                  </View>
+                  {selectedBahan?.id === bahan.id && (
+                    <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Modal Detail */}
+      <Modal 
+        visible={showDetailModal} 
+        transparent 
+        animationType="fade" 
+        onRequestClose={() => setShowDetailModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setShowDetailModal(false)}
+        >
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHandle} />
+            
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Detail Barang Masuk</Text>
+              <TouchableOpacity onPress={() => setShowDetailModal(false)}>
+                <Ionicons name="close-circle" size={28} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.divider} />
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <View style={styles.detailRow}>
+                <View style={styles.detailIconBox}>
+                  <Ionicons name="cube" size={20} color="#6366F1" />
+                </View>
+                <View style={styles.detailTextBox}>
+                  <Text style={styles.detailLabel}>Bahan</Text>
+                  <Text style={styles.detailValue}>{detailItem?.bahan?.nama || '—'}</Text>
+                </View>
+              </View>
+
+              <View style={styles.detailRow}>
+                <View style={styles.detailIconBox}>
+                  <Ionicons name="layers" size={20} color="#6366F1" />
+                </View>
+                <View style={styles.detailTextBox}>
+                  <Text style={styles.detailLabel}>Jumlah</Text>
+                  <Text style={styles.detailValue}>
+                    {detailItem?.jumlah} {detailItem?.bahan?.satuan || 'pcs'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.detailRow}>
+                <View style={styles.detailIconBox}>
+                  <Ionicons name="business" size={20} color="#6366F1" />
+                </View>
+                <View style={styles.detailTextBox}>
+                  <Text style={styles.detailLabel}>Supplier</Text>
+                  <Text style={styles.detailValue}>{detailItem?.supplier || '—'}</Text>
+                </View>
+              </View>
+
+              <View style={styles.detailRow}>
+                <View style={styles.detailIconBox}>
+                  <Ionicons name="calendar" size={20} color="#6366F1" />
+                </View>
+                <View style={styles.detailTextBox}>
+                  <Text style={styles.detailLabel}>Tanggal Masuk</Text>
+                  <Text style={styles.detailValue}>
+                    {detailItem?.tanggal ? formatDate(detailItem.tanggal) : '—'}
+                  </Text>
+                </View>
+              </View>
+
+              {detailItem?.bahan?.isi_per_satuan && (
+                <View style={styles.detailRow}>
+                  <View style={styles.detailIconBox}>
+                    <Ionicons name="information-circle" size={20} color="#6366F1" />
+                  </View>
+                  <View style={styles.detailTextBox}>
+                    <Text style={styles.detailLabel}>Isi per Satuan</Text>
+                    <Text style={styles.detailValue}>{detailItem.bahan.isi_per_satuan}</Text>
+                  </View>
+                </View>
+              )}
+
+              {detailItem?.bahan?.berat_per_isi && (
+                <View style={styles.detailRow}>
+                  <View style={styles.detailIconBox}>
+                    <Ionicons name="scale" size={20} color="#6366F1" />
+                  </View>
+                  <View style={styles.detailTextBox}>
+                    <Text style={styles.detailLabel}>Berat per Isi</Text>
+                    <Text style={styles.detailValue}>{detailItem.bahan.berat_per_isi} gram</Text>
+                  </View>
+                </View>
               )}
             </ScrollView>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
-
     </View>
   );
 }
 
-// ... styles tetap sama seperti sebelumnya ...
+// ==================== STYLES ====================
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  container: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+  },
   header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingBottom: 25,
     paddingHorizontal: 24,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8,
+    paddingBottom: 32,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
   },
-  headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
-  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
-  headerIconBg: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
-  content: { flex: 1, padding: 24, marginTop: 10 },
-  actionContainer: { marginBottom: 20 },
-  addButton: { flexDirection: 'row', backgroundColor: Colors.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 8, elevation: 2 },
-  addButtonText: { color: 'white', fontWeight: 'bold', fontSize: 15 },
-  loadingContainer: { paddingVertical: 50, alignItems: 'center' },
-  loadingText: { marginTop: 10, color: Colors.textSecondary, fontSize: 13 },
-  summaryCards: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-  summaryCard: { flex: 1, backgroundColor: 'white', borderRadius: 16, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#F0F0F0', elevation: 2 },
-  iconCircle: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  summaryLabel: { fontSize: 11, color: Colors.textSecondary, marginTop: 4, fontWeight: '600' },
-  summaryValue: { fontSize: 18, fontWeight: '800', color: Colors.text },
-  listSection: { marginBottom: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: Colors.text, marginBottom: 15 },
-  emptyContainer: { alignItems: 'center', paddingVertical: 40 },
-  emptyText: { color: Colors.textSecondary, marginTop: 10, fontSize: 14 },
-  goodsCard: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 16, elevation: 2, borderWidth: 1, borderColor: '#F0F0F0' },
-  goodsHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, alignItems: 'center' },
-  goodsId: { fontWeight: '700', fontSize: 15, color: Colors.text },
-  goodsDate: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
-  goodsStatus: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E8F5E9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  goodsStatusText: { fontSize: 11, fontWeight: '700', color: Colors.success },
-  divider: { height: 1, backgroundColor: '#F5F5F5', marginBottom: 12 },
-  goodsDetails: { marginBottom: 16 },
-  goodsDetailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
-  goodsDetailLabel: { fontSize: 13, color: Colors.textSecondary, width: 70 },
-  goodsDetailValue: { fontSize: 13, fontWeight: '600', color: Colors.text, flex: 1 },
-  goodsHighlight: { fontSize: 14, fontWeight: '700', color: Colors.primary },
-  goodsActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
-  actionButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, gap: 5, backgroundColor: '#FFF8E1' },
-  actionButtonText: { fontSize: 12, fontWeight: '700' },
-  deleteBtn: { backgroundColor: '#FFEBEE' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: Colors.backgroundLight, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%', elevation: 5 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
-  modalBody: { marginBottom: 24 },
-  inputGroup: { marginBottom: 20 },
-  inputLabel: { fontWeight: '600', marginBottom: 8, color: Colors.text, fontSize: 14 },
-  input: { borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, padding: 14, fontSize: 16, backgroundColor: '#FAFAFA' },
-  selectButton: { flexDirection: 'row', justifyContent: 'space-between', padding: 14, borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, backgroundColor: '#FAFAFA' },
-  selectButtonText: { fontSize: 15, color: Colors.text },
-  modalFooter: { flexDirection: 'row', gap: 12 },
-  modalButton: { flex: 1, padding: 16, borderRadius: 12, alignItems: 'center' },
-  cancelButton: { backgroundColor: '#F5F5F5' },
-  cancelButtonText: { fontWeight: '700', color: '#757575', fontSize: 15 },
-  saveButton: { backgroundColor: Colors.primary },
-  saveButtonText: { fontWeight: '700', color: 'white', fontSize: 15 },
-  saveButtonDisabled: { opacity: 0.7 },
-  bahanOption: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', alignItems: 'center' },
-  bahanOptionSelected: { backgroundColor: '#E3F2FD' },
-  bahanOptionText: { fontSize: 15, fontWeight: '600', color: Colors.text },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  greeting: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: 'white',
+  },
+  avatarCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  avatarText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: 'white',
+  },
+  content: {
+    flex: 1,
+    padding: 20,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 48,
+    marginBottom: 20,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  summaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 20,
+  },
+  summaryCard: {
+    flexBasis: '48%',
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+  },
+  summaryIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  summaryValue: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#1E293B',
+    marginBottom: 4,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 4,
+  },
+  cardTime: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#2E7D32',
+    letterSpacing: 0.5,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginBottom: 12,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  itemIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#F0FDF4',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemLabel: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  itemValue: {
+    fontSize: 14,
+    color: '#1E293B',
+    fontWeight: '700',
+  },
+  cardActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 12,
+    gap: 6,
+    backgroundColor: '#F5F7FA',
+  },
+  actionBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1565C0',
+  },
+  deleteBtnBg: {
+    backgroundColor: '#FEE2E2',
+  },
+  skeletonBar: {
+    backgroundColor: '#E2E8F0',
+    borderRadius: 8,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  skeletonHighlight: {
+    position: 'absolute',
+    left: 0,
+    width: '40%',
+    height: '100%',
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#94A3B8',
+    fontWeight: '700',
+  },
+  emptySubText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#CBD5E1',
+    fontWeight: '500',
+    textAlign: 'center',
+    paddingHorizontal: 40,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 30,
+    right: 24,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
+    padding: 24,
+    maxHeight: '85%',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#1E293B',
+  },
+  modalBody: {
+    maxHeight: '100%',
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#555',
+    marginBottom: 8,
+    letterSpacing: 0.3,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    padding: 14,
+    fontSize: 15,
+    backgroundColor: '#F9FAFB',
+    color: '#333',
+    fontWeight: '500',
+  },
+  selectButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: '#F9FAFB',
+  },
+  selectButtonText: {
+    fontSize: 15,
+    color: '#333',
+    fontWeight: '500',
+  },
+  helperText: {
+    fontSize: 11,
+    color: '#999',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 10,
+  },
+  cancelBtn: {
+    backgroundColor: '#F5F7FA',
+  },
+  cancelBtnText: {
+    color: '#64748B',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  saveBtn: {
+    backgroundColor: Colors.primary,
+  },
+  saveBtnText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  bahanOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  bahanOptionActive: {
+    backgroundColor: '#F0FDF4',
+  },
+  bahanInfo: {
+    flex: 1,
+  },
+  bahanName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 2,
+  },
+  bahanSatuan: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+    gap: 14,
+  },
+  detailIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  detailTextBox: {
+    flex: 1,
+  },
+  detailLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  detailValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1E293B',
+    lineHeight: 22,
+  },
 });

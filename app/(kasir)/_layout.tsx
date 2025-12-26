@@ -10,13 +10,14 @@ export default function EmployeeTabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: '#B0BEC5',
+        tabBarInactiveTintColor: '#9E9E9E',
         tabBarShowLabel: true,
         tabBarHideOnKeyboard: true,
-        // Style Tab Bar Modern konsisten dengan Gudang
+        // Modern Tab Bar Style
         tabBarStyle: styles.tabBar,
         tabBarItemStyle: styles.tabItem,
         tabBarLabelStyle: styles.tabLabel,
+        tabBarIconStyle: styles.tabIcon,
       }}
     >
       {/* 1. Kasir / POS */}
@@ -77,14 +78,22 @@ export default function EmployeeTabsLayout() {
   );
 }
 
-// Komponen Helper untuk Icon dengan Efek "Green Pill"
-const TabIcon = React.memo(function TabIcon({ focused, color, name }: { focused: boolean; color: string; name: React.ComponentProps<typeof Ionicons>['name'] }) {
-  // When icon doesn't have an outline variant, fall back to the base name.
+// Modern Tab Icon Component
+const TabIcon = React.memo(function TabIcon({
+  focused,
+  color,
+  name,
+}: {
+  focused: boolean;
+  color: string;
+  name: React.ComponentProps<typeof Ionicons>['name'];
+}) {
   const outlineName = `${name}-outline`;
   const iconName = (focused ? name : (outlineName as React.ComponentProps<typeof Ionicons>['name']));
+
   return (
-    <View accessibilityRole="image" style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-      <Ionicons name={iconName} size={20} color={color} />
+    <View style={[styles.iconWrapper, focused && styles.iconWrapperActive]}>
+      <Ionicons name={iconName} size={22} color={color} />
     </View>
   );
 });
@@ -92,43 +101,52 @@ const TabIcon = React.memo(function TabIcon({ focused, color, name }: { focused:
 const styles = StyleSheet.create({
   tabBar: {
     backgroundColor: '#FFFFFF',
-    borderTopWidth: 0, 
-    elevation: 25, // Shadow Android diperkuat
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 15,
+    borderTopWidth: 0,
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
     
-    // Tinggi yang lebih ergonomis
-    height: Platform.OS === 'ios' ? 95 : 75,
-    paddingBottom: Platform.OS === 'ios' ? 35 : 15,
-    paddingTop: 12,
-    borderTopLeftRadius: 25, // Membuat sudut atas tabbar agak melengkung
-    borderTopRightRadius: 25,
-    position: 'absolute', // Membuat tabbar terlihat melayang jika dikombinasikan dengan margin
+    // Tinggi yang ergonomis
+    height: Platform.OS === 'ios' ? 90 : 70,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 12,
+    paddingTop: 10,
+    paddingHorizontal: 12,
+    
+    // Modern rounded corners
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    position: 'absolute',
   },
+
   tabItem: {
-    paddingVertical: 4, 
+    paddingVertical: 6,
+    paddingHorizontal: 4,
   },
+
   tabLabel: {
-    fontSize: 10,
-    fontWeight: '800', // Font dipertebal agar mudah dibaca
-    marginTop: 2,
-    textTransform: 'uppercase', // Membuat label terlihat lebih profesional
-    letterSpacing: 0.3,
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 6,
+    letterSpacing: 0.4,
   },
-  
-  // Icon Styles (Green Pill Effect)
-  iconContainer: {
-    width: 44,
-    height: 32, // Bentuk lonjong (pill) bukan bulat sempurna agar lebih modern
+
+  // Icon Styles
+  tabIcon: {
+    marginBottom: 2,
+  },
+
+  iconWrapper: {
+    width: 48,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 16,
-    marginBottom: 4,
+    borderRadius: 14,
+    marginBottom: 2,
   },
-  iconContainerActive: {
-    backgroundColor: '#E8F5E9', 
-    transform: [{ scale: 1.15 }], 
+
+  iconWrapperActive: {
+    backgroundColor: '#E8F5E9',
   },
 });

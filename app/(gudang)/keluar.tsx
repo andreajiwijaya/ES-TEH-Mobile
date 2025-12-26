@@ -1,106 +1,159 @@
-import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import React, { useState, useCallback } from 'react'; // FIX: useEffect dihapus
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
-  Modal,
-  TextInput,
-  Alert,
+  StyleSheet,
   Platform,
-  ActivityIndicator,
+  Alert,
+  StatusBar,
   RefreshControl,
+  Modal,
+  ScrollView,
+  TextInput,
+  Animated,
   Image,
-  KeyboardAvoidingView,
-  StatusBar
 } from 'react-native';
-import { useFocusEffect } from 'expo-router'; // FIX: Tambahkan import ini
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import { BarangKeluar, PermintaanStok, FileAsset } from '../../types';
-import { gudangAPI } from '../../services/api';
+import { authAPI, gudangAPI } from '../../services/api';
+import { BarangKeluar, User, Outlet } from '../../types';
+import { useFocusEffect } from 'expo-router';
 
+// ==================== SKELETON SHIMMER ====================
+const SkeletonShimmer = ({ 
+  width = '100%', 
+  height = 12, 
+  borderRadius = 8 
+}: { 
+  width?: number | string; 
+  height?: number; 
+  borderRadius?: number;
+}) => {
+  const shimmerAnim = React.useMemo(() => new Animated.Value(-200), []);
+
+  React.useEffect(() => {
+    const animation = Animated.loop(
+      Animated.timing(shimmerAnim, {
+        toValue: 200,
+        duration: 1000,
+        useNativeDriver: true,
+      })
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [shimmerAnim]);
+
+  return (
+    <View style={[styles.skeletonBar, { width, height, borderRadius }]}>
+      <Animated.View
+        style={[
+          styles.skeletonHighlight,
+          { transform: [{ translateX: shimmerAnim }] },
+        ]}
+      />
+    </View>
+  );
+};
+
+// ==================== MAIN COMPONENT ====================
 export default function BarangKeluarScreen() {
-  // --- STATE ---
+  const [user, setUser] = useState<User | null>(null);
   const [outgoingGoods, setOutgoingGoods] = useState<BarangKeluar[]>([]);
-  const [permintaanStok, setPermintaanStok] = useState<PermintaanStok[]>([]);
-  
+  const [outlets, setOutlets] = useState<Outlet[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedOutlet, setSelectedOutlet] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [processing, setProcessing] = useState(false);
 
-  // Modal Create
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showPermintaanModal, setShowPermintaanModal] = useState(false);
-  const [selectedPermintaan, setSelectedPermintaan] = useState<PermintaanStok | null>(null);
-
-  // Modal Update / Upload Bukti
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  // Modals
+  const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<BarangKeluar | null>(null);
-  const [buktiFoto, setBuktiFoto] = useState<FileAsset | null>(null);
-  const [updateJumlah, setUpdateJumlah] = useState('');
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [photoToView, setPhotoToView] = useState<string | null>(null);
 
-  // --- HELPERS ---
-
-  const getImageUri = (img?: string | FileAsset | null) => {
-    if (!img) return 'https://via.placeholder.com/300';
-    if (typeof img === 'string') return img;
-    return img.uri ?? 'https://via.placeholder.com/300';
+  // Avatar helpers
+  const getAvatarColor = () => {
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE'];
+    const username = user?.username || 'Guest';
+    const index = username.charCodeAt(0) % colors.length;
+    return colors[index];
   };
+
+  const getUserInitial = () => {
+    const username = user?.username || 'G';
+    return username.charAt(0).toUpperCase();
+  };
+
+  // Helper: Parse UTC date from backend (fixes timezone issue)
+  const parseDateLocal = (s: string): Date => {
+    if (!s) return new Date();
+    const raw = s.toString().trim();
+    
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(raw)) {
+      const normalized = raw.replace(' ', 'T') + 'Z';
+      return new Date(normalized);
+    } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(raw)) {
+      return new Date(raw + 'Z');
+    }
+    return new Date(raw);
+  };
+
+  // Load Data
+  const loadUserData = useCallback(async () => {
+    try {
+      const response = await authAPI.getMe();
+      if (response.data) {
+        setUser(response.data);
+      }
+    } catch (error) {
+      console.error('Load user error:', error);
+    }
+  }, []);
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     try {
-      const [barangKeluarRes, permintaanRes] = await Promise.all([
-        gudangAPI.getBarangKeluar(),
-        gudangAPI.getPermintaanStok(),
-      ]);
+      const barangKeluarResponse = await gudangAPI.getBarangKeluar();
 
-      if (barangKeluarRes.data && Array.isArray(barangKeluarRes.data)) {
-        const sorted = barangKeluarRes.data.sort((a: any, b: any) => b.id - a.id);
-        setOutgoingGoods(sorted);
+      if (barangKeluarResponse.data) {
+        const raw = barangKeluarResponse.data as any;
+        const list: BarangKeluar[] = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
+        
+        if (Array.isArray(list)) {
+          const normalized = list.map((x: any) => ({
+            ...x,
+            status: ((x?.status || x?.status_permintaan || x?.status_pengiriman || '') as string).toLowerCase(),
+          }));
+          setOutgoingGoods(normalized.sort((a: any, b: any) => b.id - a.id));
+          
+          // Extract unique outlets
+          const uniqueOutlets: Outlet[] = [];
+          const seenIds = new Set<number>();
+          normalized.forEach((item: any) => {
+            if (item.outlet && item.outlet.id && !seenIds.has(item.outlet.id)) {
+              uniqueOutlets.push(item.outlet);
+              seenIds.add(item.outlet.id);
+            }
+          });
+          setOutlets(uniqueOutlets.sort((a, b) => a.nama.localeCompare(b.nama)));
+        }
       }
-
-      if (permintaanRes.data && Array.isArray(permintaanRes.data)) {
-        // Normalize status to lowercase and accept multiple "approved" variants (e.g. 'disetujui')
-        const normalized = (permintaanRes.data as any[]).map((p: any) => ({
-          ...p,
-          status: (p.status || '').toString().toLowerCase(),
-        }));
-
-        const isApproved = (s?: string) => {
-          const st = (s || '').toString().toLowerCase();
-          return (
-            st === 'approved' ||
-            st.includes('approved') ||
-            st.includes('disetujui') ||
-            st.includes('diterima') ||
-            st.includes('received') ||
-            st.includes('accept')
-          );
-        };
-
-        // Filter only approved requests ready to create outgoing shipment
-        const filtered = normalized.filter((p: any) => isApproved(p.status));
-        setPermintaanStok(filtered);
-      }
-
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Gagal memuat data');
+      console.error('Load data error:', error);
+      Alert.alert('Error', 'Gagal memuat data');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  // --- USE FOCUS EFFECT (FIX) ---
-  // Menjamin data permintaan yang sudah di-Approve di menu 'Request' langsung sinkron
   useFocusEffect(
     useCallback(() => {
+      loadUserData();
       loadData();
-    }, [loadData])
+    }, [loadUserData, loadData])
   );
 
   const onRefresh = () => {
@@ -108,427 +161,920 @@ export default function BarangKeluarScreen() {
     loadData(true);
   };
 
-  // --- ACTION HANDLERS ---
-
-  const handleCreate = async () => {
-    if (!selectedPermintaan) {
-      Alert.alert('Validasi', 'Pilih permintaan stok terlebih dahulu');
-      return;
-    }
-
-    setProcessing(true);
-    try {
-      const res = await gudangAPI.createBarangKeluar({
-        permintaan_id: selectedPermintaan.id
-      });
-
-      if (res.error) throw new Error(res.error);
-
-      Alert.alert('Sukses', 'Barang keluar berhasil dibuat. Silakan update status dan upload bukti saat barang dikirim.');
-      setShowAddModal(false);
-      setSelectedPermintaan(null);
-      loadData(true);
-    } catch (error: any) {
-      Alert.alert('Gagal', error.message);
-    } finally {
-      setProcessing(false);
-    }
+  // Helper functions
+  const getItemStatus = (item: BarangKeluar) => {
+    const anyItem = item as any;
+    const st = (item.status || anyItem?.status_permintaan || anyItem?.status_pengiriman || '').toString().toLowerCase();
+    if (st === 'diterima') return 'diterima';
+    if (st === 'dikirim') return 'dikirim';
+    return st || 'dikirim';
   };
 
-  const handleOpenUpdate = (item: BarangKeluar) => {
+  const getStatusStyle = (status: string) => {
+    if (status === 'diterima') return { bg: '#DCFCE7', text: '#16A34A' };
+    return { bg: '#FEF3C7', text: '#D97706' };
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = parseDateLocal(dateString);
+    return new Intl.DateTimeFormat('id-ID', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'Asia/Jakarta',
+    }).format(date);
+  };
+
+  const getRelativeTime = (dateString: string) => {
+    const d = parseDateLocal(dateString);
+    const diffMs = Date.now() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'baru saja';
+    if (diffMins < 60) return `${diffMins} menit lalu`;
+    if (diffHours < 24) return `${diffHours} jam lalu`;
+    if (diffDays === 1) return 'kemarin';
+    if (diffDays < 7) return `${diffDays} hari lalu`;
+    return formatDate(dateString);
+  };
+
+  // Summary Stats (focus on 'diterima' items - completed deliveries)
+  const summaryStats = useMemo(() => {
+    const received = outgoingGoods.filter(i => getItemStatus(i) === 'diterima');
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const receivedToday = received.filter(i => {
+      const date = parseDateLocal(i.updated_at || i.tanggal_keluar || '');
+      return date >= today;
+    }).length;
+
+    const receivedThisMonth = received.filter(i => {
+      const date = parseDateLocal(i.updated_at || i.tanggal_keluar || '');
+      return date >= thisMonth;
+    }).length;
+
+    // Top outlet
+    const outletCounts = received.reduce((acc: Record<number, { count: number, nama: string }>, item) => {
+      if (item.outlet_id) {
+        if (!acc[item.outlet_id]) {
+          acc[item.outlet_id] = { count: 0, nama: item.outlet?.nama || `Outlet #${item.outlet_id}` };
+        }
+        acc[item.outlet_id].count++;
+      }
+      return acc;
+    }, {});
+    const topOutlet = Object.values(outletCounts).sort((a, b) => b.count - a.count)[0];
+
+    // Top bahan
+    const bahanCounts = received.reduce((acc: Record<number, { count: number, nama: string }>, item) => {
+      const bahanId = item.bahan?.id;
+      if (bahanId) {
+        if (!acc[bahanId]) {
+          acc[bahanId] = { count: 0, nama: item.bahan?.nama || `Bahan #${bahanId}` };
+        }
+        acc[bahanId].count++;
+      }
+      return acc;
+    }, {});
+    const topBahan = Object.values(bahanCounts).sort((a, b) => b.count - a.count)[0];
+
+    return {
+      receivedToday,
+      receivedThisMonth,
+      topOutlet: topOutlet?.nama || '—',
+      topBahan: topBahan?.nama || '—',
+    };
+  }, [outgoingGoods]);
+
+  // Filtered Data (only show 'diterima' status - completed deliveries)
+  const filteredReceived = useMemo(() => {
+    return outgoingGoods.filter(i => {
+      const statusMatch = getItemStatus(i) === 'diterima';
+      const outletMatch = selectedOutlet === null || i.outlet_id === selectedOutlet;
+      const textMatch = (i.bahan?.nama || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        i.id.toString().includes(searchQuery);
+      return statusMatch && outletMatch && textMatch;
+    });
+  }, [outgoingGoods, searchQuery, selectedOutlet]);
+
+  // Action handlers
+  const handleViewDetail = (item: BarangKeluar) => {
     setSelectedItem(item);
-    setUpdateJumlah(item.jumlah ? item.jumlah.toString() : '');
-    setBuktiFoto(null);
-    setShowUpdateModal(true);
+    setShowDetailModal(true);
   };
 
-  const pickImage = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Izin dibutuhkan', 'Berikan izin akses foto untuk mengunggah bukti.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.5,
-      });
-
-      if ('canceled' in result) {
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-          const asset = result.assets[0];
-          const file: FileAsset = {
-            uri: asset.uri,
-            fileName: asset.fileName ?? asset.uri.split('/').pop() ?? undefined,
-            name: asset.fileName ?? asset.uri.split('/').pop() ?? undefined,
-            type: asset.type ?? 'image/jpeg',
-          };
-          setBuktiFoto(file);
-        }
-      } else {
-        // legacy shape
-        // @ts-ignore
-        if (!result.cancelled && result.uri) {
-          // @ts-ignore
-          const file: FileAsset = { uri: result.uri, name: result.uri.split('/').pop() ?? undefined };
-          setBuktiFoto(file);
-        }
-      }
-    } catch (err) {
-      console.error('pickImage error', err);
-      Alert.alert('Error', 'Gagal memilih gambar');
+  const handleViewPhoto = (item: BarangKeluar) => {
+    const anyItem = item as any;
+    const bukti = anyItem?.bukti_foto || anyItem?.bukti_terima || anyItem?.foto_bukti || null;
+    if (bukti) {
+      const uri = typeof bukti === 'string' ? bukti : bukti?.uri;
+      setPhotoToView(uri || null);
+      setShowPhotoModal(true);
+    } else {
+      Alert.alert('Info', 'Tidak ada foto bukti untuk item ini');
     }
   };
 
-  const handleUpdate = async () => {
-    if (!selectedItem) return;
-    
-    if (!updateJumlah) {
-        Alert.alert('Validasi', 'Jumlah barang harus diisi');
-        return;
-    }
+  // Render skeleton loading
+  const renderSkeleton = () => (
+    <View style={{ paddingBottom: 20 }}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <View key={i} style={styles.card}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+            <SkeletonShimmer width="40%" height={16} />
+            <SkeletonShimmer width={60} height={24} borderRadius={12} />
+          </View>
+          <View style={{ gap: 8, marginBottom: 12 }}>
+            <SkeletonShimmer width="70%" height={14} />
+            <SkeletonShimmer width="50%" height={14} />
+            <SkeletonShimmer width="60%" height={14} />
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
+            <SkeletonShimmer width={100} height={32} borderRadius={10} />
+            <SkeletonShimmer width={100} height={32} borderRadius={10} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
 
-    setProcessing(true);
-    try {
-      const res = await gudangAPI.updateBarangKeluar(selectedItem.id, {
-        jumlah: parseInt(updateJumlah),
-        bukti_foto: buktiFoto 
-      });
+  // Render item card
+  const renderItem = ({ item }: { item: BarangKeluar }) => {
+    const status = getItemStatus(item);
+    const statusStyle = getStatusStyle(status);
+    const dateStr = item.updated_at || item.tanggal_keluar || '';
 
-      if (res.error) throw new Error(res.error);
+    return (
+      <TouchableOpacity 
+        style={styles.card}
+        activeOpacity={0.7}
+        onPress={() => handleViewDetail(item)}
+      >
+        <View style={styles.cardHeader}>
+          <View>
+            <Text style={styles.cardId}>#{item.id}</Text>
+            <Text style={styles.cardDate}>{getRelativeTime(dateStr)}</Text>
+          </View>
+          <View style={[styles.badge, { backgroundColor: statusStyle.bg }]}>
+            <Text style={[styles.badgeText, { color: statusStyle.text }]}>
+              {status === 'diterima' ? 'DITERIMA' : 'DIKIRIM'}
+            </Text>
+          </View>
+        </View>
 
-      Alert.alert('Sukses', 'Data barang keluar berhasil diperbarui');
-      setShowUpdateModal(false);
-      loadData(true);
-    } catch (error: any) {
-      Alert.alert('Gagal', error.message);
-    } finally {
-      setProcessing(false);
-    }
-  };
+        <View style={styles.divider} />
 
-  const handleDelete = (id: number) => {
-    Alert.alert('Hapus', 'Yakin ingin menghapus data ini? Stok akan dikembalikan.', [
-        { text: 'Batal', style: 'cancel' },
-        { 
-            text: 'Hapus', 
-            style: 'destructive', 
-            onPress: async () => {
-                setLoading(true);
-                const res = await gudangAPI.deleteBarangKeluar(id);
-                setLoading(false);
-                if (res.error) Alert.alert('Gagal', res.error);
-                else {
-                    Alert.alert('Sukses', 'Data dihapus');
-                    loadData(true);
-                }
-            }
-        }
-    ]);
-  };
+        <View style={styles.cardBody}>
+          <View style={styles.infoRow}>
+            <Ionicons name="cube-outline" size={16} color="#64748B" />
+            <Text style={styles.infoVal}>{item.bahan?.nama || '—'}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="location-outline" size={16} color="#64748B" />
+            <Text style={styles.infoVal}>{item.outlet?.nama || '—'}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="layers-outline" size={16} color="#64748B" />
+            <Text style={styles.infoVal}>{item.jumlah} {item.bahan?.satuan || 'unit'}</Text>
+          </View>
+        </View>
 
-  // --- UI HELPERS ---
-
-  const getStatusColor = (status?: string | null) => {
-    switch (status) {
-      case 'pending': return Colors.warning;
-      case 'in_transit': return Colors.primary;
-      case 'received': return Colors.success;
-      case 'diterima': return Colors.success; // backend may use 'diterima'
-      case 'cancelled': return Colors.error;
-      default: return Colors.textSecondary;
-    }
-  };
-
-  const getStatusLabel = (status?: string | null) => {
-      switch (status) {
-          case 'in_transit': return 'DIKIRIM';
-          case 'received': return 'DITERIMA';
-          case 'diterima': return 'DITERIMA';
-          case 'cancelled': return 'BATAL';
-          default: return (status ?? '-').toString().toUpperCase();
-      }
-  }
-
-  const formatDate = (dateString?: string | null) => {
-    if (!dateString) return '-';
-    try {
-      return new Date(dateString).toLocaleDateString('id-ID', {
-        day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-      });
-    } catch {
-      return dateString;
-    }
+        <View style={styles.cardFooter}>
+          <TouchableOpacity 
+            style={styles.actionBtn}
+            onPress={() => handleViewDetail(item)}
+          >
+            <Ionicons name="eye-outline" size={16} color={Colors.primary} />
+            <Text style={styles.actionBtnTxt}>Detail</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.actionBtn}
+            onPress={() => handleViewPhoto(item)}
+          >
+            <Ionicons name="image-outline" size={16} color={Colors.primary} />
+            <Text style={styles.actionBtnTxt}>Foto</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    );
   };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
       
-      {/* HEADER GREEN DNA */}
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View>
             <Text style={styles.headerTitle}>Barang Keluar</Text>
-            <Text style={styles.headerSubtitle}>Distribusi ke Outlet</Text>
+            <Text style={styles.headerSubtitle}>Riwayat Pengiriman Cabang</Text>
           </View>
-          <View style={styles.headerIconBg}>
-            <Ionicons name="arrow-up-circle" size={24} color={Colors.primary} />
+          <View style={[styles.avatar, { backgroundColor: getAvatarColor() }]}>
+            <Text style={styles.avatarText}>{getUserInitial()}</Text>
           </View>
         </View>
       </View>
 
-      <ScrollView 
-        style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
-        contentContainerStyle={{ paddingBottom: 100 }}
-      >
-        {/* Action Button */}
-        <View style={styles.actionContainer}>
-            <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
-                <Ionicons name="add-circle" size={22} color="white" />
-                <Text style={styles.addButtonText}>Buat Pengiriman Baru</Text>
+      {/* Content Area */}
+      <View style={styles.contentArea}>
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color="#94A3B8" />
+          <TextInput 
+            style={styles.searchInput} 
+            placeholder="Cari bahan atau outlet..." 
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#94A3B8"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color="#94A3B8" />
             </TouchableOpacity>
+          )}
         </View>
 
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingText}>Memuat data...</Text>
+        {/* Summary Cards */}
+        <View style={styles.summaryGrid}>
+          <View style={styles.summaryCard}>
+            <View style={[styles.summaryIcon, { backgroundColor: '#DBEAFE' }]}>
+              <Ionicons name="today" size={20} color="#2563EB" />
+            </View>
+            <Text style={styles.summaryLabel}>Hari Ini</Text>
+            <Text style={styles.summaryValue}>{summaryStats.receivedToday}</Text>
           </View>
-        ) : (
-          <View style={styles.listContainer}>
-            {outgoingGoods.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                    <Ionicons name="cube-outline" size={48} color="#ccc" />
-                    <Text style={styles.emptyText}>Belum ada data barang keluar.</Text>
-                </View>
-            ) : (
-                outgoingGoods.map((item) => (
-                    <View key={item.id} style={styles.card}>
-                        <View style={styles.cardHeader}>
-                            <View>
-                                <Text style={styles.cardId}>Pengiriman #{item.id}</Text>
-                                <Text style={styles.cardDate}>{formatDate(item.tanggal_keluar)}</Text>
-                            </View>
-                            <View style={[styles.statusBadge, { backgroundColor: (getStatusColor(item.status) || Colors.textSecondary) + '20' }]}>
-                                <Text style={{ color: getStatusColor(item.status), fontWeight: '800', fontSize: 11 }}>
-                                    {getStatusLabel(item.status)}
-                                </Text>
-                            </View>
-                        </View>
 
-                        <View style={styles.divider} />
+          <View style={styles.summaryCard}>
+            <View style={[styles.summaryIcon, { backgroundColor: '#D1FAE5' }]}>
+              <Ionicons name="calendar" size={20} color="#059669" />
+            </View>
+            <Text style={styles.summaryLabel}>Bulan Ini</Text>
+            <Text style={styles.summaryValue}>{summaryStats.receivedThisMonth}</Text>
+          </View>
 
-                        <View style={styles.cardBody}>
-                            <View style={styles.infoRow}>
-                                <Ionicons name="storefront-outline" size={16} color={Colors.textSecondary} />
-                                <Text style={styles.infoLabel}>Tujuan:</Text>
-                                <Text style={styles.infoText}>Outlet #{item.outlet_id ?? '-'}</Text>
-                            </View>
-                            {item.bahan && (
-                                <View style={styles.infoRow}>
-                                    <Ionicons name="cube-outline" size={16} color={Colors.textSecondary} />
-                                    <Text style={styles.infoLabel}>Bahan:</Text>
-                                    <Text style={styles.infoText}>{item.bahan.nama}</Text>
-                                </View>
-                            )}
-                            <View style={styles.infoRow}>
-                                <Ionicons name="layers-outline" size={16} color={Colors.textSecondary} />
-                                <Text style={styles.infoLabel}>Jumlah:</Text>
-                                <Text style={styles.infoHighlight}>{item.jumlah ?? 0} {item.bahan?.satuan ?? ''}</Text>
-                            </View>
-                        </View>
+          <View style={styles.summaryCard}>
+            <View style={[styles.summaryIcon, { backgroundColor: '#FEF3C7' }]}>
+              <Ionicons name="storefront" size={20} color="#D97706" />
+            </View>
+            <Text style={styles.summaryLabel}>Outlet Aktif</Text>
+            <Text style={styles.summaryText}>{summaryStats.topOutlet}</Text>
+          </View>
 
-                        <View style={styles.cardFooter}>
-                            {item.status !== 'received' && item.status !== 'cancelled' && (
-                                <TouchableOpacity style={styles.actionBtn} onPress={() => handleOpenUpdate(item)}>
-                                    <Ionicons name="create-outline" size={16} color={Colors.primary} />
-                                    <Text style={styles.actionBtnText}>Update Data</Text>
-                                </TouchableOpacity>
-                            )}
-                            <TouchableOpacity style={[styles.actionBtn, styles.deleteBtn]} onPress={() => handleDelete(item.id)}>
-                                <Ionicons name="trash-outline" size={16} color={Colors.error} />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                ))
-            )}
+          <View style={styles.summaryCard}>
+            <View style={[styles.summaryIcon, { backgroundColor: '#FCE7F3' }]}>
+              <Ionicons name="trending-up" size={20} color="#DB2777" />
+            </View>
+            <Text style={styles.summaryLabel}>Bahan Terlaris</Text>
+            <Text style={styles.summaryText}>{summaryStats.topBahan}</Text>
+          </View>
+        </View>
+
+        {/* Outlet Filter */}
+        {outlets.length > 0 && (
+          <View style={styles.filterOutletContainer}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8 }}
+            >
+              <TouchableOpacity
+                style={[styles.outletChip, selectedOutlet === null && styles.outletChipActive]}
+                onPress={() => setSelectedOutlet(null)}
+              >
+                <Text style={[styles.outletChipTxt, selectedOutlet === null && styles.outletChipTxtActive]}>
+                  Semua Outlet
+                </Text>
+              </TouchableOpacity>
+              {outlets.map(outlet => (
+                <TouchableOpacity
+                  key={outlet.id}
+                  style={[styles.outletChip, selectedOutlet === outlet.id && styles.outletChipActive]}
+                  onPress={() => setSelectedOutlet(outlet.id)}
+                >
+                  <Text style={[styles.outletChipTxt, selectedOutlet === outlet.id && styles.outletChipTxtActive]}>
+                    {outlet.nama}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         )}
-      </ScrollView>
 
-      {/* --- MODAL 1: CREATE BARANG KELUAR --- */}
-      <Modal visible={showAddModal} transparent animationType="slide" onRequestClose={() => setShowAddModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Buat Pengiriman</Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.text} />
+        {/* List */}
+        <View style={{ flex: 1 }}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderLeft}>
+              <Ionicons name="checkmark-done-circle" size={22} color={Colors.primary} />
+              <Text style={styles.sectionTitle}>Riwayat Diterima</Text>
+            </View>
+            <View style={styles.sectionBadge}>
+              <Text style={styles.sectionBadgeText}>{filteredReceived.length}</Text>
+            </View>
+          </View>
+
+          <FlatList
+            data={filteredReceived}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id.toString()}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+            }
+            contentContainerStyle={{ paddingBottom: 100 }}
+            ListEmptyComponent={
+              loading && !refreshing ? (
+                renderSkeleton()
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <View style={styles.emptyIconBg}>
+                    <Ionicons name="file-tray-outline" size={48} color="#CBD5E1" />
+                  </View>
+                  <Text style={styles.emptyTitle}>Tidak Ada Data</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Belum ada riwayat barang keluar yang diterima
+                  </Text>
+                </View>
+              )
+            }
+          />
+        </View>
+      </View>
+
+      {/* MODAL DETAIL */}
+      <Modal visible={showDetailModal} transparent animationType="slide" onRequestClose={() => setShowDetailModal(false)}>
+        <TouchableOpacity 
+          style={styles.modalBackdrop} 
+          activeOpacity={1} 
+          onPress={() => setShowDetailModal(false)}
+        >
+          <View style={styles.detailSheet} onStartShouldSetResponder={() => true}>
+            <View style={styles.detailSheetHandle} />
+
+            <View style={styles.detailSheetHeader}>
+              <Text style={styles.detailSheetTitle}>Detail Pengiriman</Text>
+              <TouchableOpacity onPress={() => setShowDetailModal(false)}>
+                <Ionicons name="close-circle" size={28} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.label}>Pilih Permintaan (Approved):</Text>
-            <TouchableOpacity style={styles.selectBtn} onPress={() => setShowPermintaanModal(true)}>
-                <Text style={styles.selectBtnText}>
-                    {selectedPermintaan 
-                        ? `Req #${selectedPermintaan.id} - ${selectedPermintaan.bahan?.nama} (${selectedPermintaan.jumlah})` 
-                        : 'Pilih Permintaan...'}
-                </Text>
-                <Ionicons name="chevron-down" size={20} color={Colors.text} />
-            </TouchableOpacity>
+            <View style={styles.detailSheetDivider} />
 
-            <TouchableOpacity 
-                style={[styles.saveBtn, (!selectedPermintaan || processing) && styles.disabledBtn]}
-                onPress={handleCreate}
-                disabled={!selectedPermintaan || processing}
-            >
-                {processing ? <ActivityIndicator color="white" /> : <Text style={styles.saveBtnText}>Buat Data</Text>}
-            </TouchableOpacity>
+            <ScrollView style={styles.detailSheetContent} showsVerticalScrollIndicator={false}>
+              {selectedItem && (
+                <>
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailIconBox}>
+                      <Ionicons name="document-text" size={20} color={Colors.primary} />
+                    </View>
+                    <View style={styles.detailTextBox}>
+                      <Text style={styles.detailLabel}>ID Pengiriman</Text>
+                      <Text style={styles.detailValue}>#{selectedItem.id}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailIconBox}>
+                      <Ionicons name="cube" size={20} color={Colors.primary} />
+                    </View>
+                    <View style={styles.detailTextBox}>
+                      <Text style={styles.detailLabel}>Bahan</Text>
+                      <Text style={styles.detailValue}>{selectedItem.bahan?.nama || '—'}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailIconBox}>
+                      <Ionicons name="layers" size={20} color={Colors.primary} />
+                    </View>
+                    <View style={styles.detailTextBox}>
+                      <Text style={styles.detailLabel}>Jumlah</Text>
+                      <Text style={styles.detailValue}>
+                        {selectedItem.jumlah} {selectedItem.bahan?.satuan || 'unit'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailIconBox}>
+                      <Ionicons name="storefront" size={20} color={Colors.primary} />
+                    </View>
+                    <View style={styles.detailTextBox}>
+                      <Text style={styles.detailLabel}>Outlet Tujuan</Text>
+                      <Text style={styles.detailValue}>{selectedItem.outlet?.nama || '—'}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailIconBox}>
+                      <Ionicons name="location" size={20} color={Colors.primary} />
+                    </View>
+                    <View style={styles.detailTextBox}>
+                      <Text style={styles.detailLabel}>Alamat Outlet</Text>
+                      <Text style={styles.detailValue}>{selectedItem.outlet?.alamat || '—'}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailIconBox}>
+                      <Ionicons name="calendar" size={20} color={Colors.primary} />
+                    </View>
+                    <View style={styles.detailTextBox}>
+                      <Text style={styles.detailLabel}>Tanggal Keluar</Text>
+                      <Text style={styles.detailValue}>
+                        {formatDate(selectedItem.tanggal_keluar || '')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailIconBox}>
+                      <Ionicons name="checkmark-circle" size={20} color="#16A34A" />
+                    </View>
+                    <View style={styles.detailTextBox}>
+                      <Text style={styles.detailLabel}>Status</Text>
+                      <Text style={[styles.detailValue, { color: '#16A34A' }]}>
+                        {getItemStatus(selectedItem).toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {selectedItem.updated_at && (
+                    <View style={styles.detailRow}>
+                      <View style={styles.detailIconBox}>
+                        <Ionicons name="time" size={20} color={Colors.primary} />
+                      </View>
+                      <View style={styles.detailTextBox}>
+                        <Text style={styles.detailLabel}>Terakhir Diupdate</Text>
+                        <Text style={styles.detailValue}>
+                          {getRelativeTime(selectedItem.updated_at)}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {(selectedItem as any)?.keterangan && (
+                    <View style={styles.detailRow}>
+                      <View style={styles.detailIconBox}>
+                        <Ionicons name="information-circle" size={20} color={Colors.primary} />
+                      </View>
+                      <View style={styles.detailTextBox}>
+                        <Text style={styles.detailLabel}>Keterangan</Text>
+                        <Text style={styles.detailValue}>{(selectedItem as any).keterangan}</Text>
+                      </View>
+                    </View>
+                  )}
+                </>
+              )}
+            </ScrollView>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
 
-      {/* --- MODAL 2: PILIH PERMINTAAN --- */}
-      <Modal visible={showPermintaanModal} transparent animationType="fade" onRequestClose={() => setShowPermintaanModal(false)}>
-        <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, {maxHeight: '70%'}]}>
-                <Text style={styles.modalTitle}>Daftar Permintaan (Approved)</Text>
-                <ScrollView>
-                    {permintaanStok.length === 0 ? (
-                        <View style={styles.emptyContainer}>
-                            <Text style={styles.emptyText}>Tidak ada permintaan yang disetujui.</Text>
-                        </View>
-                    ) : (
-                        permintaanStok.map((p) => (
-                            <TouchableOpacity 
-                                key={p.id} 
-                                style={styles.permintaanItem}
-                                onPress={() => {
-                                    setSelectedPermintaan(p);
-                                    setShowPermintaanModal(false);
-                                }}
-                            >
-                                <View>
-                                    <Text style={{fontWeight:'bold', fontSize: 14}}>Request #{p.id}</Text>
-                                    <Text style={{fontSize: 13, color: Colors.text}}>{p.bahan?.nama} - {p.jumlah} {p.bahan?.satuan}</Text>
-                                    <Text style={{fontSize:12, color:Colors.textSecondary}}>Outlet ID: {p.outlet_id}</Text>
-                                </View>
-                                <Ionicons name="chevron-forward" size={20} color="#ccc" />
-                            </TouchableOpacity>
-                        ))
-                    )}
-                </ScrollView>
-                <TouchableOpacity style={styles.closeBtn} onPress={() => setShowPermintaanModal(false)}>
-                    <Text style={{color:Colors.primary, fontWeight:'bold'}}>Tutup</Text>
-                </TouchableOpacity>
+      {/* MODAL PHOTO */}
+      <Modal visible={showPhotoModal} transparent animationType="fade" onRequestClose={() => setShowPhotoModal(false)}>
+        <TouchableOpacity 
+          style={styles.modalBackdrop} 
+          activeOpacity={1} 
+          onPress={() => setShowPhotoModal(false)}
+        >
+          <View style={styles.photoModal} onStartShouldSetResponder={() => true}>
+            <View style={styles.photoModalHeader}>
+              <Text style={styles.photoModalTitle}>Bukti Foto</Text>
+              <TouchableOpacity onPress={() => setShowPhotoModal(false)}>
+                <Ionicons name="close-circle" size={28} color="#94A3B8" />
+              </TouchableOpacity>
             </View>
-        </View>
+            {photoToView ? (
+              <Image 
+                source={{ uri: photoToView }} 
+                style={styles.photoViewImg}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={styles.emptyPhotoContainer}>
+                <Ionicons name="image-outline" size={64} color="#CBD5E1" />
+                <Text style={styles.emptyPhotoText}>Tidak ada foto</Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
       </Modal>
-
-      {/* --- MODAL 3: UPDATE & UPLOAD BUKTI --- */}
-      <Modal visible={showUpdateModal} transparent animationType="slide" onRequestClose={() => setShowUpdateModal(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-                <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>Update Pengiriman #{selectedItem?.id}</Text>
-                    <TouchableOpacity onPress={() => setShowUpdateModal(false)}>
-                        <Ionicons name="close" size={24} color={Colors.text} />
-                    </TouchableOpacity>
-                </View>
-
-                <Text style={styles.label}>Jumlah Realisasi:</Text>
-                <TextInput 
-                    style={styles.input} 
-                    keyboardType="numeric"
-                    value={updateJumlah} 
-                    onChangeText={setUpdateJumlah}
-                    placeholder="Contoh: 100"
-                />
-
-                <Text style={styles.label}>Bukti Foto (Opsional):</Text>
-                <TouchableOpacity style={styles.uploadBox} onPress={pickImage}>
-                    {buktiFoto ? (
-                        <Image source={{ uri: getImageUri(buktiFoto) }} style={{width: '100%', height: '100%', borderRadius: 8}} />
-                    ) : (
-                        <View style={{alignItems:'center'}}>
-                            <Ionicons name="camera-outline" size={32} color={Colors.primary} />
-                            <Text style={{color: Colors.primary, marginTop: 5, fontWeight:'600'}}>Ambil Foto</Text>
-                        </View>
-                    )}
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                    style={[styles.saveBtn, processing && styles.disabledBtn]}
-                    onPress={handleUpdate}
-                    disabled={processing}
-                >
-                    {processing ? <ActivityIndicator color="white" /> : <Text style={styles.saveBtnText}>Simpan Update</Text>}
-                </TouchableOpacity>
-            </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
     </View>
   );
 }
 
-// ... styles tetap sama seperti sebelumnya ...
+// ==================== STYLES ====================
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FA' },
-  header: {
-    backgroundColor: Colors.primary,
-    paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingBottom: 25,
-    paddingHorizontal: 24,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8,
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  header: { 
+    backgroundColor: Colors.primary, 
+    paddingTop: Platform.OS === 'ios' ? 60 : 50, 
+    paddingBottom: 25, 
+    paddingHorizontal: 24, 
+    borderBottomLeftRadius: 32, 
+    borderBottomRightRadius: 32,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
-  headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: 'white', letterSpacing: 0.5 },
-  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
-  headerIconBg: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' },
-  content: { flex: 1, padding: 24, marginTop: 10 },
-  actionContainer: { marginBottom: 20 },
-  addButton: { flexDirection: 'row', backgroundColor: Colors.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 8, elevation: 2 },
-  addButtonText: { color: 'white', fontWeight: 'bold', fontSize: 15 },
-  loadingContainer: { marginTop: 50, alignItems: 'center' },
-  loadingText: { marginTop: 10, color: Colors.textSecondary },
-  emptyContainer: { alignItems: 'center', marginTop: 50 },
-  emptyText: { color: Colors.textSecondary, marginTop: 10 },
-  listContainer: { paddingBottom: 20 },
-  card: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 16, elevation: 2, borderWidth: 1, borderColor: '#F0F0F0' },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  cardId: { fontWeight: '700', fontSize: 15, color: Colors.text },
-  cardDate: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  divider: { height: 1, backgroundColor: '#F5F5F5', marginBottom: 12 },
-  cardBody: { marginBottom: 16 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  infoLabel: { fontSize: 13, color: Colors.textSecondary, width: 60 },
-  infoText: { color: Colors.text, fontSize: 13, fontWeight: '600', flex: 1 },
-  infoHighlight: { color: Colors.primary, fontSize: 14, fontWeight: '700' },
-  cardFooter: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', padding: 8, borderRadius: 8, backgroundColor: '#F5F7FA', gap: 6 },
-  actionBtnText: { color: Colors.primary, fontSize: 12, fontWeight: '700' },
-  deleteBtn: { backgroundColor: '#FFEBEE' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 },
-  modalContent: { backgroundColor: 'white', borderRadius: 20, padding: 24, elevation: 5 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
-  label: { fontWeight: '600', marginBottom: 8, color: Colors.text, fontSize: 14 },
-  selectBtn: { flexDirection: 'row', justifyContent: 'space-between', padding: 14, borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, marginBottom: 24, backgroundColor: '#FAFAFA' },
-  selectBtnText: { color: Colors.text, fontSize: 14 },
-  input: { borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, padding: 14, fontSize: 16, marginBottom: 24, backgroundColor: '#FAFAFA' },
-  uploadBox: { height: 140, borderWidth: 1, borderColor: Colors.primary, borderStyle: 'dashed', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 24, backgroundColor: '#E8F5E9' },
-  saveBtn: { backgroundColor: Colors.primary, padding: 16, borderRadius: 12, alignItems: 'center' },
-  saveBtnText: { color: 'white', fontWeight: 'bold', fontSize: 15 },
-  disabledBtn: { opacity: 0.6 },
-  permintaanItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
-  closeBtn: { padding: 16, alignItems: 'center', marginTop: 10 },
+  headerContent: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center',
+  },
+  headerTitle: { 
+    fontSize: 28, 
+    fontWeight: '900', 
+    color: 'white',
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: { 
+    fontSize: 13, 
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  avatarText: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: 'white',
+  },
+  contentArea: { 
+    flex: 1, 
+    paddingHorizontal: 20, 
+    marginTop: -15,
+  },
+  searchContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: 'white', 
+    borderRadius: 16, 
+    paddingHorizontal: 16, 
+    height: 48, 
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  searchInput: { 
+    flex: 1, 
+    marginLeft: 10, 
+    fontWeight: '600', 
+    color: '#1E293B',
+    fontSize: 14,
+  },
+  summaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  summaryCard: {
+    flex: 1,
+    minWidth: '47%',
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  summaryIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  summaryLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  summaryValue: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#1E293B',
+  },
+  summaryText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1E293B',
+    numberOfLines: 1,
+  },
+  filterOutletContainer: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  outletChip: { 
+    paddingHorizontal: 16, 
+    paddingVertical: 10, 
+    borderRadius: 12, 
+    backgroundColor: '#F8FAFC', 
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  outletChipActive: { 
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  outletChipTxt: { 
+    fontSize: 13, 
+    fontWeight: '700', 
+    color: '#475569',
+  },
+  outletChipTxtActive: { 
+    color: 'white',
+    fontWeight: '800',
+  },
+  sectionHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    marginBottom: 12,
+  },
+  sectionHeaderLeft: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8,
+  },
+  sectionTitle: { 
+    fontSize: 17, 
+    fontWeight: '900', 
+    color: '#0F172A',
+  },
+  sectionBadge: { 
+    backgroundColor: '#EEF2FF', 
+    paddingHorizontal: 12, 
+    paddingVertical: 4, 
+    borderRadius: 999,
+  },
+  sectionBadgeText: { 
+    color: Colors.primary, 
+    fontSize: 12, 
+    fontWeight: '800',
+  },
+  card: { 
+    backgroundColor: 'white', 
+    borderRadius: 20, 
+    padding: 18, 
+    marginBottom: 12, 
+    elevation: 2, 
+    borderWidth: 1, 
+    borderColor: '#F1F5F9',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  cardHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center',
+  },
+  cardId: { 
+    fontSize: 16, 
+    fontWeight: '900', 
+    color: '#1E293B',
+  },
+  cardDate: { 
+    fontSize: 11, 
+    color: '#94A3B8', 
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  badge: { 
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
+    borderRadius: 8,
+  },
+  badgeText: { 
+    fontSize: 10, 
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  divider: { 
+    height: 1, 
+    backgroundColor: '#F1F5F9', 
+    marginVertical: 12,
+  },
+  cardBody: { 
+    gap: 8,
+  },
+  infoRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 10,
+  },
+  infoVal: { 
+    fontSize: 14, 
+    color: '#334155', 
+    fontWeight: '700',
+    flex: 1,
+  },
+  cardFooter: { 
+    flexDirection: 'row', 
+    justifyContent: 'flex-end', 
+    gap: 10, 
+    marginTop: 12,
+  },
+  actionBtn: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 6, 
+    paddingVertical: 8, 
+    paddingHorizontal: 14, 
+    borderRadius: 10, 
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#E0F2FE',
+  },
+  actionBtnTxt: { 
+    fontSize: 12, 
+    fontWeight: '800', 
+    color: Colors.primary,
+  },
+  emptyContainer: { 
+    alignItems: 'center', 
+    paddingVertical: 60, 
+    paddingHorizontal: 30,
+  },
+  emptyIconBg: { 
+    width: 100, 
+    height: 100, 
+    borderRadius: 50, 
+    backgroundColor: '#F1F5F9', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginBottom: 20,
+  },
+  emptyTitle: { 
+    fontSize: 18, 
+    fontWeight: '900', 
+    color: '#1E293B', 
+    marginBottom: 8, 
+    textAlign: 'center',
+  },
+  emptySubtitle: { 
+    fontSize: 13, 
+    color: '#94A3B8', 
+    textAlign: 'center', 
+    lineHeight: 20,
+  },
+  skeletonBar: {
+    backgroundColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  skeletonHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'flex-end',
+  },
+  detailSheet: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+    maxHeight: '85%',
+  },
+  detailSheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 20,
+  },
+  detailSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  detailSheetTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#1E293B',
+  },
+  detailSheetDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginBottom: 20,
+  },
+  detailSheetContent: {
+    maxHeight: '100%',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+    gap: 14,
+  },
+  detailIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  detailTextBox: {
+    flex: 1,
+  },
+  detailLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  detailValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1E293B',
+    lineHeight: 22,
+  },
+  photoModal: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
+    padding: 24,
+    maxHeight: '70%',
+  },
+  photoModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  photoModalTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#1E293B',
+  },
+  photoViewImg: {
+    width: '100%',
+    height: 400,
+    borderRadius: 16,
+  },
+  emptyPhotoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyPhotoText: {
+    fontSize: 14,
+    color: '#94A3B8',
+    marginTop: 12,
+    fontWeight: '600',
+  },
 });
