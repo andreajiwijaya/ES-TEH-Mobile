@@ -17,6 +17,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { spacing, radius, typography } from '../../constants/DesignSystem';
 import { ownerAPI } from '../../services/api';
@@ -38,6 +40,9 @@ interface ReportItem {
 }
 
 export default function LaporanScreen() {
+  const insets = useSafeAreaInsets();
+  const bottomPad = insets.bottom + spacing.lg;
+
   // --- STATE ---
   const [selectedType, setSelectedType] = useState<'all' | 'penjualan' | 'stok' | 'keuangan' | 'gudang'>('all');
   const [reports, setReports] = useState<ReportItem[]>([]);
@@ -467,7 +472,7 @@ export default function LaporanScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
         style={styles.mainContent}
-        contentContainerStyle={styles.scrollPadding}
+        contentContainerStyle={[styles.scrollPadding, { paddingBottom: bottomPad }]}
       >
         <View style={styles.section}>
           <Text style={styles.sectionHeading}>Buat Laporan Baru</Text>
@@ -485,7 +490,7 @@ export default function LaporanScreen() {
         </View>
 
         <View style={styles.tabSection}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScroll}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.tabScroll, { paddingBottom: bottomPad }]}>
             {['all', 'penjualan', 'stok', 'gudang'].map((type) => (
               <TouchableOpacity key={type} style={[styles.tabBtn, selectedType === type && styles.tabBtnActive]} onPress={() => setSelectedType(type as any)}>
                 <Text style={[styles.tabBtnText, selectedType === type && styles.tabBtnTextActive]}>{type === 'all' ? 'Semua Riwayat' : type.charAt(0).toUpperCase() + type.slice(1)}</Text>

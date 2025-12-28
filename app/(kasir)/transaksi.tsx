@@ -17,6 +17,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { spacing, radius, typography } from '../../constants/DesignSystem';
 import { authAPI, karyawanAPI } from '../../services/api';
@@ -81,6 +83,9 @@ const SkeletonShimmer = ({ width, height, borderRadius = 8, style }: any) => {
 };
 
 export default function TransaksiScreen() {
+  const insets = useSafeAreaInsets();
+  const bottomPad = insets.bottom + spacing.lg;
+
   // --- STATE ---
   const [user, setUser] = useState<User | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -354,7 +359,7 @@ export default function TransaksiScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryScroll}
+          contentContainerStyle={[styles.categoryScroll, { paddingBottom: bottomPad }]}
         >
           {categories.map((cat, index) => (
             <TouchableOpacity
@@ -375,7 +380,7 @@ export default function TransaksiScreen() {
         data={filteredProducts}
         keyExtractor={item => item.id.toString()}
         numColumns={2}
-        contentContainerStyle={styles.grid}
+        contentContainerStyle={[styles.grid, { paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>

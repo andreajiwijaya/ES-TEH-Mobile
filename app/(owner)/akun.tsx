@@ -20,6 +20,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { authAPI, ownerAPI } from '../../services/api';
 import { spacing, radius, typography } from '../../constants/DesignSystem';
@@ -27,6 +29,9 @@ import { spacing, radius, typography } from '../../constants/DesignSystem';
 const { height } = Dimensions.get('window');
 
 export default function ProfileScreen() {
+  const insets = useSafeAreaInsets();
+  const bottomPad = insets.bottom + spacing.lg;
+
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);

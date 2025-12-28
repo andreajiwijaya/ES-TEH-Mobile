@@ -17,6 +17,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { spacing, radius, typography } from '../../constants/DesignSystem';
 import { authAPI, karyawanAPI } from '../../services/api';
@@ -72,6 +74,9 @@ const SkeletonShimmer = ({ width, height, borderRadius = 8, style }: any) => {
 };
 
 export default function RiwayatScreen() {
+  const insets = useSafeAreaInsets();
+  const bottomPad = insets.bottom + spacing.lg;
+
   // --- STATE ---
   const [user, setUser] = useState<User | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'today' | 'week' | 'month'>('today');
@@ -283,7 +288,7 @@ export default function RiwayatScreen() {
         </View>
 
         <ScrollView 
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
           showsVerticalScrollIndicator={false}
         >
           {/* Skeleton Revenue Card */}
@@ -340,7 +345,7 @@ export default function RiwayatScreen() {
 
       <ScrollView 
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />} 
-        contentContainerStyle={styles.scrollContent} 
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]} 
         showsVerticalScrollIndicator={false}
       >
         {/* Revenue Card */}

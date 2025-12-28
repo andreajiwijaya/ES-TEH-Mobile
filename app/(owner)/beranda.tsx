@@ -61,6 +61,9 @@ const SkeletonShimmer = ({
 
 // ==================== MAIN COMPONENT ====================
 export default function OwnerDashboardScreen() {
+  const insets = useSafeAreaInsets();
+  const bottomPad = insets.bottom + spacing.lg;
+
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [user, setUser] = useState<User | null>(null);

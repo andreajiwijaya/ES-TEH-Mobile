@@ -14,6 +14,8 @@ import {
   TextInput,
   Animated,
 } from 'react-native';
+
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { spacing, radius, typography } from '../../constants/DesignSystem';
@@ -185,6 +187,9 @@ const SwipeableCard = ({
 
 // ==================== MAIN COMPONENT ====================
 export default function PermintaanScreen() {
+  const insets = useSafeAreaInsets();
+  const bottomPad = insets.bottom + spacing.lg;
+
   const [user, setUser] = useState<User | null>(null);
   const [requests, setRequests] = useState<PermintaanStok[]>([]);
   const [statusFilter, setStatusFilter] = useState<'pending' | 'dikirim' | 'diterima' | 'ditolak' | 'semua'>('pending');

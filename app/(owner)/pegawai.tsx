@@ -19,11 +19,17 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
+import { spacing } from '../../constants/DesignSystem';
 import { ownerAPI } from '../../services/api';
 import { Outlet, User } from '../../types';
 
 export default function KaryawanScreen() {
+  const insets = useSafeAreaInsets();
+  const bottomPad = insets.bottom + spacing.lg;
+
   const [employees, setEmployees] = useState<User[]>([]);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -376,7 +382,7 @@ export default function KaryawanScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
         style={styles.mainContent}
-        contentContainerStyle={styles.scrollPadding}
+        contentContainerStyle={[styles.scrollPadding, { paddingBottom: bottomPad }]}
       >
         <View style={styles.actionRow}>
           <View style={styles.searchBox}>

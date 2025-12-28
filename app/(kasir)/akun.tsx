@@ -15,6 +15,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { spacing, radius, typography } from '../../constants/DesignSystem';
 import { authAPI } from '../../services/api';
@@ -63,6 +65,9 @@ const SkeletonShimmer = ({ width, height, borderRadius = 8, style }: any) => {
 };
 
 export default function AkunScreen() {
+  const insets = useSafeAreaInsets();
+  const bottomPad = insets.bottom + spacing.lg;
+
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [outlet, setOutlet] = useState<Outlet | null>(null);
@@ -222,7 +227,7 @@ export default function AkunScreen() {
 
         <ScrollView 
           style={styles.scrollView} 
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
           showsVerticalScrollIndicator={false}
         >
           {/* Skeleton Profile Card */}
@@ -280,7 +285,7 @@ export default function AkunScreen() {
 
       <ScrollView 
         style={styles.scrollView} 
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl

@@ -15,11 +15,17 @@ import {
   Image,
   StatusBar
 } from 'react-native';
+
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
+import { spacing } from '../../constants/DesignSystem';
 import { authAPI } from '../../services/api';
 
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
+  const bottomPad = insets.bottom + spacing.lg;
+
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -103,7 +109,7 @@ export default function LoginScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled" // Memungkinkan klik tombol saat keyboard terbuka
         >

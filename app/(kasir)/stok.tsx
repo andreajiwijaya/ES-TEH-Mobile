@@ -18,6 +18,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { spacing, radius, typography } from '../../constants/DesignSystem';
 import { authAPI, karyawanAPI } from '../../services/api';
@@ -75,6 +77,9 @@ const SkeletonShimmer = ({ width, height, borderRadius = 8, style }: any) => {
 };
 
 export default function StokScreen() {
+  const insets = useSafeAreaInsets();
+  const bottomPad = insets.bottom + spacing.lg;
+
   // --- STATE ---
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'stok' | 'terima' | 'riwayat'>('stok');
@@ -340,7 +345,7 @@ export default function StokScreen() {
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]} showsVerticalScrollIndicator={false}>
           <SkeletonShimmer width="100%" height={50} borderRadius={15} style={{ marginBottom: spacing.lg }} />
           <SkeletonShimmer width="100%" height={50} borderRadius={15} style={{ marginBottom: spacing.lg }} />
           {[1, 2, 3].map((i) => (
@@ -404,7 +409,7 @@ export default function StokScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
         showsVerticalScrollIndicator={false}
       >

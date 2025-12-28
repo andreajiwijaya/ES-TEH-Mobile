@@ -14,6 +14,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authAPI, gudangAPI } from '../../services/api';
 import { Bahan, User } from '../../types';
 import { Colors } from '../../constants/Colors';
@@ -79,6 +81,9 @@ interface ActivityItem {
 }
 
 export default function WarehouseOverviewScreen() {
+  const insets = useSafeAreaInsets();
+  const bottomPad = insets.bottom + spacing.lg;
+
   const router = useRouter();
 
   // State Management
@@ -392,7 +397,7 @@ export default function WarehouseOverviewScreen() {
             colors={[Colors.primary]}
           />
         }
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
       >
         {/* Stats Grid */}
         <View style={styles.section}>
@@ -536,7 +541,7 @@ export default function WarehouseOverviewScreen() {
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.activityScrollContent}
+              contentContainerStyle={[styles.activityScrollContent, { paddingBottom: bottomPad }]}
             >
               {recentActivities.map((activity) => (
                 <View key={activity.id} style={styles.activityCardHorizontal}>
