@@ -17,6 +17,7 @@ import {
 import { authAPI, gudangAPI } from '../../services/api';
 import { Bahan, User } from '../../types';
 import { Colors } from '../../constants/Colors';
+import { spacing, radius, typography } from '../../constants/DesignSystem';
 
 
 // Skeleton Shimmer Component
@@ -519,7 +520,7 @@ export default function WarehouseOverviewScreen() {
               {[1, 2, 3].map((i) => (
                 <View key={`skeleton-activity-${i}`} style={styles.activityCard}>
                   <SkeletonShimmer width={40} height={40} borderRadius={10} />
-                  <View style={{ flex: 1, gap: 6, marginLeft: 12 }}>
+                  <View style={{ flex: 1, gap: spacing.xs, marginLeft: 12 }}>
                     <SkeletonShimmer width="60%" height={12} borderRadius={4} />
                     <SkeletonShimmer width="80%" height={10} borderRadius={4} />
                   </View>
@@ -585,7 +586,7 @@ export default function WarehouseOverviewScreen() {
             <View>
               {[1, 2, 3].map((i) => (
                 <View key={`skeleton-stock-${i}`} style={styles.stockCard}>
-                  <View style={{ gap: 6 }}>
+                  <View style={{ gap: spacing.xs }}>
                     <SkeletonShimmer width={120} height={14} borderRadius={4} />
                     <SkeletonShimmer width={80} height={10} borderRadius={4} />
                   </View>
@@ -654,7 +655,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.lg,
     paddingBottom: 32,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
@@ -668,13 +669,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   greeting: {
-    fontSize: 14,
+    fontSize: typography.body,
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '500',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   headerTitle: {
     fontSize: 28,
@@ -684,14 +685,14 @@ const styles = StyleSheet.create({
   avatar: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   avatarText: {
-    fontSize: 18,
+    fontSize: typography.title,
     fontWeight: '800',
     color: 'white',
   },
@@ -699,8 +700,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'white',
-    borderRadius: 16,
-    paddingHorizontal: 16,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
     height: 48,
     elevation: 3,
     shadowColor: '#000',
@@ -711,7 +712,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     marginLeft: 12,
-    fontSize: 14,
+    fontSize: typography.body,
     fontWeight: '500',
     color: '#333',
   },
@@ -723,7 +724,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   section: {
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.lg,
     marginBottom: 28,
   },
   sectionHeader: {
@@ -732,28 +733,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: typography.bodyStrong,
     fontWeight: '700',
     color: '#333',
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   sectionCount: {
-    fontSize: 14,
+    fontSize: typography.body,
     fontWeight: '600',
     color: '#999',
     marginLeft: 6,
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: spacing.md,
   },
   statCard: {
     flexBasis: '31%',
     backgroundColor: 'white',
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#F0F0F0',
@@ -783,18 +784,18 @@ const styles = StyleSheet.create({
     borderColor: '#FFCDD2',
   },
   statValueWhite: {
-    fontSize: 22,
+    fontSize: typography.headline,
     fontWeight: '800',
     color: 'white',
-    marginBottom: 6,
+    marginBottom: spacing.xs,
   },
   statValue: {
-    fontSize: 22,
+    fontSize: typography.headline,
     fontWeight: '800',
-    marginBottom: 6,
+    marginBottom: spacing.xs,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: typography.caption,
     fontWeight: '600',
     color: '#777',
     textAlign: 'center',
@@ -802,13 +803,13 @@ const styles = StyleSheet.create({
   quickAccessGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: spacing.md,
   },
   quickAccessBtn: {
     flexBasis: '48%',
     backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#F0F0F0',
@@ -821,13 +822,13 @@ const styles = StyleSheet.create({
   quickAccessIcon: {
     width: 56,
     height: 56,
-    borderRadius: 16,
+    borderRadius: radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   quickAccessText: {
-    fontSize: 13,
+    fontSize: typography.body,
     fontWeight: '700',
     color: '#333',
     textAlign: 'center',
@@ -839,9 +840,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'white',
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 12,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: '#F0F0F0',
     elevation: 2,
@@ -853,8 +854,8 @@ const styles = StyleSheet.create({
   activityCardHorizontal: {
     flexDirection: 'column',
     backgroundColor: 'white',
-    borderRadius: 18,
-    padding: 14,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     marginRight: 12,
     width: 240,
     borderWidth: 1,
@@ -868,7 +869,7 @@ const styles = StyleSheet.create({
   activityIcon: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -877,13 +878,13 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   activityTitle: {
-    fontSize: 13,
+    fontSize: typography.body,
     fontWeight: '700',
     color: '#333',
     marginBottom: 2,
   },
   activityDesc: {
-    fontSize: 12,
+    fontSize: typography.caption,
     color: '#777',
     marginBottom: 2,
   },
@@ -892,13 +893,13 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   activityAmount: {
-    fontSize: 11,
+    fontSize: typography.caption,
     fontWeight: '600',
     color: '#999',
     marginBottom: 2,
   },
   activityTime: {
-    fontSize: 10,
+    fontSize: typography.caption,
     color: '#AAA',
     fontWeight: '600',
   },
@@ -910,9 +911,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: 'white',
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: '#F0F0F0',
     elevation: 2,
@@ -925,31 +926,31 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stockName: {
-    fontSize: 15,
+    fontSize: typography.bodyStrong,
     fontWeight: '700',
     color: '#333',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   stockMinimum: {
-    fontSize: 11,
+    fontSize: typography.caption,
     color: '#999',
   },
   stockRight: {
     alignItems: 'flex-end',
   },
   stockQty: {
-    fontSize: 15,
+    fontSize: typography.bodyStrong,
     fontWeight: '800',
     color: '#333',
-    marginBottom: 6,
+    marginBottom: spacing.xs,
   },
   statusBadge: {
-    paddingHorizontal: 10,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: radius.sm,
   },
   statusText: {
-    fontSize: 10,
+    fontSize: typography.caption,
     fontWeight: '700',
     color: 'white',
     textTransform: 'uppercase',
@@ -960,8 +961,8 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   emptyText: {
-    marginTop: 12,
-    fontSize: 14,
+    marginTop: spacing.md,
+    fontSize: typography.body,
     color: '#AAA',
     fontWeight: '600',
   },

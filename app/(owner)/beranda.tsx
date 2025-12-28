@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
+import { spacing, radius, typography } from '../../constants/DesignSystem';
 import { authAPI, ownerAPI } from '../../services/api';
 import { User } from '../../types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -248,13 +249,13 @@ export default function OwnerDashboardScreen() {
 
   // Render skeleton loading
   const renderSkeleton = () => (
-    <View style={{ paddingVertical: 10 }}>
+    <View style={{ paddingVertical: spacing.sm }}>
       <View style={[styles.revenueCard, { height: 200, justifyContent: 'center', gap: 15 }]}>
         <SkeletonShimmer width="50%" height={14} />
         <SkeletonShimmer width="80%" height={32} />
         <SkeletonShimmer width="100%" height={8} borderRadius={4} />
         <SkeletonShimmer width="60%" height={12} />
-        <View style={{ flexDirection: 'row', gap: 20, marginTop: 10 }}>
+        <View style={{ flexDirection: 'row', gap: spacing.lg, marginTop: spacing.sm }}>
           <SkeletonShimmer width="45%" height={40} />
           <SkeletonShimmer width="45%" height={40} />
         </View>
@@ -269,11 +270,11 @@ export default function OwnerDashboardScreen() {
         ))}
       </View>
 
-      <View style={{ paddingHorizontal: 24, marginTop: 30 }}>
+      <View style={{ paddingHorizontal: spacing.lg, marginTop: 30 }}>
         <View style={{ marginBottom: 15 }}>
           <SkeletonShimmer width="40%" height={20} />
         </View>
-        <View style={{ gap: 12 }}>
+        <View style={{ gap: spacing.md }}>
           {[1, 2, 3].map((i) => (
             <SkeletonShimmer key={i} width="100%" height={120} borderRadius={20} />
           ))}
@@ -613,7 +614,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
     paddingBottom: 30,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.lg,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
     elevation: 4,
@@ -631,45 +632,45 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerSubtitle: {
-    fontSize: 11,
+    fontSize: typography.caption,
     color: 'rgba(255,255,255,0.7)',
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   greetingText: {
-    fontSize: 14,
+    fontSize: typography.body,
     color: 'rgba(255,255,255,0.8)',
     fontWeight: '600',
     marginBottom: 2,
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: typography.display,
     fontWeight: '900',
     color: 'white',
     letterSpacing: -0.5,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   dateBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.xs,
     backgroundColor: 'rgba(0,0,0,0.15)',
-    paddingHorizontal: 12,
+    paddingHorizontal: spacing.md,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: radius.md,
     alignSelf: 'flex-start',
   },
   dateText: {
-    fontSize: 11,
+    fontSize: typography.caption,
     color: 'rgba(255,255,255,0.95)',
     fontWeight: '700',
   },
   avatar: {
     width: 54,
     height: 54,
-    borderRadius: 20,
+    borderRadius: radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
@@ -677,7 +678,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   avatarText: {
-    fontSize: 20,
+    fontSize: typography.title,
     fontWeight: '900',
     color: 'white',
   },
@@ -699,41 +700,41 @@ const styles = StyleSheet.create({
   },
   urgentAlert: {
     marginHorizontal: 24,
-    marginBottom: 16,
+    marginBottom: spacing.md,
     backgroundColor: '#FEF2F2',
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.md,
     borderWidth: 1,
     borderColor: '#FEE2E2',
   },
   urgentIconBox: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: radius.md,
     backgroundColor: 'white',
     justifyContent: 'center',
     alignItems: 'center',
   },
   urgentTitle: {
-    fontSize: 13,
+    fontSize: typography.body,
     fontWeight: '800',
     color: '#991B1B',
     marginBottom: 2,
   },
   urgentText: {
-    fontSize: 11,
+    fontSize: typography.caption,
     fontWeight: '600',
     color: '#DC2626',
   },
   revenueCard: {
     marginHorizontal: 24,
-    marginBottom: 20,
+    marginBottom: spacing.lg,
     backgroundColor: 'white',
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -743,39 +744,39 @@ const styles = StyleSheet.create({
     borderColor: '#F1F5F9',
   },
   revenueLabel: {
-    fontSize: 10,
+    fontSize: typography.caption,
     fontWeight: '900',
     color: '#94A3B8',
     letterSpacing: 1.2,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   revenueValue: {
-    fontSize: 32,
+    fontSize: typography.display,
     fontWeight: '900',
     color: '#1E293B',
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   progressBar: {
     height: 8,
     backgroundColor: '#F1F5F9',
-    borderRadius: 4,
+    borderRadius: radius.sm,
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   progressFill: {
     height: '100%',
     backgroundColor: Colors.primary,
-    borderRadius: 4,
+    borderRadius: radius.sm,
   },
   progressText: {
-    fontSize: 11,
+    fontSize: typography.caption,
     color: '#64748B',
     fontWeight: '600',
   },
   revenueDivider: {
     height: 1,
     backgroundColor: '#F1F5F9',
-    marginVertical: 16,
+    marginVertical: spacing.md,
   },
   revenueRow: {
     flexDirection: 'row',
@@ -786,14 +787,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   revenueItemLabel: {
-    fontSize: 9,
+    fontSize: typography.caption,
     fontWeight: '800',
     color: '#94A3B8',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
     letterSpacing: 0.5,
   },
   revenueItemValue: {
-    fontSize: 16,
+    fontSize: typography.bodyStrong,
     fontWeight: '800',
     color: '#475569',
   },
@@ -805,14 +806,14 @@ const styles = StyleSheet.create({
   revenueDetailBox: {
     marginTop: 14,
     backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 8,
+    gap: spacing.sm,
   },
   revenueDetailTitle: {
-    fontSize: 12,
+    fontSize: typography.caption,
     fontWeight: '800',
     color: '#475569',
   },
@@ -822,26 +823,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   revenueDetailLabel: {
-    fontSize: 11,
+    fontSize: typography.caption,
     fontWeight: '700',
     color: '#94A3B8',
   },
   revenueDetailValue: {
-    fontSize: 13,
+    fontSize: typography.body,
     fontWeight: '800',
     color: '#1E293B',
   },
   statsGrid: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    gap: 12,
-    marginBottom: 20,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   statCard: {
     flex: 1,
     backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#F1F5F9',
@@ -854,19 +855,19 @@ const styles = StyleSheet.create({
   statIcon: {
     width: 42,
     height: 42,
-    borderRadius: 12,
+    borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: spacing.sm,
   },
   statValue: {
-    fontSize: 22,
+    fontSize: typography.headline,
     fontWeight: '900',
     color: '#1E293B',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: typography.caption,
     fontWeight: '700',
     color: '#94A3B8',
     textTransform: 'uppercase',
@@ -874,18 +875,18 @@ const styles = StyleSheet.create({
   },
   intelGrid: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    gap: 12,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
     marginBottom: 30,
   },
   intelCard: {
     flex: 1,
     backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.md,
     borderWidth: 1,
     borderColor: '#F1F5F9',
     elevation: 2,
@@ -897,56 +898,56 @@ const styles = StyleSheet.create({
   intelIcon: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
   },
   intelLabel: {
-    fontSize: 9,
+    fontSize: typography.caption,
     fontWeight: '800',
     color: '#94A3B8',
     marginBottom: 2,
     letterSpacing: 0.5,
   },
   intelValue: {
-    fontSize: 18,
+    fontSize: typography.title,
     fontWeight: '900',
     color: '#1E293B',
   },
   section: {
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.lg,
     marginBottom: 30,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: typography.title,
     fontWeight: '900',
     color: '#1E293B',
   },
   sectionBadge: {
     backgroundColor: '#EEF2FF',
-    paddingHorizontal: 12,
+    paddingHorizontal: spacing.md,
     paddingVertical: 4,
-    borderRadius: 999,
+    borderRadius: radius.pill,
   },
   sectionBadgeText: {
-    fontSize: 12,
+    fontSize: typography.caption,
     fontWeight: '800',
     color: Colors.primary,
   },
   liveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.xs,
     backgroundColor: '#F0FDF4',
-    paddingHorizontal: 10,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: radius.sm,
   },
   pulse: {
     width: 6,
@@ -955,7 +956,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#22C55E',
   },
   liveText: {
-    fontSize: 9,
+    fontSize: typography.caption,
     fontWeight: '900',
     color: '#16A34A',
     letterSpacing: 0.5,
@@ -963,13 +964,13 @@ const styles = StyleSheet.create({
   stockGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: spacing.sm,
   },
   stockBox: {
     width: '31.3%',
     backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#F1F5F9',
@@ -980,27 +981,27 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   stockName: {
-    fontSize: 9,
+    fontSize: typography.caption,
     fontWeight: '500',
     color: '#94A3B8',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
     textAlign: 'center',
   },
   stockQty: {
-    fontSize: 14,
+    fontSize: typography.body,
     fontWeight: '900',
     color: '#1E293B',
   },
   stockUnit: {
-    fontSize: 10,
+    fontSize: typography.caption,
     color: '#94A3B8',
     fontWeight: '600',
   },
   branchCard: {
     backgroundColor: 'white',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 12,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: '#F1F5F9',
     elevation: 2,
@@ -1017,7 +1018,7 @@ const styles = StyleSheet.create({
   branchNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: spacing.sm,
     flex: 1,
   },
   statusIndicator: {
@@ -1026,18 +1027,18 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   branchName: {
-    fontSize: 16,
+    fontSize: typography.bodyStrong,
     fontWeight: '800',
     color: '#1E293B',
     flex: 1,
   },
   statusBadge: {
-    paddingHorizontal: 12,
+    paddingHorizontal: spacing.md,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: radius.sm,
   },
   statusBadgeText: {
-    fontSize: 10,
+    fontSize: typography.caption,
     fontWeight: '900',
     letterSpacing: 0.3,
   },
@@ -1055,19 +1056,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   branchStockName: {
-    fontSize: 9,
+    fontSize: typography.caption,
     fontWeight: '500',
     color: '#94A3B8',
-    marginBottom: 6,
+    marginBottom: spacing.xs,
     textAlign: 'center',
   },
   branchStockQty: {
-    fontSize: 14,
+    fontSize: typography.body,
     fontWeight: '800',
     color: '#475569',
   },
   branchStockUnit: {
-    fontSize: 8,
+    fontSize: typography.caption,
     fontWeight: '600',
     color: '#94A3B8',
   },
@@ -1085,24 +1086,24 @@ const styles = StyleSheet.create({
   },
   quickActionsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    gap: 12,
-    marginBottom: 20,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   quickActionBtn: {
     flex: 1,
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   quickActionIcon: {
     width: 48,
     height: 48,
-    borderRadius: 14,
+    borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
   },
   quickActionLabel: {
-    fontSize: 11,
+    fontSize: typography.caption,
     fontWeight: '700',
     color: '#475569',
     textAlign: 'center',
@@ -1113,7 +1114,7 @@ const styles = StyleSheet.create({
     right: 24,
     width: 60,
     height: 60,
-    borderRadius: 30,
+    borderRadius: radius.xl,
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1127,23 +1128,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   trendBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
   },
   trendText: {
-    fontSize: 12,
+    fontSize: typography.caption,
     fontWeight: '800',
     letterSpacing: 0.3,
   },
   branchStatus: {
-    fontSize: 10,
+    fontSize: typography.caption,
     fontWeight: '600',
     color: '#64748B',
     marginTop: 2,

@@ -16,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
+import { spacing, radius, typography } from '../../constants/DesignSystem';
 import { authAPI } from '../../services/api';
 import { Outlet, User } from '../../types';
 
@@ -207,7 +208,7 @@ export default function WarehouseProfileScreen() {
     <View style={[styles.infoItem, isLast && styles.infoItemLast]}>
       <SkeletonShimmer width={36} height={36} borderRadius={12} />
       <View style={styles.infoTextContainer}>
-        <SkeletonShimmer width={80} height={12} borderRadius={6} style={{ marginBottom: 6 }} />
+        <SkeletonShimmer width={80} height={12} borderRadius={6} style={{ marginBottom: spacing.xs }} />
         <SkeletonShimmer width={120} height={16} borderRadius={6} />
       </View>
     </View>
@@ -236,13 +237,13 @@ export default function WarehouseProfileScreen() {
             <View style={styles.avatarContainer}>
               <SkeletonShimmer width={80} height={80} borderRadius={40} />
             </View>
-            <SkeletonShimmer width={150} height={20} borderRadius={10} style={{ marginBottom: 8, marginTop: 16 }} />
+            <SkeletonShimmer width={150} height={20} borderRadius={10} style={{ marginBottom: spacing.sm, marginTop: spacing.md }} />
             <SkeletonShimmer width={100} height={28} borderRadius={20} />
           </View>
 
           {/* Skeleton User Details */}
           <View style={styles.sectionContainer}>
-            <SkeletonShimmer width={140} height={12} borderRadius={6} style={{ marginBottom: 12, marginLeft: 4 }} />
+            <SkeletonShimmer width={140} height={12} borderRadius={6} style={{ marginBottom: spacing.md, marginLeft: 4 }} />
             <View style={styles.card}>
               <InfoItemSkeleton />
               <InfoItemSkeleton />
@@ -252,7 +253,7 @@ export default function WarehouseProfileScreen() {
 
           {/* Skeleton Outlet Details */}
           <View style={styles.sectionContainer}>
-            <SkeletonShimmer width={130} height={12} borderRadius={6} style={{ marginBottom: 12, marginLeft: 4 }} />
+            <SkeletonShimmer width={130} height={12} borderRadius={6} style={{ marginBottom: spacing.md, marginLeft: 4 }} />
             <View style={styles.card}>
               <InfoItemSkeleton />
               <InfoItemSkeleton isLast />
@@ -260,11 +261,11 @@ export default function WarehouseProfileScreen() {
           </View>
 
           {/* Skeleton Logout Button */}
-          <SkeletonShimmer width="100%" height={54} borderRadius={20} style={{ marginTop: 8, marginBottom: 32 }} />
+          <SkeletonShimmer width="100%" height={54} borderRadius={20} style={{ marginTop: spacing.sm, marginBottom: 32 }} />
 
           {/* Skeleton Footer */}
           <View style={styles.footer}>
-            <SkeletonShimmer width={140} height={12} borderRadius={6} style={{ marginBottom: 6 }} />
+            <SkeletonShimmer width={140} height={12} borderRadius={6} style={{ marginBottom: spacing.xs }} />
             <SkeletonShimmer width={110} height={10} borderRadius={6} />
           </View>
         </ScrollView>
@@ -368,7 +369,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     height: 200,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.lg,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
     elevation: 5,
@@ -382,14 +383,14 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: typography.headline,
     fontWeight: '800',
     color: 'white',
-    marginBottom: 6,
+    marginBottom: spacing.xs,
     letterSpacing: 0.5,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: typography.body,
     color: 'rgba(255, 255, 255, 0.85)',
     fontWeight: '500',
   },
@@ -398,16 +399,16 @@ const styles = StyleSheet.create({
     marginTop: -70,
   },
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
     paddingBottom: 40,
   },
   profileCard: {
     backgroundColor: 'white',
-    borderRadius: 28,
+    borderRadius: radius.xl,
     alignItems: 'center',
     paddingVertical: 32,
-    paddingHorizontal: 24,
-    marginBottom: 20,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
     elevation: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
@@ -418,7 +419,7 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     position: 'relative',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   avatarCircle: {
     width: 90,
@@ -447,23 +448,23 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   avatarText: {
-    fontSize: 32,
+    fontSize: typography.display,
     fontWeight: '900',
     color: 'white',
     letterSpacing: 1,
   },
   profileName: {
-    fontSize: 22,
+    fontSize: typography.headline,
     fontWeight: '900',
     color: '#1A1A1A',
-    marginBottom: 10,
+    marginBottom: spacing.sm,
     letterSpacing: 0.3,
   },
   roleBadge: {
     backgroundColor: '#F1F8E9',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 24,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
@@ -471,25 +472,25 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   roleText: {
-    fontSize: 13,
+    fontSize: typography.body,
     fontWeight: '800',
     color: Colors.primary,
     letterSpacing: 0.8,
   },
   sectionContainer: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   sectionTitle: {
-    fontSize: 11,
+    fontSize: typography.caption,
     fontWeight: '900',
     color: '#888',
-    marginBottom: 12,
+    marginBottom: spacing.md,
     marginLeft: 6,
     letterSpacing: 1.5,
   },
   card: {
     backgroundColor: 'white',
-    borderRadius: 24,
+    borderRadius: radius.lg,
     overflow: 'hidden',
     elevation: 4,
     shadowColor: '#000',
@@ -502,7 +503,7 @@ const styles = StyleSheet.create({
   infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 18,
+    padding: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: '#F8F8F8',
   },
@@ -512,7 +513,7 @@ const styles = StyleSheet.create({
   infoIconContainer: {
     width: 42,
     height: 42,
-    borderRadius: 14,
+    borderRadius: radius.md,
     backgroundColor: '#F9F9F9',
     justifyContent: 'center',
     alignItems: 'center',
@@ -524,15 +525,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   infoLabel: {
-    fontSize: 11,
+    fontSize: typography.caption,
     color: '#999',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   infoValue: {
-    fontSize: 15,
+    fontSize: typography.bodyStrong,
     color: '#2C2C2C',
     fontWeight: '800',
     letterSpacing: 0.2,
@@ -540,11 +541,11 @@ const styles = StyleSheet.create({
   logoutButton: {
     flexDirection: 'row',
     backgroundColor: '#FFF5F5',
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: spacing.md,
     marginBottom: 32,
     borderWidth: 1.5,
     borderColor: '#FFCDD2',
@@ -555,7 +556,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
   },
   logoutText: {
-    fontSize: 16,
+    fontSize: typography.bodyStrong,
     fontWeight: '900',
     color: '#E53935',
     marginLeft: 10,
@@ -563,19 +564,19 @@ const styles = StyleSheet.create({
   },
   footer: {
     alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 8,
+    marginBottom: spacing.lg,
+    marginTop: spacing.sm,
   },
   versionText: {
     color: '#999',
-    fontSize: 13,
+    fontSize: typography.body,
     fontWeight: '700',
     letterSpacing: 0.3,
   },
   footerSub: {
     color: '#CCC',
-    fontSize: 11,
-    marginTop: 6,
+    fontSize: typography.caption,
+    marginTop: spacing.xs,
     fontWeight: '600',
     letterSpacing: 0.2,
   },

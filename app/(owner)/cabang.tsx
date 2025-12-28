@@ -20,6 +20,7 @@ import {
   View,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
+import { spacing, radius, typography } from '../../constants/DesignSystem';
 import { ownerAPI } from '../../services/api';
 import { Outlet } from '../../types';
 
@@ -243,17 +244,17 @@ export default function OutletScreen() {
         <View style={styles.statsCard}>
           <View style={styles.statBox}>
             <SkeletonShimmer width={60} height={22} />
-            <SkeletonShimmer width={50} height={10} style={{ marginTop: 10 }} />
+            <SkeletonShimmer width={50} height={10} style={{ marginTop: spacing.sm }} />
           </View>
           <View style={styles.vDivider} />
           <View style={styles.statBox}>
             <SkeletonShimmer width={60} height={22} />
-            <SkeletonShimmer width={50} height={10} style={{ marginTop: 10 }} />
+            <SkeletonShimmer width={50} height={10} style={{ marginTop: spacing.sm }} />
           </View>
           <View style={styles.vDivider} />
           <View style={styles.statBox}>
             <SkeletonShimmer width={60} height={22} />
-            <SkeletonShimmer width={50} height={10} style={{ marginTop: 10 }} />
+            <SkeletonShimmer width={50} height={10} style={{ marginTop: spacing.sm }} />
           </View>
         </View>
       );
@@ -292,12 +293,12 @@ export default function OutletScreen() {
                 </View>
                 <SkeletonShimmer width={70} height={20} radius={10} />
               </View>
-              <SkeletonShimmer width="90%" height={14} style={{ marginBottom: 12 }} />
+              <SkeletonShimmer width="90%" height={14} style={{ marginBottom: spacing.md }} />
               <SkeletonShimmer width="75%" height={14} />
               <View style={styles.cardDivider} />
               <View style={styles.cardFooter}>
                 <SkeletonShimmer width={110} height={20} radius={10} />
-                <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flexDirection: 'row', gap: spacing.sm }}>
                   <SkeletonShimmer width={40} height={36} radius={12} />
                   <SkeletonShimmer width={40} height={36} radius={12} />
                 </View>
@@ -529,26 +530,26 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
     paddingBottom: 80,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.lg,
     borderBottomLeftRadius: 36,
     borderBottomRightRadius: 36,
     zIndex: 10,
     elevation: 10,
   },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { color: 'white', fontSize: 24, fontWeight: '900', letterSpacing: -0.3 },
-  headerSubtitle: { color: 'rgba(255,255,255,0.78)', fontSize: 13, fontWeight: '600', marginTop: 4 },
+  headerTitle: { color: 'white', fontSize: typography.headline, fontWeight: '900', letterSpacing: -0.3 },
+  headerSubtitle: { color: 'rgba(255,255,255,0.78)', fontSize: typography.body, fontWeight: '600', marginTop: spacing.xs },
   headerAvatar: {
     width: 46,
     height: 46,
-    borderRadius: 14,
+    borderRadius: radius.md,
     backgroundColor: 'rgba(255,255,255,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.25)',
   },
-  avatarText: { color: 'white', fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
+  avatarText: { color: 'white', fontSize: typography.bodyStrong, fontWeight: '900', letterSpacing: 0.5 },
 
   statsCard: {
     position: 'absolute',
@@ -557,9 +558,9 @@ const styles = StyleSheet.create({
     right: 24,
     flexDirection: 'row',
     backgroundColor: 'white',
-    borderRadius: 24,
+    borderRadius: radius.lg,
     paddingVertical: 18,
-    paddingHorizontal: 10,
+    paddingHorizontal: spacing.sm,
     elevation: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -569,53 +570,53 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   statBox: { flex: 1, alignItems: 'center' },
-  statVal: { fontSize: 22, fontWeight: '900', color: '#0F172A' },
-  statLab: { fontSize: 10, fontWeight: '800', color: '#94A3B8', letterSpacing: 0.8, marginTop: 6 },
+  statVal: { fontSize: typography.headline, fontWeight: '900', color: '#0F172A' },
+  statLab: { fontSize: typography.caption, fontWeight: '800', color: '#94A3B8', letterSpacing: 0.8, marginTop: spacing.xs },
   vDivider: { width: 1, height: '70%', backgroundColor: '#F1F5F9', alignSelf: 'center' },
 
   mainContent: { flex: 1 },
   // Tetap clear dari header + stats card, sedikit lebih rapat
-  scrollPadding: { paddingTop: 65, paddingHorizontal: 24 },
+  scrollPadding: { paddingTop: 65, paddingHorizontal: spacing.lg },
 
-  actionRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  actionRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.lg },
   searchBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'white',
-    borderRadius: 16,
-    paddingHorizontal: 14,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
     height: 54,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  searchInput: { flex: 1, marginLeft: 10, fontSize: 15, color: '#0F172A', fontWeight: '600' },
+  searchInput: { flex: 1, marginLeft: 10, fontSize: typography.bodyStrong, color: '#0F172A', fontWeight: '600' },
 
-  listSection: { marginTop: 6 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  sectionHeading: { fontSize: 18, fontWeight: '900', color: '#0F172A', letterSpacing: -0.2 },
-  sectionLabelWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  sectionBadge: { backgroundColor: '#EEF2FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
-  sectionBadgeText: { fontSize: 12, fontWeight: '800', color: '#4F46E5' },
+  listSection: { marginTop: spacing.xs },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
+  sectionHeading: { fontSize: typography.title, fontWeight: '900', color: '#0F172A', letterSpacing: -0.2 },
+  sectionLabelWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  sectionBadge: { backgroundColor: '#EEF2FF', paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: radius.md },
+  sectionBadgeText: { fontSize: typography.caption, fontWeight: '800', color: '#4F46E5' },
   liveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.xs,
     backgroundColor: '#F0FDF4',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
   },
   pulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E' },
-  liveText: { fontSize: 10, fontWeight: '900', color: '#15803D', letterSpacing: 0.6 },
+  liveText: { fontSize: typography.caption, fontWeight: '900', color: '#15803D', letterSpacing: 0.6 },
 
-  listSkeletonWrapper: { gap: 12 },
+  listSkeletonWrapper: { gap: spacing.sm },
 
   outletCard: {
     backgroundColor: 'white',
-    padding: 18,
-    borderRadius: 22,
-    marginBottom: 12,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    marginBottom: spacing.sm,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     elevation: 2,
@@ -624,37 +625,37 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 6,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 },
-  statusLamp: { width: 12, height: 12, borderRadius: 6 },
-  outletName: { fontSize: 17, fontWeight: '900', color: '#0F172A' },
-  outletMeta: { fontSize: 12, fontWeight: '700', color: '#94A3B8', marginTop: 2 },
-  statusPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  pillText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+  nameRow: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: spacing.sm },
+  statusLamp: { width: 12, height: 12, borderRadius: radius.sm },
+  outletName: { fontSize: typography.bodyStrong, fontWeight: '900', color: '#0F172A' },
+  outletMeta: { fontSize: typography.caption, fontWeight: '700', color: '#94A3B8', marginTop: spacing.xs },
+  statusPill: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: radius.lg },
+  pillText: { fontSize: typography.caption, fontWeight: '900', letterSpacing: 0.5 },
 
-  cardBody: { marginBottom: 12 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  alamatText: { fontSize: 13, color: '#475569', fontWeight: '600', flex: 1, lineHeight: 18 },
+  cardBody: { marginBottom: spacing.sm },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  alamatText: { fontSize: typography.body, color: '#475569', fontWeight: '600', flex: 1, lineHeight: 18 },
 
-  cardDivider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 },
+  cardDivider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: spacing.sm },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   staffBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.xs,
     backgroundColor: '#F8FAFC',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  staffCount: { fontSize: 12, fontWeight: '800', color: '#0F172A' },
-  footerBtns: { flexDirection: 'row', gap: 10 },
+  staffCount: { fontSize: typography.caption, fontWeight: '800', color: '#0F172A' },
+  footerBtns: { flexDirection: 'row', gap: spacing.sm },
   footerIconBtn: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
@@ -662,25 +663,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
 
-  emptyState: { alignItems: 'center', paddingVertical: 40, gap: 8 },
+  emptyState: { alignItems: 'center', paddingVertical: spacing.xl * 2, gap: spacing.xs },
   emptyIconWrap: {
     width: 54,
     height: 54,
-    borderRadius: 18,
+    borderRadius: radius.lg,
     backgroundColor: '#EEF2FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
-  emptySubtitle: { fontSize: 13, color: '#64748B', textAlign: 'center' },
+  emptyTitle: { fontSize: typography.bodyStrong, fontWeight: '800', color: '#0F172A' },
+  emptySubtitle: { fontSize: typography.body, color: '#64748B', textAlign: 'center' },
 
   fab: {
     position: 'absolute',
     bottom: 92,
-    right: 22,
+    right: spacing.md,
     width: 58,
     height: 58,
-    borderRadius: 20,
+    borderRadius: radius.lg,
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
@@ -691,19 +692,19 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
   },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.85)', justifyContent: 'center', padding: 22 },
-  modalContent: { backgroundColor: 'white', borderRadius: 26, padding: 22, maxHeight: '92%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
-  modalTitle: { fontSize: 20, fontWeight: '900', color: '#0F172A' },
-  modalSubtitle: { fontSize: 12, color: '#64748B', marginTop: 4 },
-  inputGroup: { marginBottom: 16 },
-  inputLabel: { fontSize: 13, fontWeight: '800', color: '#0F172A', marginBottom: 8 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.85)', justifyContent: 'center', padding: spacing.md },
+  modalContent: { backgroundColor: 'white', borderRadius: radius.xl, padding: spacing.lg, maxHeight: '92%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
+  modalTitle: { fontSize: typography.title, fontWeight: '900', color: '#0F172A' },
+  modalSubtitle: { fontSize: typography.caption, color: '#64748B', marginTop: spacing.xs },
+  inputGroup: { marginBottom: spacing.md },
+  inputLabel: { fontSize: typography.body, fontWeight: '800', color: '#0F172A', marginBottom: spacing.xs },
   input: {
     backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    fontSize: 15,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    fontSize: typography.bodyStrong,
     color: '#0F172A',
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -712,26 +713,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 22,
-    padding: 14,
+    marginBottom: spacing.lg,
+    padding: spacing.sm,
     backgroundColor: '#F0FDF4',
-    borderRadius: 16,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: '#DCFCE7',
   },
-  switchSub: { fontSize: 11, color: '#15803D', fontWeight: '700' },
+  switchSub: { fontSize: typography.caption, color: '#15803D', fontWeight: '700' },
   saveBtn: {
     backgroundColor: Colors.primary,
-    paddingVertical: 16,
-    borderRadius: 16,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
     alignItems: 'center',
   },
-  saveBtnText: { color: 'white', fontWeight: '900', fontSize: 15 },
-  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  saveBtnText: { color: 'white', fontWeight: '900', fontSize: typography.bodyStrong },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   loadingDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: radius.sm,
     backgroundColor: 'white',
     opacity: 0.8,
   },

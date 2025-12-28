@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import { spacing, radius, typography } from '../../constants/DesignSystem';
 import { authAPI, gudangAPI } from '../../services/api';
 import { PermintaanStok, UpdatePermintaanStokPayload, User } from '../../types';
 import { useFocusEffect } from 'expo-router';
@@ -473,7 +474,7 @@ export default function PermintaanScreen() {
                 </View>
                 <View style={styles.itemRow}>
                   <SkeletonShimmer width={48} height={48} borderRadius={12} />
-                  <View style={{ flex: 1, gap: 8 }}>
+                  <View style={{ flex: 1, gap: spacing.sm }}>
                     <SkeletonShimmer width="70%" height={16} borderRadius={8} />
                     <SkeletonShimmer width="40%" height={14} borderRadius={6} />
                   </View>
@@ -671,7 +672,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.lg,
     paddingBottom: 32,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
@@ -687,10 +688,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   greeting: {
-    fontSize: 14,
+    fontSize: typography.body,
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '500',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   headerTitle: {
     fontSize: 28,
@@ -707,22 +708,22 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.3)',
   },
   avatarText: {
-    fontSize: 20,
+    fontSize: typography.title,
     fontWeight: '800',
     color: 'white',
   },
   content: {
     flex: 1,
-    padding: 20,
+    padding: spacing.lg,
   },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'white',
-    borderRadius: 16,
-    paddingHorizontal: 16,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
     height: 48,
-    marginBottom: 20,
+    marginBottom: spacing.lg,
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -732,21 +733,21 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     marginLeft: 12,
-    fontSize: 14,
+    fontSize: typography.body,
     fontWeight: '500',
     color: '#333',
   },
   summaryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 20,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   summaryCard: {
     flexBasis: '48%',
     backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     alignItems: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
@@ -762,19 +763,19 @@ const styles = StyleSheet.create({
   summaryIcon: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   summaryValue: {
-    fontSize: 24,
+    fontSize: typography.headline,
     fontWeight: '900',
     color: '#1E293B',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   summaryLabel: {
-    fontSize: 12,
+    fontSize: typography.caption,
     color: '#64748B',
     fontWeight: '700',
   },
@@ -789,21 +790,21 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     backgroundColor: Colors.primary,
-    borderRadius: 20,
+    borderRadius: radius.lg,
     flexDirection: 'row',
     alignItems: 'center',
     paddingLeft: 24,
-    gap: 12,
+    gap: spacing.md,
   },
   swipeBackgroundText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: typography.bodyStrong,
     fontWeight: '800',
   },
   card: {
     backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     marginBottom: 15,
     borderWidth: 1,
     borderColor: '#F0F0F0',
@@ -817,32 +818,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   outletRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.xs,
   },
   outletName: {
-    fontSize: 14,
+    fontSize: typography.body,
     fontWeight: '800',
     color: '#334155',
   },
   timeText: {
-    fontSize: 11,
+    fontSize: typography.caption,
     color: '#94A3B8',
     fontWeight: '600',
   },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.md,
   },
   itemIcon: {
     width: 48,
     height: 48,
-    borderRadius: 12,
+    borderRadius: radius.md,
     backgroundColor: '#F0FDF4',
     justifyContent: 'center',
     alignItems: 'center',
@@ -851,43 +852,43 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   itemName: {
-    fontSize: 16,
+    fontSize: typography.bodyStrong,
     fontWeight: '700',
     color: '#1E293B',
     marginBottom: 2,
   },
   itemQty: {
-    fontSize: 13,
+    fontSize: typography.body,
     color: '#64748B',
     fontWeight: '600',
   },
   statusBadge: {
-    paddingHorizontal: 10,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: radius.sm,
   },
   statusText: {
-    fontSize: 10,
+    fontSize: typography.caption,
     fontWeight: '900',
     letterSpacing: 0.5,
   },
   swipeHint: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 12,
+    gap: spacing.xs,
+    marginTop: spacing.md,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },
   swipeHintText: {
-    fontSize: 12,
+    fontSize: typography.caption,
     color: Colors.primary,
     fontWeight: '700',
   },
   skeletonBar: {
     backgroundColor: '#E2E8F0',
-    borderRadius: 8,
+    borderRadius: radius.sm,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -904,14 +905,14 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyText: {
-    marginTop: 16,
-    fontSize: 16,
+    marginTop: spacing.md,
+    fontSize: typography.bodyStrong,
     color: '#94A3B8',
     fontWeight: '700',
   },
   emptySubText: {
-    marginTop: 8,
-    fontSize: 13,
+    marginTop: spacing.sm,
+    fontSize: typography.body,
     color: '#CBD5E1',
     fontWeight: '500',
   },
@@ -924,7 +925,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
-    padding: 24,
+    padding: spacing.lg,
     maxHeight: '85%',
   },
   modalHandle: {
@@ -933,23 +934,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
     borderRadius: 2,
     alignSelf: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: typography.headline,
     fontWeight: '900',
     color: '#1E293B',
   },
   divider: {
     height: 1,
     backgroundColor: '#F1F5F9',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   modalBody: {
     maxHeight: '100%',
@@ -957,13 +958,13 @@ const styles = StyleSheet.create({
   detailRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
     gap: 14,
   },
   detailIconBox: {
     width: 42,
     height: 42,
-    borderRadius: 12,
+    borderRadius: radius.md,
     backgroundColor: '#EEF2FF',
     justifyContent: 'center',
     alignItems: 'center',
@@ -972,32 +973,32 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   detailLabel: {
-    fontSize: 11,
+    fontSize: typography.caption,
     fontWeight: '700',
     color: '#94A3B8',
     textTransform: 'uppercase',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
     letterSpacing: 0.5,
   },
   detailValue: {
-    fontSize: 15,
+    fontSize: typography.bodyStrong,
     fontWeight: '800',
     color: '#1E293B',
     lineHeight: 22,
   },
   modalActions: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 10,
+    gap: spacing.md,
+    marginTop: spacing.sm,
   },
   actionBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-    borderRadius: 16,
-    gap: 8,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -1011,7 +1012,7 @@ const styles = StyleSheet.create({
   },
   rejectBtnText: {
     color: '#EF4444',
-    fontSize: 15,
+    fontSize: typography.bodyStrong,
     fontWeight: '800',
   },
   approveBtn: {
@@ -1019,7 +1020,7 @@ const styles = StyleSheet.create({
   },
   approveBtnText: {
     color: 'white',
-    fontSize: 15,
+    fontSize: typography.bodyStrong,
     fontWeight: '800',
   },
   sendBtn: {
@@ -1027,7 +1028,7 @@ const styles = StyleSheet.create({
   },
   sendBtnText: {
     color: 'white',
-    fontSize: 15,
+    fontSize: typography.bodyStrong,
     fontWeight: '800',
   },
 });

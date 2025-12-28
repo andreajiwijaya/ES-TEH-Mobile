@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import { spacing, radius, typography } from '../../constants/DesignSystem';
 import { authAPI, gudangAPI } from '../../services/api';
 import { BarangKeluar, User, Outlet } from '../../types';
 import { useFocusEffect } from 'expo-router';
@@ -284,16 +285,16 @@ export default function BarangKeluarScreen() {
     <View style={{ paddingBottom: 20 }}>
       {[1, 2, 3, 4, 5].map((i) => (
         <View key={i} style={styles.card}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md }}>
             <SkeletonShimmer width="40%" height={16} />
             <SkeletonShimmer width={60} height={24} borderRadius={12} />
           </View>
-          <View style={{ gap: 8, marginBottom: 12 }}>
+          <View style={{ gap: spacing.sm, marginBottom: spacing.md }}>
             <SkeletonShimmer width="70%" height={14} />
             <SkeletonShimmer width="50%" height={14} />
             <SkeletonShimmer width="60%" height={14} />
           </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.md }}>
             <SkeletonShimmer width={100} height={32} borderRadius={10} />
             <SkeletonShimmer width={100} height={32} borderRadius={10} />
           </View>
@@ -440,7 +441,7 @@ export default function BarangKeluarScreen() {
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8 }}
+              contentContainerStyle={{ gap: spacing.sm }}
             >
               <TouchableOpacity
                 style={[styles.outletChip, selectedOutlet === null && styles.outletChipActive]}
@@ -674,7 +675,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary, 
     paddingTop: Platform.OS === 'ios' ? 60 : 50, 
     paddingBottom: 25, 
-    paddingHorizontal: 24, 
+    paddingHorizontal: spacing.lg, 
     borderBottomLeftRadius: 32, 
     borderBottomRightRadius: 32,
     elevation: 4,
@@ -695,7 +696,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   headerSubtitle: { 
-    fontSize: 13, 
+    fontSize: typography.body, 
     color: 'rgba(255,255,255,0.85)',
     marginTop: 2,
     fontWeight: '600',
@@ -710,23 +711,23 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   avatarText: {
-    fontSize: 20,
+    fontSize: typography.title,
     fontWeight: '900',
     color: 'white',
   },
   contentArea: { 
     flex: 1, 
-    paddingHorizontal: 20, 
+    paddingHorizontal: spacing.lg, 
     marginTop: -15,
   },
   searchContainer: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     backgroundColor: 'white', 
-    borderRadius: 16, 
-    paddingHorizontal: 16, 
+    borderRadius: radius.lg, 
+    paddingHorizontal: spacing.md, 
     height: 48, 
-    marginBottom: 16,
+    marginBottom: spacing.md,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -740,20 +741,20 @@ const styles = StyleSheet.create({
     marginLeft: 10, 
     fontWeight: '600', 
     color: '#1E293B',
-    fontSize: 14,
+    fontSize: typography.body,
   },
   summaryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 16,
+    gap: spacing.md,
+    marginBottom: spacing.md,
   },
   summaryCard: {
     flex: 1,
     minWidth: '47%',
     backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -765,35 +766,35 @@ const styles = StyleSheet.create({
   summaryIcon: {
     width: 42,
     height: 42,
-    borderRadius: 12,
+    borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: spacing.sm,
   },
   summaryLabel: {
-    fontSize: 11,
+    fontSize: typography.caption,
     fontWeight: '700',
     color: '#94A3B8',
     textTransform: 'uppercase',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
     letterSpacing: 0.5,
   },
   summaryValue: {
-    fontSize: 24,
+    fontSize: typography.headline,
     fontWeight: '900',
     color: '#1E293B',
   },
   summaryText: {
-    fontSize: 13,
+    fontSize: typography.body,
     fontWeight: '800',
     color: '#1E293B',
     numberOfLines: 1,
   },
   filterOutletContainer: {
     backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 16,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -803,9 +804,9 @@ const styles = StyleSheet.create({
     borderColor: '#F1F5F9',
   },
   outletChip: { 
-    paddingHorizontal: 16, 
-    paddingVertical: 10, 
-    borderRadius: 12, 
+    paddingHorizontal: spacing.md, 
+    paddingVertical: spacing.sm, 
+    borderRadius: radius.md, 
     backgroundColor: '#F8FAFC', 
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
@@ -817,7 +818,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
   },
   outletChipTxt: { 
-    fontSize: 13, 
+    fontSize: typography.body, 
     fontWeight: '700', 
     color: '#475569',
   },
@@ -829,34 +830,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   sectionHeaderLeft: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    gap: 8,
+    gap: spacing.sm,
   },
   sectionTitle: { 
-    fontSize: 17, 
+    fontSize: typography.title, 
     fontWeight: '900', 
     color: '#0F172A',
   },
   sectionBadge: { 
     backgroundColor: '#EEF2FF', 
-    paddingHorizontal: 12, 
+    paddingHorizontal: spacing.md, 
     paddingVertical: 4, 
-    borderRadius: 999,
+    borderRadius: radius.pill,
   },
   sectionBadgeText: { 
     color: Colors.primary, 
-    fontSize: 12, 
+    fontSize: typography.caption, 
     fontWeight: '800',
   },
   card: { 
     backgroundColor: 'white', 
-    borderRadius: 20, 
-    padding: 18, 
-    marginBottom: 12, 
+    borderRadius: radius.lg, 
+    padding: spacing.md, 
+    marginBottom: spacing.md, 
     elevation: 2, 
     borderWidth: 1, 
     borderColor: '#F1F5F9',
@@ -871,41 +872,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardId: { 
-    fontSize: 16, 
+    fontSize: typography.bodyStrong, 
     fontWeight: '900', 
     color: '#1E293B',
   },
   cardDate: { 
-    fontSize: 11, 
+    fontSize: typography.caption, 
     color: '#94A3B8', 
     marginTop: 2,
     fontWeight: '600',
   },
   badge: { 
-    paddingHorizontal: 12, 
+    paddingHorizontal: spacing.md, 
     paddingVertical: 6, 
-    borderRadius: 8,
+    borderRadius: radius.sm,
   },
   badgeText: { 
-    fontSize: 10, 
+    fontSize: typography.caption, 
     fontWeight: '900',
     letterSpacing: 0.5,
   },
   divider: { 
     height: 1, 
     backgroundColor: '#F1F5F9', 
-    marginVertical: 12,
+    marginVertical: spacing.md,
   },
   cardBody: { 
-    gap: 8,
+    gap: spacing.sm,
   },
   infoRow: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    gap: 10,
+    gap: spacing.sm,
   },
   infoVal: { 
-    fontSize: 14, 
+    fontSize: typography.body, 
     color: '#334155', 
     fontWeight: '700',
     flex: 1,
@@ -913,22 +914,22 @@ const styles = StyleSheet.create({
   cardFooter: { 
     flexDirection: 'row', 
     justifyContent: 'flex-end', 
-    gap: 10, 
-    marginTop: 12,
+    gap: spacing.sm, 
+    marginTop: spacing.md,
   },
   actionBtn: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    gap: 6, 
-    paddingVertical: 8, 
-    paddingHorizontal: 14, 
-    borderRadius: 10, 
+    gap: spacing.xs, 
+    paddingVertical: spacing.sm, 
+    paddingHorizontal: spacing.md, 
+    borderRadius: radius.md, 
     backgroundColor: '#F0F9FF',
     borderWidth: 1,
     borderColor: '#E0F2FE',
   },
   actionBtnTxt: { 
-    fontSize: 12, 
+    fontSize: typography.caption, 
     fontWeight: '800', 
     color: Colors.primary,
   },
@@ -940,21 +941,21 @@ const styles = StyleSheet.create({
   emptyIconBg: { 
     width: 100, 
     height: 100, 
-    borderRadius: 50, 
+    borderRadius: radius.pill, 
     backgroundColor: '#F1F5F9', 
     justifyContent: 'center', 
     alignItems: 'center', 
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   emptyTitle: { 
-    fontSize: 18, 
+    fontSize: typography.title, 
     fontWeight: '900', 
     color: '#1E293B', 
-    marginBottom: 8, 
+    marginBottom: spacing.sm, 
     textAlign: 'center',
   },
   emptySubtitle: { 
-    fontSize: 13, 
+    fontSize: typography.body, 
     color: '#94A3B8', 
     textAlign: 'center', 
     lineHeight: 20,
@@ -980,7 +981,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.lg,
     paddingBottom: 24,
     maxHeight: '85%',
   },
@@ -990,24 +991,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
     borderRadius: 2,
     alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 20,
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
   },
   detailSheetHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   detailSheetTitle: {
-    fontSize: 22,
+    fontSize: typography.headline,
     fontWeight: '900',
     color: '#1E293B',
   },
   detailSheetDivider: {
     height: 1,
     backgroundColor: '#F1F5F9',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   detailSheetContent: {
     maxHeight: '100%',
@@ -1015,13 +1016,13 @@ const styles = StyleSheet.create({
   detailRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
     gap: 14,
   },
   detailIconBox: {
     width: 42,
     height: 42,
-    borderRadius: 12,
+    borderRadius: radius.md,
     backgroundColor: '#EEF2FF',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1030,15 +1031,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   detailLabel: {
-    fontSize: 11,
+    fontSize: typography.caption,
     fontWeight: '700',
     color: '#94A3B8',
     textTransform: 'uppercase',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
     letterSpacing: 0.5,
   },
   detailValue: {
-    fontSize: 15,
+    fontSize: typography.bodyStrong,
     fontWeight: '800',
     color: '#1E293B',
     lineHeight: 22,
@@ -1047,24 +1048,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
-    padding: 24,
+    padding: spacing.lg,
     maxHeight: '70%',
   },
   photoModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   photoModalTitle: {
-    fontSize: 20,
+    fontSize: typography.title,
     fontWeight: '900',
     color: '#1E293B',
   },
   photoViewImg: {
     width: '100%',
     height: 400,
-    borderRadius: 16,
+    borderRadius: radius.lg,
   },
   emptyPhotoContainer: {
     alignItems: 'center',
@@ -1072,9 +1073,9 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyPhotoText: {
-    fontSize: 14,
+    fontSize: typography.body,
     color: '#94A3B8',
-    marginTop: 12,
+    marginTop: spacing.md,
     fontWeight: '600',
   },
 });

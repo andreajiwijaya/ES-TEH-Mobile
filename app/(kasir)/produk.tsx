@@ -21,6 +21,7 @@ import {
   View
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
+import { spacing, radius, typography } from '../../constants/DesignSystem';
 import { authAPI, karyawanAPI } from '../../services/api';
 import { CreateProductPayload, FileAsset, Kategori, Product, StokOutletItem, UpdateProductPayload, User } from '../../types';
 
@@ -349,7 +350,7 @@ export default function ProdukScreen() {
         <View style={styles.header}>
           <View style={styles.headerContent}>
             <View>
-              <SkeletonShimmer width={200} height={28} borderRadius={8} style={{ marginBottom: 8 }} />
+              <SkeletonShimmer width={200} height={28} borderRadius={8} style={{ marginBottom: spacing.sm }} />
               <SkeletonShimmer width={240} height={14} borderRadius={6} />
             </View>
             <SkeletonShimmer width={48} height={48} borderRadius={24} />
@@ -359,10 +360,10 @@ export default function ProdukScreen() {
         <View style={styles.shimmerGrid}>
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <View key={i} style={styles.shimmerCard}>
-              <SkeletonShimmer width="100%" height={140} borderRadius={20} style={{ marginBottom: 12 }} />
-              <SkeletonShimmer width="80%" height={14} borderRadius={6} style={{ marginBottom: 8 }} />
-              <SkeletonShimmer width="60%" height={16} borderRadius={6} style={{ marginBottom: 12 }} />
-              <View style={{ flexDirection: 'row', gap: 8 }}>
+              <SkeletonShimmer width="100%" height={140} borderRadius={20} style={{ marginBottom: spacing.md }} />
+              <SkeletonShimmer width="80%" height={14} borderRadius={6} style={{ marginBottom: spacing.sm }} />
+              <SkeletonShimmer width="60%" height={16} borderRadius={6} style={{ marginBottom: spacing.md }} />
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
                 <SkeletonShimmer width="48%" height={36} borderRadius={10} />
                 <SkeletonShimmer width="48%" height={36} borderRadius={10} />
               </View>
@@ -602,7 +603,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.lg,
     paddingBottom: 28,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
@@ -618,27 +619,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 26,
+    fontSize: typography.headline,
     fontWeight: '800',
     color: 'white',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   headerSubtitle: {
-    fontSize: 13,
+    fontSize: typography.body,
     color: 'rgba(255,255,255,0.85)',
     fontWeight: '500',
   },
   avatarCircle: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: radius.lg,
     backgroundColor: 'white',
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 4,
   },
   avatarText: {
-    fontSize: 18,
+    fontSize: typography.title,
     fontWeight: '900',
     color: Colors.primary,
   },
@@ -652,8 +653,8 @@ const styles = StyleSheet.create({
     width: '48%',
     margin: '1%',
     backgroundColor: 'white',
-    borderRadius: 24,
-    padding: 12,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     elevation: 3,
   },
   listContent: {
@@ -664,25 +665,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 100,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.lg,
   },
   emptyText: {
-    marginTop: 16,
+    marginTop: spacing.md,
     color: '#999',
-    fontSize: 16,
+    fontSize: typography.bodyStrong,
     fontWeight: '700',
   },
   emptySubtext: {
-    marginTop: 8,
+    marginTop: spacing.sm,
     color: '#BBB',
-    fontSize: 13,
+    fontSize: typography.body,
     fontWeight: '500',
   },
   card: {
     flex: 0.5,
     backgroundColor: 'white',
-    margin: 8,
-    borderRadius: 24,
+    margin: spacing.sm,
+    borderRadius: radius.lg,
     overflow: 'hidden',
     elevation: 4,
     borderWidth: 1,
@@ -705,43 +706,43 @@ const styles = StyleSheet.create({
     top: 10,
     left: 10,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 10,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 5,
-    borderRadius: 10,
+    borderRadius: radius.md,
   },
   categoryBadgeText: {
     color: 'white',
-    fontSize: 10,
+    fontSize: typography.caption,
     fontWeight: '800',
   },
   cardInfo: {
-    padding: 14,
+    padding: spacing.md,
   },
   cardName: {
     fontWeight: '800',
-    fontSize: 15,
+    fontSize: typography.bodyStrong,
     color: '#1A1A1A',
-    marginBottom: 6,
+    marginBottom: spacing.xs,
   },
   cardPrice: {
     color: Colors.primary,
     fontWeight: '900',
-    fontSize: 18,
-    marginBottom: 12,
+    fontSize: typography.title,
+    marginBottom: spacing.md,
   },
   cardDivider: {
     height: 1,
     backgroundColor: '#F5F5F5',
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   cardActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing.sm,
   },
   editBtn: {
     backgroundColor: Colors.primary,
-    padding: 10,
-    borderRadius: 12,
+    padding: spacing.sm,
+    borderRadius: radius.md,
     flex: 1,
     alignItems: 'center',
     flexDirection: 'row',
@@ -751,8 +752,8 @@ const styles = StyleSheet.create({
   },
   deleteBtn: {
     backgroundColor: '#EF4444',
-    padding: 10,
-    borderRadius: 12,
+    padding: spacing.sm,
+    borderRadius: radius.md,
     flex: 1,
     alignItems: 'center',
     flexDirection: 'row',
@@ -763,7 +764,7 @@ const styles = StyleSheet.create({
   btnText: {
     color: 'white',
     fontWeight: '800',
-    fontSize: 12,
+    fontSize: typography.caption,
   },
   fab: {
     position: 'absolute',
@@ -771,7 +772,7 @@ const styles = StyleSheet.create({
     right: 30,
     width: 60,
     height: 60,
-    borderRadius: 30,
+    borderRadius: radius.xl,
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
@@ -790,7 +791,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
-    padding: 28,
+    padding: spacing.xl,
     maxHeight: '95%',
     elevation: 20,
   },
@@ -798,23 +799,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: spacing.lg,
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: typography.headline,
     fontWeight: '800',
     color: '#1A1A1A',
   },
   modalBody: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   uploadArea: {
     height: 180,
     backgroundColor: '#F5F7FA',
-    borderRadius: 20,
+    borderRadius: radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: spacing.lg,
     borderStyle: 'dashed',
     borderWidth: 2,
     borderColor: '#DDD',
@@ -829,31 +830,31 @@ const styles = StyleSheet.create({
   },
   uploadText: {
     color: Colors.primary,
-    fontSize: 15,
+    fontSize: typography.bodyStrong,
     fontWeight: '700',
-    marginTop: 12,
+    marginTop: spacing.md,
   },
   uploadSubtext: {
     color: '#999',
-    fontSize: 12,
-    marginTop: 4,
+    fontSize: typography.caption,
+    marginTop: spacing.xs,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   label: {
-    fontSize: 13,
+    fontSize: typography.body,
     fontWeight: '800',
     color: '#666',
-    marginBottom: 10,
+    marginBottom: spacing.sm,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   input: {
     backgroundColor: '#F5F7FA',
-    borderRadius: 16,
-    padding: 16,
-    fontSize: 15,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    fontSize: typography.bodyStrong,
     fontWeight: '600',
     borderWidth: 1,
     borderColor: '#E8E8E8',
@@ -863,10 +864,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     backgroundColor: 'white',
-    borderRadius: 12,
+    borderRadius: radius.md,
     marginRight: 10,
     borderWidth: 1.5,
     borderColor: '#E8E8E8',
@@ -876,7 +877,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
   },
   chipText: {
-    fontSize: 13,
+    fontSize: typography.body,
     color: '#666',
     fontWeight: '700',
   },
@@ -888,57 +889,57 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   addBahanBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#E8F5E9',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
     gap: 5,
   },
   addBahanText: {
     color: Colors.primary,
     fontWeight: '800',
-    fontSize: 12,
+    fontSize: typography.caption,
   },
   komposisiContainer: {
     backgroundColor: '#F9FAF9',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 24,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
     borderWidth: 1,
     borderColor: '#E8E8E8',
   },
   komposisiRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: spacing.md,
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
-    gap: 10,
+    gap: spacing.sm,
   },
   komposisiLeft: {
     flex: 1,
   },
   komposisiLabel: {
-    fontSize: 11,
+    fontSize: typography.caption,
     fontWeight: '700',
     color: '#999',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
     textTransform: 'uppercase',
   },
   bahanChipContainer: {
     flexDirection: 'row',
   },
   bahanChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     backgroundColor: 'white',
-    borderRadius: 10,
+    borderRadius: radius.md,
     marginRight: 8,
     borderWidth: 1,
     borderColor: '#E8E8E8',
@@ -948,7 +949,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
   },
   bahanChipText: {
-    fontSize: 12,
+    fontSize: typography.caption,
     color: '#666',
     fontWeight: '600',
   },
@@ -961,8 +962,8 @@ const styles = StyleSheet.create({
   },
   qtyInput: {
     backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: radius.md,
+    padding: spacing.md,
     borderWidth: 1,
     borderColor: '#E8E8E8',
     textAlign: 'center',
@@ -970,7 +971,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   removeBtn: {
-    padding: 10,
+    padding: spacing.sm,
   },
   modalActions: {
     borderTopWidth: 1,
@@ -979,18 +980,18 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     backgroundColor: Colors.primary,
-    padding: 18,
-    borderRadius: 16,
+    padding: spacing.md,
+    borderRadius: radius.lg,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
+    gap: spacing.sm,
     elevation: 3,
   },
   saveBtnText: {
     color: 'white',
     fontWeight: '800',
-    fontSize: 16,
+    fontSize: typography.bodyStrong,
   },
   btnDisabled: {
     opacity: 0.6,

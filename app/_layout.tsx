@@ -1,10 +1,19 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React from "react";
+import React, { useEffect } from "react";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Text, TextInput } from 'react-native';
 
 export default function RootLayout() {
+  // Matikan scaling font dari OS agar ukuran teks konsisten
+  useEffect(() => {
+    (Text as any).defaultProps = (Text as any).defaultProps || {};
+    (Text as any).defaultProps.allowFontScaling = false;
+    (TextInput as any).defaultProps = (TextInput as any).defaultProps || {};
+    (TextInput as any).defaultProps.allowFontScaling = false;
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>

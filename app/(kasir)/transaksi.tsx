@@ -18,6 +18,7 @@ import {
   View
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
+import { spacing, radius, typography } from '../../constants/DesignSystem';
 import { authAPI, karyawanAPI } from '../../services/api';
 import { CreateTransaksiPayload, FileAsset, Product, TransaksiItemPayload, User } from '../../types';
 
@@ -302,7 +303,7 @@ export default function TransaksiScreen() {
         <View style={styles.header}>
           <View style={styles.headerContent}>
             <View>
-              <SkeletonShimmer width={200} height={28} borderRadius={8} style={{ marginBottom: 8 }} />
+              <SkeletonShimmer width={200} height={28} borderRadius={8} style={{ marginBottom: spacing.sm }} />
               <SkeletonShimmer width={240} height={14} borderRadius={6} />
             </View>
             <SkeletonShimmer width={48} height={48} borderRadius={24} />
@@ -319,8 +320,8 @@ export default function TransaksiScreen() {
         <View style={styles.shimmerGrid}>
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <View key={i} style={styles.shimmerCard}>
-              <SkeletonShimmer width="100%" height={140} borderRadius={20} style={{ marginBottom: 12 }} />
-              <SkeletonShimmer width="80%" height={14} borderRadius={6} style={{ marginBottom: 8 }} />
+              <SkeletonShimmer width="100%" height={140} borderRadius={20} style={{ marginBottom: spacing.md }} />
+              <SkeletonShimmer width="80%" height={14} borderRadius={6} style={{ marginBottom: spacing.sm }} />
               <SkeletonShimmer width="60%" height={16} borderRadius={6} />
             </View>
           ))}
@@ -568,7 +569,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
     paddingBottom: 28,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.lg,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
     elevation: 5,
@@ -583,45 +584,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 26,
+    fontSize: typography.headline,
     fontWeight: '800',
     color: 'white',
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   headerSubtitle: {
-    fontSize: 13,
+    fontSize: typography.body,
     color: 'rgba(255,255,255,0.85)',
     fontWeight: '500',
   },
   avatarCircle: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: radius.lg,
     backgroundColor: 'white',
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 4,
   },
   avatarText: {
-    fontSize: 18,
+    fontSize: typography.title,
     fontWeight: '900',
     color: Colors.primary,
   },
   categoryShimmer: {
     flexDirection: 'row',
     paddingVertical: 15,
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
   },
   categoryContainer: {
-    paddingVertical: 16,
+    paddingVertical: spacing.md,
   },
   categoryScroll: {
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
   },
   catPill: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
     backgroundColor: 'white',
     marginRight: 12,
     borderWidth: 1.5,
@@ -633,7 +634,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
   },
   catText: {
-    fontSize: 13,
+    fontSize: typography.body,
     fontWeight: '700',
     color: '#666'
   },
@@ -650,8 +651,8 @@ const styles = StyleSheet.create({
     width: '48%',
     margin: '1%',
     backgroundColor: 'white',
-    borderRadius: 24,
-    padding: 12,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     elevation: 3,
   },
   grid: {
@@ -662,19 +663,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 100,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.lg,
   },
   emptyText: {
-    marginTop: 16,
+    marginTop: spacing.md,
     color: '#999',
-    fontSize: 16,
+    fontSize: typography.bodyStrong,
     fontWeight: '700',
   },
   card: {
     flex: 0.5,
     backgroundColor: 'white',
-    margin: 8,
-    borderRadius: 24,
+    margin: spacing.sm,
+    borderRadius: radius.lg,
     overflow: 'hidden',
     elevation: 4,
     borderWidth: 1,
@@ -697,30 +698,30 @@ const styles = StyleSheet.create({
     top: 10,
     left: 10,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 10,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 5,
-    borderRadius: 10,
+    borderRadius: radius.md,
   },
   categoryBadgeText: {
     color: 'white',
-    fontSize: 10,
+    fontSize: typography.caption,
     fontWeight: '800',
   },
   cardBody: {
-    padding: 14,
+    padding: spacing.md,
     position: 'relative',
   },
   cardTitle: {
-    fontSize: 14,
+    fontSize: typography.body,
     fontWeight: '800',
     color: '#1A1A1A',
-    marginBottom: 6,
+    marginBottom: spacing.xs,
   },
   cardPrice: {
-    fontSize: 16,
+    fontSize: typography.bodyStrong,
     fontWeight: '900',
     color: Colors.primary,
-    marginTop: 4,
+    marginTop: spacing.xs,
   },
   addBtnIcon: {
     position: 'absolute',
@@ -729,7 +730,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 3,
@@ -742,8 +743,8 @@ const styles = StyleSheet.create({
   },
   cartBar: {
     backgroundColor: Colors.primary,
-    borderRadius: 24,
-    padding: 18,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -762,24 +763,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
   },
   badgeText: {
     color: Colors.primary,
     fontWeight: '900',
-    fontSize: 13,
+    fontSize: typography.body,
   },
   cartLabel: {
     color: 'rgba(255,255,255,0.8)',
-    fontSize: 11,
+    fontSize: typography.caption,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   cartTotal: {
     color: 'white',
-    fontSize: 20,
+    fontSize: typography.title,
     fontWeight: '900',
     marginTop: 2,
   },
@@ -787,15 +788,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
-    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    gap: spacing.xs,
   },
   btnCheckoutText: {
     color: 'white',
     fontWeight: '800',
-    fontSize: 14,
+    fontSize: typography.body,
   },
   modalOverlay: {
     flex: 1,
@@ -806,7 +807,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
-    padding: 28,
+    padding: spacing.xl,
     maxHeight: '85%',
     elevation: 20,
     paddingBottom: 40,
@@ -815,24 +816,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: spacing.lg,
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: typography.headline,
     fontWeight: '800',
     color: '#1A1A1A',
   },
   cartList: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
     maxHeight: 250,
   },
   cartItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
-    gap: 12,
+    gap: spacing.md,
   },
   itemLeft: {
     flex: 1,
@@ -840,31 +841,31 @@ const styles = StyleSheet.create({
   itemName: {
     fontWeight: '800',
     color: '#1A1A1A',
-    fontSize: 15,
+    fontSize: typography.bodyStrong,
   },
   itemSubtotal: {
     color: Colors.primary,
-    fontSize: 14,
+    fontSize: typography.body,
     fontWeight: '700',
-    marginTop: 4,
+    marginTop: spacing.xs,
   },
   qtyControl: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.md,
     backgroundColor: '#F5F7FA',
-    padding: 6,
-    borderRadius: 16,
+    padding: spacing.xs,
+    borderRadius: radius.lg,
   },
   qtyText: {
     fontWeight: '900',
-    fontSize: 16,
+    fontSize: typography.bodyStrong,
     minWidth: 24,
     textAlign: 'center',
     color: '#333',
   },
   itemDelete: {
-    padding: 6,
+    padding: spacing.xs,
   },
   paymentSection: {
     borderTopWidth: 1,
@@ -875,42 +876,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: spacing.lg,
     paddingHorizontal: 4,
   },
   summaryLabel: {
-    fontSize: 16,
+    fontSize: typography.bodyStrong,
     fontWeight: '700',
     color: '#666',
   },
   summaryValue: {
-    fontSize: 26,
+    fontSize: typography.headline,
     fontWeight: '900',
     color: Colors.primary,
   },
   payLabel: {
-    fontSize: 13,
+    fontSize: typography.body,
     fontWeight: '800',
     color: '#666',
-    marginBottom: 12,
+    marginBottom: spacing.md,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   payRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   payBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-    borderRadius: 16,
+    padding: spacing.md,
+    borderRadius: radius.lg,
     borderWidth: 1.5,
     borderColor: '#E8E8E8',
-    gap: 10,
+    gap: spacing.sm,
     backgroundColor: 'white',
   },
   payBtnActive: {
@@ -920,7 +921,7 @@ const styles = StyleSheet.create({
   payBtnText: {
     fontWeight: '800',
     color: '#666',
-    fontSize: 14,
+    fontSize: typography.body,
   },
   payBtnTextActive: {
     color: 'white',
@@ -929,42 +930,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 18,
+    padding: spacing.md,
     borderStyle: 'dashed',
     borderWidth: 2,
     borderColor: Colors.primary,
-    borderRadius: 16,
-    marginBottom: 20,
+    borderRadius: radius.lg,
+    marginBottom: spacing.lg,
     backgroundColor: '#F1F8E9',
-    gap: 12,
+    gap: spacing.md,
   },
   uploadBtnText: {
     color: Colors.primary,
     fontWeight: '800',
-    fontSize: 14,
+    fontSize: typography.body,
   },
   proofPreviewRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 20,
-    padding: 12,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+    padding: spacing.md,
     backgroundColor: '#F5F7FA',
-    borderRadius: 16,
+    borderRadius: radius.lg,
   },
   proofImg: {
     width: 80,
     height: 80,
-    borderRadius: 12,
+    borderRadius: radius.md,
     backgroundColor: '#f0f0f0',
   },
   proofReplace: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 12,
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
     borderWidth: 1.5,
     borderColor: Colors.primary,
     backgroundColor: 'white',
@@ -972,25 +973,25 @@ const styles = StyleSheet.create({
   proofReplaceText: {
     color: Colors.primary,
     fontWeight: '800',
-    fontSize: 13,
+    fontSize: typography.body,
   },
   proofRemove: {
-    padding: 10,
+    padding: spacing.sm,
   },
   btnFinal: {
     backgroundColor: Colors.primary,
-    padding: 18,
-    borderRadius: 16,
+    padding: spacing.md,
+    borderRadius: radius.lg,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
+    gap: spacing.sm,
     elevation: 4,
   },
   btnFinalText: {
     color: 'white',
     fontWeight: '800',
-    fontSize: 16,
+    fontSize: typography.bodyStrong,
   },
   btnDisabled: {
     backgroundColor: '#CCC',
