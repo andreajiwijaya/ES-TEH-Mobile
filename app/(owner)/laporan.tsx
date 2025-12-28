@@ -1,27 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState, useCallback, useMemo } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
+  Modal,
   Platform,
   RefreshControl,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  Modal,
-  StatusBar,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../../constants/Colors';
 import { ownerAPI } from '../../services/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // FIX: Kompatibilitas Expo SDK 54
-import * as FileSystem from 'expo-file-system/legacy'; 
-import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 
 interface ReportItem {
   id: string;
@@ -39,6 +41,7 @@ export default function LaporanScreen() {
   const [selectedType, setSelectedType] = useState<'all' | 'penjualan' | 'stok' | 'keuangan' | 'gudang'>('all');
   const [reports, setReports] = useState<ReportItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null); // State User Baru
@@ -48,9 +51,43 @@ export default function LaporanScreen() {
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [processing, setProcessing] = useState(false);
 
+  // --- SKELETON SHIMMER ---
+  const SkeletonShimmer = ({ width, height, style }: { width?: number | string; height?: number; style?: any }) => {
+    const anim = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, { toValue: 1, duration: 1200, easing: Easing.linear, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true })
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    }, [anim]);
+
+    const translateX = anim.interpolate({ inputRange: [0, 1], outputRange: [-60, 60] });
+    return (
+      <View style={[{ overflow: 'hidden', backgroundColor: '#E5E7EB', borderRadius: 12 }, style, width ? { width } : {}, height ? { height } : {}]}> 
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: 0,
+            width: '50%',
+            opacity: 0.5,
+            transform: [{ translateX }],
+            backgroundColor: 'rgba(255,255,255,0.6)'
+          }}
+        />
+      </View>
+    );
+  };
+
   // --- PERSISTENCE LOGIC UTUH ---
   const loadReports = useCallback(async (isSilent = false) => {
     if (!isSilent) setRefreshing(true);
+    setLoading(true);
     try {
       // SINKRONISASI DATA USER UNTUK AVATAR
       const userData = await AsyncStorage.getItem('@user_data');
@@ -64,6 +101,8 @@ export default function LaporanScreen() {
       console.error("Gagal load history:", err);
     } finally {
       setRefreshing(false);
+      // Beri sedikit delay agar shimmer terasa
+      setTimeout(() => setLoading(false), 250);
     }
   }, []);
 
@@ -144,8 +183,9 @@ export default function LaporanScreen() {
       let summaryData = "Data tidak tersedia";
       let reportJudul = "";
 
-      if (tempSelectedCategory === 'penjualan' || tempSelectedCategory === 'keuangan') {
-          reportJudul = tempSelectedCategory === 'penjualan' ? "Laporan Penjualan" : "Laporan Keuangan";
+        if (tempSelectedCategory === 'penjualan' || tempSelectedCategory === 'keuangan') {
+          // Gabungkan Penjualan & Keuangan dalam satu laporan
+          reportJudul = "Laporan Penjualan & Keuangan";
           const response = await ownerAPI.getLaporanPendapatan(strStartDate, strEndDate);
           if (response.data) {
               const total = response.data.total_pendapatan || 0;
@@ -192,7 +232,10 @@ export default function LaporanScreen() {
     try {
       let detailContent = '';
       const responseStok = await ownerAPI.getStokDetail();
-      const detailStok = responseStok.data?.data;
+      const detailStok = responseStok.data?.data || responseStok.data;
+      // Use dashboard for gudang data to ensure nested `bahan` fields are available
+      const responseDash = await ownerAPI.getDashboard();
+      const dashData = (responseDash as any)?.data?.data || (responseDash as any)?.data || responseDash;
 
       if (report.jenis === 'keuangan') {
         detailContent = `
@@ -205,9 +248,16 @@ export default function LaporanScreen() {
       } else if (report.jenis === 'penjualan') {
         const res = await ownerAPI.getLaporanPendapatan(report.startDate, report.endDate);
         const detailHarian = res.data?.detail_per_hari || [];
+        // Gabungkan Keuangan (kartu ringkas total omset) + tabel penjualan harian
         detailContent = `
-          <h3 style="color: ${Colors.primary}; border-left: 5px solid ${Colors.primary}; padding-left: 10px;">Rincian Penjualan Harian</h3>
-          <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+          <div style="text-align: center; margin-top: 30px; padding: 30px; border: 2px solid ${Colors.primary}; border-radius: 16px;">
+            <p style="font-size: 16px; color: #666; margin-bottom: 8px;">TOTAL OMSET KEUANGAN</p>
+            <h1 style="font-size: 36px; color: #1E293B; margin: 0;">Rp ${(res.data?.total_pendapatan || 0).toLocaleString('id-ID')}</h1>
+            <p style="font-size: 12px; color: #94A3B8; margin-top: 12px;">Periode: ${report.periode}</p>
+          </div>
+
+          <h3 style="color: ${Colors.primary}; border-left: 5px solid ${Colors.primary}; padding-left: 10px; margin-top: 24px;">Rincian Penjualan Harian</h3>
+          <table style="width: 100%; border-collapse: collapse; margin-top: 12px;">
             <tr style="background-color: #f8f9fa;">
               <th style="border: 1px solid #ddd; padding: 12px;">Tanggal</th>
               <th style="border: 1px solid #ddd; padding: 12px; text-align: right;">Pemasukan</th>
@@ -219,7 +269,7 @@ export default function LaporanScreen() {
               </tr>
             `).join('')}
             <tr style="background-color: #f0fdf4; font-weight: bold;">
-              <td style="border: 1px solid #ddd; padding: 12px;">GRAND TOTAL</td>
+              <td style="border: 1px solid #ddd; padding: 12px;">TOTAL PEMASUKAN</td>
               <td style="border: 1px solid #ddd; padding: 12px; text-align: right;">Rp ${(res.data?.total_pendapatan || 0).toLocaleString('id-ID')}</td>
             </tr>
           </table>
@@ -235,12 +285,47 @@ export default function LaporanScreen() {
             </table>
           </div>`).join('');
       } else if (report.jenis === 'gudang') {
-        const gudangData = detailStok?.stok_gudang || [];
+        // Prefer dashboard stok_gudang (has nested `bahan`). Fallback to stok-detail when needed.
+        const gudangData = (dashData?.stok_gudang || detailStok?.stok_gudang || []) as any[];
         detailContent = `
           <h3 style="color: #558B2F;">Inventaris Gudang Pusat</h3>
           <table style="width: 100%; border-collapse: collapse;">
             <tr style="background-color: #F1F8E9;"><th>Bahan Baku</th><th style="text-align:center">Sisa</th><th style="text-align:center">Status</th></tr>
-            ${gudangData.map((g: any) => `<tr><td>${g.nama_bahan}</td><td style="text-align:center">${g.stok} ${g.satuan}</td><td style="text-align:center; font-weight:bold; color: ${g.stok <= 10 ? 'red' : 'green'};">${g.stok <= 10 ? 'KRITIS' : 'AMAN'}</td></tr>`).join('')}
+            ${gudangData.map((g: any) => {
+              // Calculate display quantity using the same logic as warehouse/owner dashboard
+              const unitRaw = (g?.bahan?.satuan || g?.satuan || '').toLowerCase();
+              const unitLabel = g?.bahan?.satuan || g?.satuan || '';
+              const stokVal = Number(g?.stok || 0);
+
+              let displayQty = `${stokVal.toLocaleString('id-ID')} ${unitLabel}`;
+
+              if (unitRaw !== 'gr') {
+                const perUnitWeight = (
+                  (Number(g?.bahan?.berat_per_isi) || Number(g?.berat_per_isi) || 0) *
+                  (Number(g?.bahan?.isi_per_satuan) || Number(g?.isi_per_satuan) || 1)
+                );
+
+                if (perUnitWeight > 0) {
+                  const packCount = Math.floor(stokVal / perUnitWeight);
+                  const remainder = stokVal - (packCount * perUnitWeight);
+                  if (packCount > 0 && remainder > 0) {
+                    displayQty = `${packCount.toLocaleString('id-ID')} ${unitLabel} + sisa ${Math.round(remainder).toLocaleString('id-ID')} gr`;
+                  } else if (packCount > 0) {
+                    displayQty = `${packCount.toLocaleString('id-ID')} ${unitLabel}`;
+                  } else {
+                    // Tidak cukup untuk 1 pack, tampilkan gram saja
+                    displayQty = `${Math.round(remainder).toLocaleString('id-ID')} gr`;
+                  }
+                } else {
+                  // Packaging data missing: avoid wrong unit labels like "karton" with raw grams
+                  displayQty = `${stokVal.toLocaleString('id-ID')} gr`;
+                }
+              }
+
+              const namaBahan = g?.bahan?.nama || g?.nama_bahan || '—';
+              const isKritis = (g?.is_kritis === true) || (stokVal <= 10);
+              return `<tr><td>${namaBahan}</td><td style="text-align:center">${displayQty}</td><td style="text-align:center; font-weight:bold; color: ${isKritis ? 'red' : 'green'};">${isKritis ? 'KRITIS' : 'AMAN'}</td></tr>`;
+            }).join('')}
           </table>`;
       }
 
@@ -255,7 +340,7 @@ export default function LaporanScreen() {
           </head>
           <body>
             <div class="header">
-              <h1 style="color: ${Colors.primary}; margin: 0;">ES TEH INDONESIA</h1>
+              <h1 style="color: ${Colors.primary}; margin: 0;">ES TEH FAVORIT INDONESIA</h1>
               <p style="margin: 5px 0 0 0;">Laporan Resmi Dashboard Owner</p>
             </div>
             <div class="meta">
@@ -264,12 +349,46 @@ export default function LaporanScreen() {
               <p><strong>Tanggal Cetak:</strong> ${formatDateLabel(new Date().toISOString())}</p>
             </div>
             ${detailContent}
-            <div style="margin-top: 50px; text-align: center; color: #94A3B8; font-size: 10px;">Dokumen ini sah dan dihasilkan secara sistematis oleh Esteh Indonesia Application</div>
+            <div style="margin-top: 50px; text-align: center; color: #94A3B8; font-size: 10px;">Es Teh Favorit Indonesia Application</div>
           </body>
         </html>`;
 
+      // Bangun nama file dengan rentang tanggal
+      const safeTitle = (report.judul || 'Laporan')
+        .replace(/[^a-zA-Z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        || 'Laporan';
+
+      const startD = new Date(report.startDate);
+      const endD = new Date(report.endDate);
+      const sameDay = report.startDate === report.endDate;
+      const sameMonth = startD.getMonth() === endD.getMonth() && startD.getFullYear() === endD.getFullYear();
+      const sameYear = startD.getFullYear() === endD.getFullYear();
+
+      const dd = (d: Date) => String(d.getDate()).padStart(2, '0');
+      const mm = (d: Date) => String(d.getMonth() + 1).padStart(2, '0');
+      const yy = (d: Date) => String(d.getFullYear()).slice(-2);
+
+      let suffix = `${startD.getFullYear()}${mm(startD)}${dd(startD)}`; // default hari-ini: YYYYMMDD
+      if (!sameDay) {
+        if (sameMonth && sameYear) {
+          // Dalam bulan & tahun yang sama, singkat: 07-14MM
+          suffix = `${dd(startD)}-${dd(endD)}${mm(startD)}`;
+        } else if (sameYear) {
+          // Tahun sama beda bulan: 07MM-14MM
+          suffix = `${dd(startD)}${mm(startD)}-${dd(endD)}${mm(endD)}`;
+        } else {
+          // Lintas tahun: 07MMYY-14MMYY
+          suffix = `${dd(startD)}${mm(startD)}${yy(startD)}-${dd(endD)}${mm(endD)}${yy(endD)}`;
+        }
+      }
+
+      const pdfFileName = `${safeTitle}-${suffix}.pdf`;
+
       const { uri } = await Print.printToFileAsync({ html });
-      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+      const targetPath = `${FileSystem.cacheDirectory}${pdfFileName}`;
+      await FileSystem.moveAsync({ from: uri, to: targetPath });
+      await Sharing.shareAsync(targetPath, { UTI: '.pdf', mimeType: 'application/pdf' });
     } catch {
       Alert.alert('Error', 'Gagal membuat PDF.');
     }
@@ -278,6 +397,10 @@ export default function LaporanScreen() {
   const handleDownloadExcel = async (report: ReportItem) => {
     setDownloading(true);
     try {
+      // Panggil endpoint owner terlebih dahulu untuk memastikan akses dan kesiapan ekspor
+      const warmup = await ownerAPI.exportLaporan(report.startDate, report.endDate);
+      if (warmup.error) throw new Error(warmup.error);
+
       const token = await AsyncStorage.getItem('@auth_token');
       const url = `https://esteh-backend-production.up.railway.app/api/laporan/export?start_date=${report.startDate}&end_date=${report.endDate}`;
       const fileUri = `${FileSystem.cacheDirectory}Laporan_${report.id}.xlsx`;
@@ -319,11 +442,23 @@ export default function LaporanScreen() {
         </View>
 
         <View style={styles.statsCard}>
-          <View style={styles.statBox}><Text style={styles.statVal}>{stats.total}</Text><Text style={styles.statLab}>ARSIP</Text></View>
-          <View style={styles.vDivider} />
-          <View style={styles.statBox}><Text style={[styles.statVal, {color: '#15803D'}]}>{stats.penjualan}</Text><Text style={styles.statLab}>SALES</Text></View>
-          <View style={styles.vDivider} />
-          <View style={styles.statBox}><Text style={[styles.statVal, {color: '#1D4ED8'}]}>{stats.stok}</Text><Text style={styles.statLab}>STOK</Text></View>
+          {loading ? (
+            <>
+              <View style={styles.statBox}><SkeletonShimmer width={70} height={22} /><Text style={styles.statLab}>ARSIP</Text></View>
+              <View style={styles.vDivider} />
+              <View style={styles.statBox}><SkeletonShimmer width={70} height={22} /><Text style={styles.statLab}>SALES</Text></View>
+              <View style={styles.vDivider} />
+              <View style={styles.statBox}><SkeletonShimmer width={70} height={22} /><Text style={styles.statLab}>STOK</Text></View>
+            </>
+          ) : (
+            <>
+              <View style={styles.statBox}><Text style={styles.statVal}>{stats.total}</Text><Text style={styles.statLab}>ARSIP</Text></View>
+              <View style={styles.vDivider} />
+              <View style={styles.statBox}><Text style={[styles.statVal, {color: '#15803D'}]}>{stats.penjualan}</Text><Text style={styles.statLab}>SALES</Text></View>
+              <View style={styles.vDivider} />
+              <View style={styles.statBox}><Text style={[styles.statVal, {color: '#1D4ED8'}]}>{stats.stok}</Text><Text style={styles.statLab}>STOK</Text></View>
+            </>
+          )}
         </View>
       </View>
 
@@ -336,12 +471,12 @@ export default function LaporanScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionHeading}>Buat Laporan Baru</Text>
           <View style={styles.reportGrid}>
-            {['penjualan', 'stok', 'keuangan', 'gudang'].map((type) => {
+            {['penjualan', 'stok', 'gudang'].map((type) => {
               const theme = getTypeTheme(type);
               return (
                 <TouchableOpacity key={type} style={styles.gridBtn} onPress={() => { setTempSelectedCategory(type); setShowFilterModal(true); }}>
                   <View style={[styles.gridIconCircle, { backgroundColor: theme.bg }]}><Ionicons name={theme.icon as any} size={24} color={theme.text} /></View>
-                  <Text style={styles.gridBtnText}>{type === 'stok' ? 'Stok Outlet' : type === 'gudang' ? 'Stok Gudang' : type === 'keuangan' ? 'Keuangan' : 'Penjualan'}</Text>
+                  <Text style={styles.gridBtnText}>{type === 'stok' ? 'Stok Outlet' : type === 'gudang' ? 'Stok Gudang' : 'Penjualan & Keuangan'}</Text>
                 </TouchableOpacity>
               )
             })}
@@ -350,7 +485,7 @@ export default function LaporanScreen() {
 
         <View style={styles.tabSection}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScroll}>
-            {['all', 'penjualan', 'stok', 'keuangan', 'gudang'].map((type) => (
+            {['all', 'penjualan', 'stok', 'gudang'].map((type) => (
               <TouchableOpacity key={type} style={[styles.tabBtn, selectedType === type && styles.tabBtnActive]} onPress={() => setSelectedType(type as any)}>
                 <Text style={[styles.tabBtnText, selectedType === type && styles.tabBtnTextActive]}>{type === 'all' ? 'Semua Riwayat' : type.charAt(0).toUpperCase() + type.slice(1)}</Text>
               </TouchableOpacity>
@@ -359,34 +494,61 @@ export default function LaporanScreen() {
         </View>
 
         <View style={styles.listArea}>
-          {reports.filter(r => selectedType === 'all' || r.jenis === selectedType).length === 0 ? (
-            <View style={styles.emptyContainer}><Ionicons name="document-text-outline" size={64} color="#CBD5E1" /><Text style={styles.emptyText}>Belum ada riwayat laporan</Text></View>
-          ) : (
-            reports.filter(r => selectedType === 'all' || r.jenis === selectedType).map((item) => {
-              const theme = getTypeTheme(item.jenis);
-              const isExpanded = expandedId === item.id;
-              return (
-                <View key={item.id} style={[styles.historyCard, isExpanded && styles.historyCardActive]}>
-                  <TouchableOpacity style={styles.cardHeader} onPress={() => toggleExpand(item.id)}>
-                    <View style={[styles.listIconBox, { backgroundColor: theme.bg }]}><Ionicons name={theme.icon as any} size={20} color={theme.text} /></View>
-                    <View style={styles.cardMainInfo}><Text style={styles.cardTitle}>{item.judul}</Text><Text style={styles.cardSub}>{item.periode} • {formatDateLabel(item.tanggal_dibuat)}</Text></View>
-                    <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={20} color="#94A3B8" />
-                  </TouchableOpacity>
-                  {isExpanded && (
-                    <View style={styles.cardDetail}>
-                      <View style={[styles.summaryBox, { backgroundColor: theme.bg + '50' }]}><Text style={[styles.summaryTxt, { color: theme.text }]}>{item.data_ringkasan}</Text></View>
-                      <View style={styles.actionRow}>
-                        <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteReport(item.id)}><Ionicons name="trash-outline" size={20} color="#EF4444" /></TouchableOpacity>
-                        {item.jenis !== 'stok' && item.jenis !== 'gudang' && (
-                          <TouchableOpacity style={styles.excelBtn} onPress={() => handleDownloadExcel(item)} disabled={downloading}><Ionicons name="file-tray-full-outline" size={20} color="#15803D" /></TouchableOpacity>
-                        )}
-                        <TouchableOpacity style={styles.printBtn} onPress={() => generatePDF(item)}><Ionicons name="print-outline" size={18} color="white" /><Text style={styles.printBtnText}> Cetak PDF</Text></TouchableOpacity>
+          {loading ? (
+            <>
+              {[1,2,3].map((i) => (
+                <View key={i} style={styles.historyCard}>
+                  <View style={styles.cardHeader}>
+                    <SkeletonShimmer width={44} height={44} style={{ borderRadius: 14, marginRight: 15 }} />
+                    <View style={{ flex: 1 }}>
+                      <SkeletonShimmer width={160} height={16} />
+                      <SkeletonShimmer width={120} height={12} style={{ marginTop: 8 }} />
+                    </View>
+                    <SkeletonShimmer width={24} height={24} style={{ borderRadius: 6 }} />
+                  </View>
+                  <View style={styles.cardDetail}>
+                    <SkeletonShimmer height={48} style={{ borderRadius: 12 }} />
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 15 }}>
+                      <SkeletonShimmer width={48} height={48} style={{ borderRadius: 12 }} />
+                      <SkeletonShimmer width={48} height={48} style={{ borderRadius: 12 }} />
+                      <View style={{ flex: 1 }}>
+                        <SkeletonShimmer height={48} style={{ borderRadius: 12 }} />
                       </View>
                     </View>
-                  )}
+                  </View>
                 </View>
-              );
-            })
+              ))}
+            </>
+          ) : (
+            reports.filter(r => selectedType === 'all' || r.jenis === selectedType).length === 0 ? (
+              <View style={styles.emptyContainer}><Ionicons name="document-text-outline" size={64} color="#CBD5E1" /><Text style={styles.emptyText}>Belum ada riwayat laporan</Text></View>
+            ) : (
+              reports.filter(r => selectedType === 'all' || r.jenis === selectedType).map((item) => {
+                const theme = getTypeTheme(item.jenis);
+                const isExpanded = expandedId === item.id;
+                return (
+                  <View key={item.id} style={[styles.historyCard, isExpanded && styles.historyCardActive]}>
+                    <TouchableOpacity style={styles.cardHeader} onPress={() => toggleExpand(item.id)}>
+                      <View style={[styles.listIconBox, { backgroundColor: theme.bg }]}><Ionicons name={theme.icon as any} size={20} color={theme.text} /></View>
+                      <View style={styles.cardMainInfo}><Text style={styles.cardTitle}>{item.judul}</Text><Text style={styles.cardSub}>{item.periode} • {formatDateLabel(item.tanggal_dibuat)}</Text></View>
+                      <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={20} color="#94A3B8" />
+                    </TouchableOpacity>
+                    {isExpanded && (
+                      <View style={styles.cardDetail}>
+                        <View style={[styles.summaryBox, { backgroundColor: theme.bg + '50' }]}><Text style={[styles.summaryTxt, { color: theme.text }]}>{item.data_ringkasan}</Text></View>
+                        <View style={styles.actionRow}>
+                          <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteReport(item.id)}><Ionicons name="trash-outline" size={20} color="#EF4444" /></TouchableOpacity>
+                          {item.jenis !== 'stok' && item.jenis !== 'gudang' && (
+                            <TouchableOpacity style={styles.excelBtn} onPress={() => handleDownloadExcel(item)} disabled={downloading}><Ionicons name="file-tray-full-outline" size={20} color="#15803D" /></TouchableOpacity>
+                          )}
+                          <TouchableOpacity style={styles.printBtn} onPress={() => generatePDF(item)}><Ionicons name="print-outline" size={18} color="white" /><Text style={styles.printBtnText}> Cetak PDF</Text></TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                );
+              })
+            )
           )}
         </View>
         <View style={{ height: 100 }} />

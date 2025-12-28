@@ -1,73 +1,167 @@
-import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Platform,
-  Alert,
-  RefreshControl,
-  StatusBar
-} from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
-import { ownerAPI } from '../../services/api';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // FIX: Ditambahkan untuk ambil user
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Animated,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Colors } from '../../constants/Colors';
+import { authAPI, ownerAPI } from '../../services/api';
+import { User } from '../../types';
 
+// ==================== SKELETON SHIMMER ====================
+const SkeletonShimmer = ({ 
+  width = '100%', 
+  height = 12, 
+  borderRadius = 8,
+  style
+}: { 
+  width?: number | string; 
+  height?: number; 
+  borderRadius?: number;
+  style?: any;
+}) => {
+  const shimmerAnim = useMemo(() => new Animated.Value(-200), []);
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.timing(shimmerAnim, {
+        toValue: 200,
+        duration: 1000,
+        useNativeDriver: true,
+      })
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [shimmerAnim]);
+
+  const styleObj: any = { width, height, borderRadius };
+
+  return (
+    <View style={[styles.skeletonBar, styleObj, style]}>
+      <Animated.View
+        style={[
+          styles.skeletonHighlight,
+          { transform: [{ translateX: shimmerAnim }] },
+        ]}
+      />
+    </View>
+  );
+};
+
+// ==================== MAIN COMPONENT ====================
 export default function OwnerDashboardScreen() {
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [user, setUser] = useState<any>(null); // State User Baru
   
   const [dashData, setDashData] = useState<any>(null);
-  const [outletData, setOutletData] = useState<any[]>([]);
-  const [monthlyFin, setMonthlyFin] = useState<any>(null);
-  const [stats, setStats] = useState({ users: 0, outlets: 0 });
+  const [stokDetail, setStokDetail] = useState<any>(null);
+  const [monthlyRevenue, setMonthlyRevenue] = useState<any>(null);
+  const [prevMonthRevenue, setPrevMonthRevenue] = useState<any>(null);
+  const [userCount, setUserCount] = useState(0);
+  const [outletCount, setOutletCount] = useState(0);
+  const [showRevenueDetail, setShowRevenueDetail] = useState(false);
 
-  const getGreeting = () => {
+  // Avatar helpers
+  const getAvatarColor = () => {
+    const colors = [Colors.primary, Colors.primaryDark, Colors.success, '#34D399', '#4CAF50'];
+    const username = user?.username || 'Owner';
+    const index = username.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
+
+  const getUserInitial = () => {
+    const username = user?.username || 'O';
+    return username.substring(0, 2).toUpperCase();
+  };
+
+  const getGreeting = useCallback(() => {
     const hour = new Date().getHours();
     if (hour >= 5 && hour < 11) return 'Selamat Pagi';
     if (hour >= 11 && hour < 15) return 'Selamat Siang';
     if (hour >= 15 && hour < 18) return 'Selamat Sore';
     return 'Selamat Malam';
-  };
+  }, []);
 
-  const loadDataCenter = useCallback(async (isRefetching = false) => {
+  const getCurrentDate = useCallback(() => {
+    return new Date().toLocaleDateString('id-ID', { 
+      weekday: 'long', 
+      day: 'numeric', 
+      month: 'long', 
+      year: 'numeric' 
+    });
+  }, []);
+
+  // Load user data
+  const loadUserData = useCallback(async () => {
     try {
-      if (!isRefetching) setLoading(true);
-      
-      // Ambil data user dari storage agar sinkron dengan akun
-      const userData = await AsyncStorage.getItem('@user_data');
-      if (userData) setUser(JSON.parse(userData));
+      const response = await authAPI.getMe();
+      if (response.data) {
+        setUser(response.data);
+      }
+    } catch (error) {
+      console.error('Load user error:', error);
+    }
+  }, []);
 
+  // Load dashboard data
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
+    try {
       const today = new Date().toISOString().split('T')[0];
       const firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+      
+      // Previous month dates
+      const prevMonthEnd = new Date(new Date().getFullYear(), new Date().getMonth(), 0);
+      const prevMonthStart = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().split('T')[0];
+      const prevMonthEndStr = prevMonthEnd.toISOString().split('T')[0];
 
-      const [dRes, sRes, fRes, uRes, oRes] = await Promise.all([
+      const [dashRes, stokRes, revenueRes, prevRevenueRes, usersRes, outletsRes] = await Promise.all([
         ownerAPI.getDashboard(),
         ownerAPI.getStokDetail(),
         ownerAPI.getLaporanPendapatan(firstDay, today),
+        ownerAPI.getLaporanPendapatan(prevMonthStart, prevMonthEndStr),
         ownerAPI.getUsers(),
-        ownerAPI.getOutlets()
+        ownerAPI.getOutlets(),
       ]);
 
-      const dData = (dRes as any)?.data?.data || (dRes as any)?.data || dRes;
-      const sData = (sRes as any)?.data?.data || (sRes as any)?.data || sRes;
-      const fData = (fRes as any)?.data || fRes;
-      const userList = (uRes as any)?.data?.data || (uRes as any)?.data || uRes;
-      const outletList = (oRes as any)?.data?.data || (oRes as any)?.data || oRes;
-
+      // Process dashboard data
+      const dData = (dashRes as any)?.data?.data || (dashRes as any)?.data || dashRes;
       setDashData(dData);
-      setOutletData(sData?.stok_outlet || []);
-      setMonthlyFin(fData);
-      setStats({
-        users: Array.isArray(userList) ? userList.length : 0,
-        outlets: Array.isArray(outletList) ? outletList.length : 0
-      });
-    } catch (error) {
-      console.error("Sync Error:", error);
-      Alert.alert('Update Gagal', 'Gagal menyinkronkan data.');
+
+      // Process stock detail
+      const sData = (stokRes as any)?.data?.data || (stokRes as any)?.data || stokRes;
+      setStokDetail(sData);
+
+      // Process current month revenue
+      const rData = (revenueRes as any)?.data || revenueRes;
+      setMonthlyRevenue(rData);
+
+      // Process previous month revenue
+      const prData = (prevRevenueRes as any)?.data || prevRevenueRes;
+      setPrevMonthRevenue(prData);
+
+      // Process users count
+      const uData = (usersRes as any)?.data?.data || (usersRes as any)?.data || usersRes;
+      setUserCount(Array.isArray(uData) ? uData.length : 0);
+
+      // Process outlets count
+      const oData = (outletsRes as any)?.data?.data || (outletsRes as any)?.data || outletsRes;
+      setOutletCount(Array.isArray(oData) ? oData.length : 0);
+
+    } catch (error: any) {
+      console.error('Load data error:', error);
+      Alert.alert('Error', 'Gagal memuat data dashboard');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -76,289 +170,977 @@ export default function OwnerDashboardScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadDataCenter();
-    }, [loadDataCenter])
+      loadUserData();
+      loadData();
+
+      // Start lightweight polling to keep data fresh (near real-time)
+      const intervalId = setInterval(() => {
+        loadData(true);
+      }, 30000); // 30s interval
+
+      return () => clearInterval(intervalId);
+    }, [loadUserData, loadData])
   );
 
-  const formatIDR = (val: any) => {
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData(true);
+  };
+
+  // Format currency
+  const formatIDR = (value: any) => {
     return new Intl.NumberFormat('id-ID', {
-      style: 'currency', currency: 'IDR', minimumFractionDigits: 0
-    }).format(Number(val) || 0);
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+    }).format(Number(value) || 0);
   };
 
-  const calculateDailyAverage = () => {
-    const total = monthlyFin?.total_pendapatan || 0;
-    const currentDay = new Date().getDate();
-    return total / Math.max(currentDay, 1);
-  };
+  const currentDay = useMemo(() => new Date().getDate(), []);
 
-  const Skeleton = ({ width, height, style }: any) => (
-    <View style={[{ width, height, backgroundColor: '#E2E8F0', borderRadius: 8, overflow: 'hidden' }, style]}>
-      <View style={styles.shimmerEffect} />
+  const todayRevenue = useMemo(() => dashData?.pendapatan_hari_ini || 0, [dashData?.pendapatan_hari_ini]);
+
+  // Calculate daily average (total bulan berjalan ÷ hari berjalan)
+  const dailyAverage = useMemo(() => {
+    const total = monthlyRevenue?.total_pendapatan || 0;
+    return currentDay > 0 ? total / currentDay : 0;
+  }, [monthlyRevenue?.total_pendapatan, currentDay]);
+
+  // Calculate progress percentage based on today's revenue vs daily average (capped at 100%)
+  const progressPercentage = useMemo(() => {
+    if (dailyAverage === 0) return todayRevenue > 0 ? 100 : 0;
+    return Math.min(100, Math.round((todayRevenue / dailyAverage) * 100));
+  }, [todayRevenue, dailyAverage]);
+
+  const progressLabel = useMemo(() => {
+    return `${dailyAverage > 0 ? progressPercentage : '0'}% vs rata-rata harian (total ÷ hari berjalan)`;
+  }, [dailyAverage, progressPercentage]);
+
+  const dailyAverageDisplay = useMemo(() => {
+    return formatIDR(dailyAverage);
+  }, [dailyAverage]);
+
+  const progressDisplay = useMemo(() => {
+    return `${progressPercentage}%`;
+  }, [progressPercentage]);
+
+  // Calculate revenue trend (comparison with previous month)
+  const revenueTrend = useMemo(() => {
+    const current = monthlyRevenue?.total_pendapatan || 0;
+    const previous = prevMonthRevenue?.total_pendapatan || 0;
+    if (previous === 0) return 0;
+    return Math.round(((current - previous) / previous) * 100);
+  }, [monthlyRevenue?.total_pendapatan, prevMonthRevenue?.total_pendapatan]);
+
+  // Check urgent actions
+  const hasUrgentAction = useMemo(() => {
+    return (dashData?.permintaan_pending > 0) || (dashData?.jumlah_stok_kritis > 0);
+  }, [dashData]);
+
+  // Stock health percentage
+  const stockHealth = useMemo(() => {
+    if (!dashData?.stok_gudang?.length) return 0;
+    const healthy = dashData.stok_gudang.length - (dashData.jumlah_stok_kritis || 0);
+    return Math.round((healthy / dashData.stok_gudang.length) * 100);
+  }, [dashData]);
+
+  // Render skeleton loading
+  const renderSkeleton = () => (
+    <View style={{ paddingVertical: 10 }}>
+      <View style={[styles.revenueCard, { height: 200, justifyContent: 'center', gap: 15 }]}>
+        <SkeletonShimmer width="50%" height={14} />
+        <SkeletonShimmer width="80%" height={32} />
+        <SkeletonShimmer width="100%" height={8} borderRadius={4} />
+        <SkeletonShimmer width="60%" height={12} />
+        <View style={{ flexDirection: 'row', gap: 20, marginTop: 10 }}>
+          <SkeletonShimmer width="45%" height={40} />
+          <SkeletonShimmer width="45%" height={40} />
+        </View>
+      </View>
+
+      <View style={styles.statsGrid}>
+        {[1, 2, 3].map((i) => (
+          <View key={i} style={styles.statCard}>
+            <SkeletonShimmer width={40} height={24} />
+            <SkeletonShimmer width={60} height={12} />
+          </View>
+        ))}
+      </View>
+
+      <View style={{ paddingHorizontal: 24, marginTop: 30 }}>
+        <View style={{ marginBottom: 15 }}>
+          <SkeletonShimmer width="40%" height={20} />
+        </View>
+        <View style={{ gap: 12 }}>
+          {[1, 2, 3].map((i) => (
+            <SkeletonShimmer key={i} width="100%" height={120} borderRadius={20} />
+          ))}
+        </View>
+      </View>
     </View>
   );
-
-  const hasUrgentAction = (dashData?.permintaan_pending > 0) || (dashData?.jumlah_stok_kritis > 0);
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
       
-      <View style={styles.premiumHeader}>
-        <View style={styles.headerTop}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
-            <Text style={styles.greetingText}>{getGreeting()},</Text>
-            {/* FIX: Nama disesuaikan dengan user yang login */}
-            <Text style={styles.headerTitle}>{user?.username || 'Pak Tardi'}</Text>
-          </View>
-          <View style={styles.headerRight}>
-            <View style={styles.avatarContainer}>
-              {/* FIX: Avatar Inisial Dinamis */}
-              <Text style={styles.avatarText}>
-                {user?.username ? user.username.substring(0, 2).toUpperCase() : 'PT'}
-              </Text>
-              <View style={[styles.onlineStatus, { backgroundColor: loading ? '#94A3B8' : '#22C55E' }]} />
+            <Text style={styles.greetingText}>{getGreeting()}, Owner</Text>
+            <Text style={styles.headerTitle}>{user?.username || 'Owner'}</Text>
+            <View style={styles.dateBadge}>
+              <Ionicons name="calendar-outline" size={12} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.dateText}>{getCurrentDate()}</Text>
             </View>
           </View>
-        </View>
-        <View style={styles.headerBottom}>
-          <View style={styles.datePill}>
-            <Ionicons name="calendar-outline" size={14} color="white" />
-            <Text style={styles.dateText}>
-              {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </Text>
-          </View>
-          <View style={styles.overviewBadge}>
-            <Text style={styles.overviewBadgeText}>Overview Bisnis</Text>
+          <View style={[styles.avatar, { backgroundColor: getAvatarColor() }]}>
+            <Text style={styles.avatarText}>{getUserInitial()}</Text>
+            <View style={[styles.statusDot, { backgroundColor: loading ? '#94A3B8' : '#22C55E' }]} />
           </View>
         </View>
       </View>
 
       <ScrollView 
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadDataCenter(true)} tintColor={Colors.primary} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+        }
         style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
       >
         {loading && !refreshing ? (
-          <View style={{ paddingVertical: 10 }}>
-            <View style={[styles.finCard, { height: 180, justifyContent: 'center' }]}>
-               <Skeleton width="60%" height={15} style={{ marginBottom: 15 }} />
-               <Skeleton width="80%" height={35} style={{ marginBottom: 20 }} />
-               <Skeleton width="100%" height={40} />
-            </View>
-            <View style={styles.statsRow}>
-               <Skeleton width="30%" height={60} style={{ borderRadius: 15 }} />
-               <Skeleton width="30%" height={60} style={{ borderRadius: 15 }} />
-               <Skeleton width="30%" height={60} style={{ borderRadius: 15 }} />
-            </View>
-            <View style={{ paddingHorizontal: 25, marginTop: 30 }}>
-               <Skeleton width="40%" height={20} style={{ marginBottom: 15 }} />
-               <Skeleton width="100%" height={120} style={{ borderRadius: 20, marginBottom: 15 }} />
-               <Skeleton width="100%" height={120} style={{ borderRadius: 20 }} />
-            </View>
-          </View>
+          renderSkeleton()
         ) : (
           <>
+            {/* Quick Actions removed per request */}
+
+            {/* Urgent Alert */}
             {hasUrgentAction && (
-              <View style={styles.urgentBar}>
-                <Ionicons name="alert-circle" size={18} color="#991B1B" />
-                <Text style={styles.urgentText} numberOfLines={1}>
-                  {dashData?.permintaan_pending} Permintaan & {dashData?.jumlah_stok_kritis} Stok Kritis
-                </Text>
+              <View style={styles.urgentAlert}>
+                <View style={styles.urgentIconBox}>
+                  <Ionicons name="alert-circle" size={20} color="#DC2626" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.urgentTitle}>Perhatian Diperlukan</Text>
+                  <Text style={styles.urgentText}>
+                    {dashData?.permintaan_pending || 0} Permintaan • {dashData?.jumlah_stok_kritis || 0} Stok Kritis
+                  </Text>
+                </View>
               </View>
             )}
 
-            <View style={styles.finCard}>
-              <View style={styles.finMain}>
-                <Text style={styles.finLabel}>TOTAL PENDAPATAN BULAN INI</Text>
-                <Text style={styles.finValue}>{formatIDR(monthlyFin?.total_pendapatan)}</Text>
-                <View style={styles.progressContainer}>
-                    <View style={[styles.progressFill, { width: '75%', backgroundColor: Colors.primary }]} />
+            {/* Revenue Card */}
+            <TouchableOpacity 
+              style={styles.revenueCard}
+              onPress={() => setShowRevenueDetail(prev => !prev)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.revenueTrendRow}>
+                <View>
+                  <Text style={styles.revenueLabel}>TOTAL PENDAPATAN BULAN INI</Text>
+                  <Text style={styles.revenueValue}>{formatIDR(monthlyRevenue?.total_pendapatan)}</Text>
                 </View>
-                <Text style={styles.progressNote}>75% dari target bulan lalu</Text>
+                <View style={[styles.trendBadge, revenueTrend >= 0 ? { backgroundColor: '#D1FAE5' } : { backgroundColor: '#FEE2E2' }]}>
+                  <Ionicons 
+                    name={revenueTrend >= 0 ? 'trending-up' : 'trending-down'} 
+                    size={16} 
+                    color={revenueTrend >= 0 ? '#059669' : '#DC2626'} 
+                  />
+                  <Text style={[styles.trendText, { color: revenueTrend >= 0 ? '#059669' : '#DC2626' }]}>
+                    {Math.abs(revenueTrend)}%
+                  </Text>
+                </View>
               </View>
-              <View style={styles.finDivider} />
-              <View style={styles.finRow}>
-                <View style={styles.finSubItem}>
-                  <Text style={styles.finSubLabel}>HARI INI</Text>
-                  <Text style={styles.finSubValue}>{formatIDR(dashData?.pendapatan_hari_ini)}</Text>
-                </View>
-                <View style={styles.finSubItem}>
-                  <Text style={styles.finSubLabel}>RATA-RATA</Text>
-                  <Text style={styles.finSubValue}>{formatIDR(calculateDailyAverage())}</Text>
-                </View>
+              
+              <View style={styles.progressBar}>
+                <View style={[styles.progressFill, { width: `${progressPercentage}%` }]} />
               </View>
-            </View>
+              <Text style={styles.progressText}>{progressLabel}</Text>
 
-            <View style={styles.statsRow}>
-              <View style={styles.statBox}>
-                <Text style={styles.statVal}>{stats.outlets}</Text>
-                <Text style={styles.statLab}>Outlet</Text>
+              <View style={styles.revenueDivider} />
+
+              <View style={styles.revenueRow}>
+                <View style={styles.revenueItem}>
+                  <Text style={styles.revenueItemLabel}>HARI INI</Text>
+                  <Text style={styles.revenueItemValue}>{formatIDR(dashData?.pendapatan_hari_ini)}</Text>
+                </View>
+                <View style={styles.revenueDividerVertical} />
+                <View style={styles.revenueItem}>
+                  <Text style={styles.revenueItemLabel}>RATA-RATA</Text>
+                  <Text style={styles.revenueItemValue}>{dailyAverageDisplay}</Text>
+                </View>
               </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statBox}>
-                <Text style={styles.statVal}>{stats.users}</Text>
-                <Text style={styles.statLab}>Karyawan</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statBox}>
-                <Text style={[styles.statVal, dashData?.permintaan_pending > 0 && {color: '#F97316'}]}>
+
+              {showRevenueDetail && (
+                <View style={styles.revenueDetailBox}>
+                  <Text style={styles.revenueDetailTitle}>Detail perhitungan</Text>
+                  <View style={styles.revenueDetailRow}>
+                    <Text style={styles.revenueDetailLabel}>Total bulan ini</Text>
+                    <Text style={styles.revenueDetailValue}>{formatIDR(monthlyRevenue?.total_pendapatan || 0)}</Text>
+                  </View>
+                  <View style={styles.revenueDetailRow}>
+                    <Text style={styles.revenueDetailLabel}>Hari berjalan</Text>
+                    <Text style={styles.revenueDetailValue}>{currentDay}</Text>
+                  </View>
+                  <View style={styles.revenueDetailRow}>
+                    <Text style={styles.revenueDetailLabel}>Rata-rata harian</Text>
+                    <Text style={styles.revenueDetailValue}>{dailyAverageDisplay}</Text>
+                  </View>
+                  <View style={styles.revenueDetailRow}>
+                    <Text style={styles.revenueDetailLabel}>Pendapatan hari ini</Text>
+                    <Text style={styles.revenueDetailValue}>{formatIDR(dashData?.pendapatan_hari_ini || 0)}</Text>
+                  </View>
+                  <View style={styles.revenueDetailRow}>
+                    <Text style={styles.revenueDetailLabel}>Progress</Text>
+                    <Text style={styles.revenueDetailValue}>{progressDisplay}</Text>
+                  </View>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Stats Grid */}
+            <View style={styles.statsGrid}>
+              <TouchableOpacity 
+                style={styles.statCard}
+                onPress={() => router.push('/(owner)/cabang')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.statIcon, { backgroundColor: '#DBEAFE' }]}>
+                  <Ionicons name="storefront" size={20} color="#2563EB" />
+                </View>
+                <Text style={styles.statValue}>{outletCount}</Text>
+                <Text style={styles.statLabel}>Outlet</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.statCard}
+                onPress={() => router.push('/(owner)/pegawai')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.statIcon, { backgroundColor: '#D1FAE5' }]}>
+                  <Ionicons name="people" size={20} color="#059669" />
+                </View>
+                <Text style={styles.statValue}>{userCount}</Text>
+                <Text style={styles.statLabel}>Karyawan</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.statCard}
+                onPress={() => router.push('/(owner)/laporan')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.statIcon, { backgroundColor: '#FEF3C7' }]}>
+                  <Ionicons name="document-text" size={20} color="#D97706" />
+                </View>
+                <Text style={[styles.statValue, (dashData?.permintaan_pending > 0) && { color: '#F97316' }]}>
                   {dashData?.permintaan_pending || 0}
                 </Text>
-                <Text style={styles.statLab}>Pengajuan</Text>
-              </View>
+                <Text style={styles.statLabel}>Pengajuan</Text>
+              </TouchableOpacity>
             </View>
 
+            {/* Intelligence Cards */}
             <View style={styles.intelGrid}>
               <View style={styles.intelCard}>
-                <View style={styles.intelIconBox}>
-                    <Ionicons name="people-outline" size={16} color={Colors.primary} />
+                <View style={[styles.intelIcon, { backgroundColor: '#EEF2FF' }]}>
+                  <Ionicons name="people-outline" size={18} color={Colors.primary} />
                 </View>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.intelLabel}>RASIO STAF</Text>
-                  <Text style={styles.intelValue}>{stats.outlets > 0 ? (stats.users / stats.outlets).toFixed(1) : 0}</Text>
+                  <Text style={styles.intelValue}>
+                    {outletCount > 0 ? (userCount / outletCount).toFixed(1) : '0.0'}
+                  </Text>
                 </View>
               </View>
+
               <View style={styles.intelCard}>
-                <View style={[styles.intelIconBox, {backgroundColor: '#ECFDF5'}]}>
-                    <Ionicons name="shield-checkmark-outline" size={16} color="#10B981" />
+                <View style={[styles.intelIcon, { backgroundColor: '#ECFDF5' }]}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color="#10B981" />
                 </View>
-                <View>
-                  <Text style={styles.intelLabel}>HEALTH STOK</Text>
-                  <Text style={[styles.intelValue, {color: '#10B981'}]}>
-                    {dashData?.stok_gudang?.length > 0 
-                      ? (((dashData.stok_gudang.length - dashData.jumlah_stok_kritis) / dashData.stok_gudang.length) * 100).toFixed(0) 
-                      : 0}%
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.intelLabel}>RASIO STOK</Text>
+                  <Text style={[styles.intelValue, { color: stockHealth > 50 ? '#10B981' : '#EF4444' }]}>
+                    {stockHealth}%
                   </Text>
                 </View>
               </View>
             </View>
 
+            {/* Warehouse Stock Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Monitoring Stok Gudang</Text>
-                <View style={styles.liveBadge}><View style={styles.pulse} /><Text style={styles.liveText}>REAL-TIME</Text></View>
+                <View style={styles.liveBadge}>
+                  <View style={styles.pulse} />
+                  <Text style={styles.liveText}>REAL-TIME</Text>
+                </View>
               </View>
+
               <View style={styles.stockGrid}>
-                {(dashData?.stok_gudang || []).map((item: any, index: number) => (
-                  <View key={index} style={styles.stockBox}>
-                    <Text style={styles.stockLabel} numberOfLines={1}>{item.bahan?.nama}</Text>
-                    <Text style={[styles.stockValue, item.is_kritis && { color: '#EF4444' }]}>
-                      {item.stok} <Text style={styles.stockUnit}>{item.bahan?.satuan.charAt(0)}</Text>
-                    </Text>
-                  </View>
-                ))}
+                {(dashData?.stok_gudang || []).slice(0, 9).map((item: any, index: number) => {
+                  // Calculate display quantity using the same logic as warehouse
+                  const unit = (item.bahan?.satuan || '').toLowerCase();
+                  let displayQty = Number(item.stok || 0).toLocaleString('id-ID');
+                  let displayUnit = 'Bungkus';
+                  
+                  if (unit !== 'gr') {
+                    const perUnitWeight = (Number(item.bahan?.berat_per_isi) || 0) * (Number(item.bahan?.isi_per_satuan) || 1);
+                    if (perUnitWeight > 0) {
+                      const packCount = Math.floor(Number(item.stok || 0) / perUnitWeight);
+                      displayQty = `${packCount.toLocaleString('id-ID')}`;
+                    }
+                  }
+
+                  return (
+                    <View key={index} style={styles.stockBox}>
+                      <Text style={styles.stockName} numberOfLines={1}>{item.bahan?.nama || '—'}</Text>
+                      <Text style={[styles.stockQty, item.is_kritis && { color: '#EF4444' }]}>
+                        {displayQty}
+                      </Text>
+                      <Text style={styles.stockUnit}>{displayUnit}</Text>
+                    </View>
+                  );
+                })}
               </View>
             </View>
 
+            {/* Branch Monitoring Section */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Monitoring Cabang</Text>
-              {outletData.map((ot, idx) => (
-                <View key={idx} style={styles.branchCard}>
-                  <View style={styles.branchHeader}>
-                    <View style={styles.branchNameRow}>
-                      <View style={[styles.statusLamp, { backgroundColor: ot.jumlah_stok_kritis > 0 ? '#EF4444' : '#22C55E' }]} />
-                      <Text style={styles.branchName} numberOfLines={1}>{ot.nama_outlet}</Text>
-                    </View>
-                    <View style={[styles.statusPill, ot.jumlah_stok_kritis > 0 ? { backgroundColor: '#FEF2F2' } : { backgroundColor: '#F0FDF4' }]}>
-                      <Text style={[styles.statusPillText, ot.jumlah_stok_kritis > 0 ? { color: '#EF4444' } : { color: '#22C55E' }]}>
-                        {ot.jumlah_stok_kritis > 0 ? `${ot.jumlah_stok_kritis} Kritis` : 'Aman'}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.branchDivider} />
-                  <View style={styles.miniStokRow}>
-                    {ot.stok.slice(0, 4).map((s: any, i: number) => (
-                      <View key={i} style={styles.branchStockItem}>
-                        <Text style={styles.branchStockName} numberOfLines={1}>{s.nama_bahan}</Text>
-                        <Text style={[styles.branchStockQty, s.status === 'Kritis' && { color: '#EF4444' }]}>{s.stok}</Text>
-                      </View>
-                    ))}
-                  </View>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Monitoring Cabang</Text>
+                <View style={styles.sectionBadge}>
+                  <Text style={styles.sectionBadgeText}>{stokDetail?.stok_outlet?.length || 0}</Text>
                 </View>
-              ))}
+              </View>
+
+              {(stokDetail?.stok_outlet || []).map((outlet: any, idx: number) => {
+                // Estimate operational status based on recent activity
+                const outletHealth = outlet.stok?.length > 0 
+                  ? (outlet.stok.length - (outlet.stok.filter((s: any) => s.status === 'Kritis').length || 0)) / outlet.stok.length * 100
+                  : 0;
+                const isOperational = outletHealth > 30 && outlet.jumlah_stok_kritis === 0;
+
+                return (
+                  <TouchableOpacity 
+                    key={idx} 
+                    style={styles.branchCard}
+                    onPress={() => router.push('/(owner)/cabang')}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.branchHeader}>
+                      <View style={styles.branchNameRow}>
+                        <View style={[styles.statusIndicator, { 
+                          backgroundColor: isOperational ? '#22C55E' : '#EF4444'
+                        }]} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.branchName} numberOfLines={1}>{outlet.nama_outlet}</Text>
+                          <Text style={styles.branchStatus}>
+                            {isOperational ? '🟢 Operasional' : '🟡 Perlu Perhatian'}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={[styles.statusBadge, 
+                        isOperational
+                          ? { backgroundColor: '#F0FDF4' } 
+                          : { backgroundColor: '#FEF2F2' }
+                      ]}>
+                        <Text style={[styles.statusBadgeText,
+                          isOperational
+                            ? { color: '#16A34A' } 
+                            : { color: '#DC2626' }
+                        ]}>
+                          {isOperational ? 'Aman' : `${outlet.jumlah_stok_kritis || 'Beberapa'} Kritis`}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.branchDivider} />
+
+                    <View style={styles.branchStockRow}>
+                      {outlet.stok?.slice(0, 4).map((stock: any, i: number) => {
+                        // Cari bahan di dashData berdasarkan bahan_id untuk akses berat_per_isi
+                        const bahanInfo = (dashData?.stok_gudang || []).find((g: any) => g.bahan_id === stock.bahan_id)?.bahan;
+                        const berat_per_isi = Number(bahanInfo?.berat_per_isi) || 0;
+                        
+                        let displayQty = `${Number(stock.stok || 0).toLocaleString('id-ID')}`;
+                        let displayUnit = '';
+                        
+                        if (berat_per_isi > 0) {
+                          const packCount = Math.floor(Number(stock.stok || 0) / berat_per_isi);
+                          displayQty = `${packCount.toLocaleString('id-ID')}`;
+                          displayUnit = 'bungkus';
+                        }
+
+                        return (
+                          <View key={i} style={styles.branchStockItem}>
+                            <Text style={styles.branchStockName} numberOfLines={1}>
+                              {stock.nama_bahan}
+                            </Text>
+                            <Text style={[styles.branchStockQty, 
+                              stock.status === 'Kritis' && { color: '#EF4444' }
+                            ]}>
+                              {displayQty}
+                            </Text>
+                            {displayUnit && <Text style={styles.branchStockUnit}>{displayUnit}</Text>}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </>
         )}
-        <View style={{ height: 60 }} />
+
+        <View style={{ height: 80 }} />
       </ScrollView>
     </View>
   );
 }
 
+// ==================== STYLES ====================
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  premiumHeader: {
+  header: {
     backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingBottom: 45,
-    paddingHorizontal: 25,
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
+    paddingBottom: 30,
+    paddingHorizontal: 24,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  headerLeft: { flex: 1 },
-  greetingText: { color: 'rgba(255,255,255,0.7)', fontSize: 14, fontWeight: '600' },
-  headerTitle: { color: 'white', fontSize: 32, fontWeight: '900', letterSpacing: -0.5 },
-  headerRight: { justifyContent: 'center', alignItems: 'center' },
-  avatarContainer: {
-    width: 54, height: 54, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)'
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
-  avatarText: { color: 'white', fontSize: 20, fontWeight: '900' },
-  onlineStatus: { position: 'absolute', bottom: -2, right: -2, width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: Colors.primary },
-  headerBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  datePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.12)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 15, gap: 6 },
-  dateText: { color: 'white', fontSize: 11, fontWeight: '700' },
-  overviewBadge: { backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  overviewBadgeText: { color: 'rgba(255,255,255,0.8)', fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
-  scrollView: { flex: 1, marginTop: -35 },
-  shimmerEffect: { flex: 1, backgroundColor: 'rgba(255,255,255,0.3)' },
-  urgentBar: { marginHorizontal: 25, marginBottom: 15, backgroundColor: '#FEF2F2', padding: 14, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: '#FEE2E2' },
-  urgentText: { fontSize: 11, color: '#991B1B', fontWeight: '800', flex: 1 },
-  finCard: { marginHorizontal: 25, backgroundColor: 'white', borderRadius: 30, padding: 25, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 15 },
-  finMain: { marginBottom: 20 },
-  finLabel: { fontSize: 10, color: '#94A3B8', fontWeight: '900', letterSpacing: 1.5, marginBottom: 8 },
-  finValue: { fontSize: 32, fontWeight: '900', color: '#1E293B' },
-  progressContainer: { height: 7, backgroundColor: '#F1F5F9', borderRadius: 4, marginTop: 18, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 4 },
-  progressNote: { fontSize: 10, color: '#94A3B8', marginTop: 8, fontWeight: '700' },
-  finDivider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 20 },
-  finRow: { flexDirection: 'row' },
-  finSubItem: { flex: 1, alignItems: 'center' },
-  finSubLabel: { fontSize: 9, color: '#94A3B8', fontWeight: '800', marginBottom: 4 },
-  finSubValue: { fontSize: 16, fontWeight: '800', color: '#475569' },
-  statsRow: { flexDirection: 'row', marginHorizontal: 25, marginTop: 20, backgroundColor: 'white', padding: 15, borderRadius: 20, alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' },
-  statBox: { flex: 1, alignItems: 'center' },
-  statVal: { fontSize: 18, fontWeight: '900', color: '#1E293B' },
-  statLab: { fontSize: 10, color: '#94A3B8', fontWeight: '700', marginTop: 2 },
-  statDivider: { width: 1, height: 20, backgroundColor: '#F1F5F9' },
-  intelGrid: { flexDirection: 'row', paddingHorizontal: 25, gap: 12, marginTop: 25 },
-  intelCard: { flex: 1, backgroundColor: 'white', padding: 18, borderRadius: 25, borderWidth: 1, borderColor: '#F1F5F9', flexDirection: 'row', alignItems: 'center', gap: 12 },
-  intelIconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' },
-  intelLabel: { fontSize: 8, fontWeight: '900', color: '#94A3B8', marginBottom: 2 },
-  intelValue: { fontSize: 16, fontWeight: '900', color: '#1E293B' },
-  section: { marginTop: 35, paddingHorizontal: 25 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
-  sectionTitle: { fontSize: 18, fontWeight: '900', color: '#1E293B' },
-  liveBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F0FDF4', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  pulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E' },
-  liveText: { fontSize: 9, fontWeight: '900', color: '#22C55E' },
-  stockGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  stockBox: { width: '31.3%', backgroundColor: 'white', padding: 15, borderRadius: 20, borderWidth: 1, borderColor: '#F1F5F9', alignItems: 'center' },
-  stockLabel: { fontSize: 10, color: '#64748B', fontWeight: '700', marginBottom: 6 },
-  stockValue: { fontSize: 15, fontWeight: '900', color: '#1E293B' },
-  stockUnit: { fontSize: 9, color: '#94A3B8' },
-  branchCard: { backgroundColor: 'white', padding: 22, borderRadius: 30, marginBottom: 15, borderWidth: 1, borderColor: '#F1F5F9' },
-  branchHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  branchNameRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  statusLamp: { width: 10, height: 10, borderRadius: 5 },
-  branchName: { fontSize: 17, fontWeight: '800', color: '#1E293B', flex: 1 },
-  statusPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, minWidth: 80, alignItems: 'center' },
-  statusPillText: { fontSize: 10, fontWeight: '900' },
-  branchDivider: { height: 1, backgroundColor: '#F8F8F8', marginVertical: 15 },
-  miniStokRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  branchStockItem: { width: '23%', alignItems: 'center' },
-  branchStockName: { fontSize: 8.5, color: '#94A3B8', marginBottom: 4, fontWeight: 'bold', textAlign: 'center' },
-  branchStockQty: { fontSize: 14, fontWeight: '800', color: '#475569' }
+  headerLeft: {
+    flex: 1,
+  },
+  headerSubtitle: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '700',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  greetingText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: 'white',
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
+  dateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  dateText: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.95)',
+    fontWeight: '700',
+  },
+  avatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    position: 'relative',
+  },
+  avatarText: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: 'white',
+  },
+  statusDot: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2.5,
+    borderColor: Colors.primary,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingTop: 20,
+  },
+  urgentAlert: {
+    marginHorizontal: 24,
+    marginBottom: 16,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+  },
+  urgentIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  urgentTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#991B1B',
+    marginBottom: 2,
+  },
+  urgentText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#DC2626',
+  },
+  revenueCard: {
+    marginHorizontal: 24,
+    marginBottom: 20,
+    backgroundColor: 'white',
+    borderRadius: 24,
+    padding: 24,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  revenueLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#94A3B8',
+    letterSpacing: 1.2,
+    marginBottom: 8,
+  },
+  revenueValue: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#1E293B',
+    marginBottom: 16,
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: Colors.primary,
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  revenueDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 16,
+  },
+  revenueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  revenueItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  revenueItemLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#94A3B8',
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  revenueItemValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  revenueDividerVertical: {
+    width: 1,
+    height: 30,
+    backgroundColor: '#F1F5F9',
+  },
+  revenueDetailBox: {
+    marginTop: 14,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 8,
+  },
+  revenueDetailTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  revenueDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  revenueDetailLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  revenueDetailValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    gap: 12,
+    marginBottom: 20,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  statIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#1E293B',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  intelGrid: {
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    gap: 12,
+    marginBottom: 30,
+  },
+  intelCard: {
+    flex: 1,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  intelIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  intelLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#94A3B8',
+    marginBottom: 2,
+    letterSpacing: 0.5,
+  },
+  intelValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#1E293B',
+  },
+  section: {
+    paddingHorizontal: 24,
+    marginBottom: 30,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#1E293B',
+  },
+  sectionBadge: {
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  sectionBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  pulse: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#22C55E',
+  },
+  liveText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#16A34A',
+    letterSpacing: 0.5,
+  },
+  stockGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  stockBox: {
+    width: '31.3%',
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  stockName: {
+    fontSize: 9,
+    fontWeight: '500',
+    color: '#94A3B8',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  stockQty: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#1E293B',
+  },
+  stockUnit: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  branchCard: {
+    backgroundColor: 'white',
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  branchHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  branchNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  statusIndicator: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  branchName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1E293B',
+    flex: 1,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+  },
+  branchDivider: {
+    height: 1,
+    backgroundColor: '#F8FAFC',
+    marginVertical: 14,
+  },
+  branchStockRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  branchStockItem: {
+    width: '23%',
+    alignItems: 'center',
+  },
+  branchStockName: {
+    fontSize: 9,
+    fontWeight: '500',
+    color: '#94A3B8',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  branchStockQty: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  branchStockUnit: {
+    fontSize: 8,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  skeletonBar: {
+    backgroundColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  skeletonHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  quickActionsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    gap: 12,
+    marginBottom: 20,
+  },
+  quickActionBtn: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 8,
+  },
+  quickActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quickActionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+    textAlign: 'center',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 30,
+    right: 24,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+  },
+  revenueTrendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  trendBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  trendText: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  branchStatus: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 2,
+  },
 });

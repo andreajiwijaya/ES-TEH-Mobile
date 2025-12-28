@@ -1,25 +1,27 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState, useCallback, useMemo } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // FIX: Ditambahkan untuk sinkronisasi
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  Platform,
   ActivityIndicator,
   Alert,
-  RefreshControl,
+  Animated,
+  Easing,
   KeyboardAvoidingView,
-  StatusBar
+  Modal,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../../constants/Colors';
-import { User, Outlet } from '../../types';
 import { ownerAPI } from '../../services/api';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // FIX: Ditambahkan untuk sinkronisasi
+import { Outlet, User } from '../../types';
 
 export default function KaryawanScreen() {
   const [employees, setEmployees] = useState<User[]>([]);
@@ -125,6 +127,174 @@ export default function KaryawanScreen() {
     setShowPassword(false);
   };
 
+  // Skeleton shimmer component
+  type SkeletonProps = { width?: number | string; height?: number; radius?: number; style?: any };
+  const SkeletonShimmer = ({ width = '100%', height = 16, radius = 12, style }: SkeletonProps) => {
+    const shimmer = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+      const loop = Animated.loop(
+        Animated.timing(shimmer, { toValue: 1, duration: 1100, easing: Easing.linear, useNativeDriver: true })
+      );
+      loop.start();
+      return () => loop.stop();
+    }, [shimmer]);
+    const translate = shimmer.interpolate({ inputRange: [0, 1], outputRange: [-120, 120] });
+    const baseStyle = typeof width === 'number' ? { width } : { width };
+    return (
+      <View style={[styles.skeletonBase, baseStyle, { height, borderRadius: radius }, style]}>
+        <Animated.View style={[styles.skeletonHighlight, { transform: [{ translateX: translate }] }]} />
+      </View>
+    );
+  };
+
+  const renderHeaderStats = () => {
+    if (loading && !refreshing) {
+      return (
+        <View style={styles.statsCard}>
+          <View style={styles.statBox}>
+            <SkeletonShimmer width={60} height={22} />
+            <SkeletonShimmer width={50} height={10} style={{ marginTop: 10 }} />
+          </View>
+          <View style={styles.vDivider} />
+          <View style={styles.statBox}>
+            <SkeletonShimmer width={60} height={22} />
+            <SkeletonShimmer width={50} height={10} style={{ marginTop: 10 }} />
+          </View>
+          <View style={styles.vDivider} />
+          <View style={styles.statBox}>
+            <SkeletonShimmer width={60} height={22} />
+            <SkeletonShimmer width={50} height={10} style={{ marginTop: 10 }} />
+          </View>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.statsCard}>
+        <View style={styles.statBox}>
+          <Text style={styles.statVal}>{stats.total}</Text>
+          <Text style={styles.statLab}>TOTAL</Text>
+        </View>
+        <View style={styles.vDivider} />
+        <View style={styles.statBox}>
+          <Text style={[styles.statVal, { color: Colors.primary }]}>{stats.staff}</Text>
+          <Text style={styles.statLab}>OUTLET</Text>
+        </View>
+        <View style={styles.vDivider} />
+        <View style={styles.statBox}>
+          <Text style={[styles.statVal, { color: '#F59E0B' }]}>{stats.gudang}</Text>
+          <Text style={styles.statLab}>GUDANG</Text>
+        </View>
+      </View>
+    );
+  };
+
+  const renderListContent = () => {
+    if (loading && !refreshing) {
+      return (
+        <View style={styles.listSkeletonWrapper}>
+          {[1, 2, 3].map((key) => (
+            <View key={key} style={styles.employeeCard}>
+              <View style={styles.cardHeader}>
+                <View style={styles.nameRow}>
+                  <SkeletonShimmer width={48} height={48} radius={24} />
+                  <View style={{ flex: 1 }}>
+                    <SkeletonShimmer width="55%" height={16} />
+                    <SkeletonShimmer width={80} height={12} style={{ marginTop: 8 }} />
+                  </View>
+                </View>
+                <SkeletonShimmer width={28} height={24} radius={6} />
+              </View>
+              <SkeletonShimmer width="80%" height={12} style={{ marginBottom: 12 }} />
+              <View style={styles.cardDivider} />
+              <View style={styles.cardFooter}>
+                <SkeletonShimmer width={90} height={14} />
+                <SkeletonShimmer width={24} height={24} radius={8} />
+              </View>
+            </View>
+          ))}
+        </View>
+      );
+    }
+
+    if (!filteredEmployees.length) {
+      return (
+        <View style={styles.emptyContainer}>
+          <View style={styles.emptyIconWrap}>
+            <Ionicons name="person-outline" size={22} color="#94A3B8" />
+          </View>
+          <Text style={styles.emptyText}>Belum ada karyawan</Text>
+        </View>
+      );
+    }
+
+    return filteredEmployees.map((item) => (
+      <View key={item.id} style={styles.employeeCard}>
+        <View style={styles.cardHeader}>
+          <View style={styles.nameRow}>
+            <View
+              style={[
+                styles.avatarCircle,
+                {
+                  backgroundColor:
+                    item.role === 'owner' ? Colors.primary : item.role === 'gudang' ? '#F59E0B' : '#10B981',
+                },
+              ]}
+            >
+              <Text style={styles.avatarLetter}>{item.username.charAt(0).toUpperCase()}</Text>
+            </View>
+            <View style={styles.identityContainer}>
+              <Text style={styles.usernameText} numberOfLines={1}>
+                {item.username}
+              </Text>
+              <View style={[styles.rolePill, { backgroundColor: item.role === 'gudang' ? '#FFFBEB' : '#F0FDF4' }]}>
+                <Text style={[styles.rolePillText, { color: item.role === 'gudang' ? '#B45309' : '#15803D' }]}>
+                  {item.role.toUpperCase()}
+                </Text>
+              </View>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.settingsBtn}
+            onPress={() => {
+              setSelectedEmployee(item);
+              setFormData({
+                username: item.username,
+                password: '',
+                role: item.role as any,
+                outlet_id: item.outlet_id?.toString() || '',
+              });
+              setShowEditModal(true);
+            }}
+          >
+            <Ionicons name="create-outline" size={22} color={Colors.primary} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.cardBody}>
+          <View style={styles.infoRow}>
+            <Ionicons name="location-outline" size={14} color="#94A3B8" />
+            <Text style={styles.locationText} numberOfLines={1}>
+              {item.role === 'karyawan'
+                ? `Penempatan: ${getOutletName(item.outlet_id)}`
+                : 'Akses Gudang Pusat'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.cardDivider} />
+
+        <View style={styles.cardFooter}>
+          <Text style={styles.idText}>ID: USR-{item.id}</Text>
+          {item.role !== 'owner' && (
+            <TouchableOpacity onPress={() => handleDelete(item.id)}>
+              <Ionicons name="trash-outline" size={18} color="#EF4444" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    ));
+  };
+
   const handleAdd = async () => {
     if (!formData.username || !formData.password) {
       Alert.alert('Validasi', 'Username dan password wajib diisi');
@@ -199,22 +369,7 @@ export default function KaryawanScreen() {
           </View>
         </View>
 
-        <View style={styles.statsCard}>
-          <View style={styles.statBox}>
-            <Text style={styles.statVal}>{stats.total}</Text>
-            <Text style={styles.statLab}>TOTAL</Text>
-          </View>
-          <View style={styles.vDivider} />
-          <View style={styles.statBox}>
-            <Text style={[styles.statVal, {color: Colors.primary}]}>{stats.staff}</Text>
-            <Text style={styles.statLab}>OUTLET</Text>
-          </View>
-          <View style={styles.vDivider} />
-          <View style={styles.statBox}>
-            <Text style={[styles.statVal, {color: '#F59E0B'}]}>{stats.gudang}</Text>
-            <Text style={styles.statLab}>GUDANG</Text>
-          </View>
-        </View>
+        {renderHeaderStats()}
       </View>
 
       <ScrollView 
@@ -234,69 +389,36 @@ export default function KaryawanScreen() {
               placeholderTextColor="#94A3B8"
             />
           </View>
-          <TouchableOpacity 
-            style={styles.greenAddBtn}
-            onPress={() => { resetForm(); setShowAddModal(true); }}
-          >
-            <Ionicons name="add" size={30} color="white" />
-          </TouchableOpacity>
         </View>
 
         <View style={styles.listSection}>
-          <Text style={styles.sectionHeading}>Daftar Tim Aktif</Text>
-          {loading && !refreshing ? (
-            <ActivityIndicator size="large" color={Colors.primary} style={{marginTop: 40}} />
-          ) : (
-            filteredEmployees.map((item) => (
-              <View key={item.id} style={styles.employeeCard}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.nameRow}>
-                    <View style={[styles.avatarCircle, { backgroundColor: item.role === 'owner' ? Colors.primary : (item.role === 'gudang' ? '#F59E0B' : '#10B981') }]}>
-                        <Text style={styles.avatarLetter}>{item.username.charAt(0).toUpperCase()}</Text>
-                    </View>
-                    <View style={styles.identityContainer}>
-                        <Text style={styles.usernameText} numberOfLines={1}>{item.username}</Text>
-                        <View style={[styles.rolePill, { backgroundColor: item.role === 'gudang' ? '#FFFBEB' : '#F0FDF4' }]}>
-                            <Text style={[styles.rolePillText, { color: item.role === 'gudang' ? '#B45309' : '#15803D' }]}>
-                                {item.role.toUpperCase()}
-                            </Text>
-                        </View>
-                    </View>
-                  </View>
-                  <TouchableOpacity style={styles.settingsBtn} onPress={() => {
-                        setSelectedEmployee(item);
-                        setFormData({ username: item.username, password: '', role: item.role as any, outlet_id: item.outlet_id?.toString() || '' });
-                        setShowEditModal(true);
-                  }}>
-                      <Ionicons name="create-outline" size={22} color={Colors.primary} />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.cardBody}>
-                  <View style={styles.infoRow}>
-                    <Ionicons name="location-outline" size={14} color="#94A3B8" />
-                    <Text style={styles.locationText} numberOfLines={1}>
-                        {item.role === 'karyawan' ? `Penempatan: ${getOutletName(item.outlet_id)}` : 'Akses Gudang Pusat'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.cardDivider} />
-
-                <View style={styles.cardFooter}>
-                    <Text style={styles.idText}>ID: USR-{item.id}</Text>
-                    {item.role !== 'owner' && (
-                        <TouchableOpacity onPress={() => handleDelete(item.id)}>
-                            <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                        </TouchableOpacity>
-                    )}
-                </View>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionLabelWrap}>
+              <Text style={styles.sectionHeading}>Daftar Tim Aktif</Text>
+              <View style={styles.sectionBadge}>
+                <Text style={styles.sectionBadgeText}>{filteredEmployees.length} orang</Text>
               </View>
-            ))
-          )}
+            </View>
+            <View style={styles.liveBadge}>
+              <View style={styles.pulse} />
+              <Text style={styles.liveText}>LIVE</Text>
+            </View>
+          </View>
+          {renderListContent()}
         </View>
         <View style={{height: 100}} />
       </ScrollView>
+
+      <TouchableOpacity
+        style={styles.fab}
+        activeOpacity={0.9}
+        onPress={() => {
+          resetForm();
+          setShowAddModal(true);
+        }}
+      >
+        <Ionicons name="add" size={26} color="white" />
+      </TouchableOpacity>
 
       {/* MODAL ADD / EDIT */}
       <Modal visible={showAddModal || showEditModal} transparent animationType="fade">
@@ -316,7 +438,7 @@ export default function KaryawanScreen() {
               
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>{showEditModal ? 'Password Baru (Opsional)' : 'Password'}</Text>
-                <div style={styles.passwordWrapper}>
+                <View style={styles.passwordWrapper}>
                     <TextInput 
                         style={styles.passwordInput} 
                         value={formData.password} 
@@ -327,7 +449,7 @@ export default function KaryawanScreen() {
                     <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
                         <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={22} color="#94A3B8" />
                     </TouchableOpacity>
-                </div>
+                </View>
               </View>
 
               <View style={styles.inputGroup}>
@@ -430,10 +552,18 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: 12, marginBottom: 25 },
   searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 18, paddingHorizontal: 15, height: 56, borderWidth: 1, borderColor: '#E2E8F0' },
   searchInput: { flex: 1, marginLeft: 10, fontSize: 15, color: '#1E293B', fontWeight: '600' },
-  greenAddBtn: { width: 56, height: 56, backgroundColor: '#10B981', borderRadius: 18, justifyContent: 'center', alignItems: 'center', elevation: 4 },
+  // FAB replaces inline add button
 
   listSection: { marginTop: 10 },
-  sectionHeading: { fontSize: 18, fontWeight: '900', color: '#1E293B', marginBottom: 15 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  sectionHeading: { fontSize: 18, fontWeight: '900', color: '#1E293B' },
+  sectionLabelWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  sectionBadge: { backgroundColor: '#EEF2FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
+  sectionBadgeText: { fontSize: 12, fontWeight: '800', color: '#4F46E5' },
+  liveBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F0FDF4', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+  pulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E' },
+  liveText: { fontSize: 10, fontWeight: '900', color: '#15803D', letterSpacing: 0.6 },
+  listSkeletonWrapper: { gap: 12 },
   
   employeeCard: { backgroundColor: 'white', padding: 20, borderRadius: 30, marginBottom: 15, borderWidth: 1, borderColor: '#F1F5F9', elevation: 2 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 15 },
@@ -483,4 +613,26 @@ const styles = StyleSheet.create({
 
   emptyContainer: { alignItems: 'center', marginTop: 80 },
   emptyText: { color: '#94A3B8', fontWeight: '600', marginTop: 10 }
+  ,emptyIconWrap: { width: 54, height: 54, borderRadius: 18, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center' },
+
+  fab: {
+    position: 'absolute',
+    bottom: 92,
+    right: 22,
+    width: 58,
+    height: 58,
+    borderRadius: 20,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    zIndex: 20,
+  },
+
+  skeletonBase: { backgroundColor: '#E2E8F0', overflow: 'hidden' },
+  skeletonHighlight: { position: 'absolute', top: 0, bottom: 0, width: '45%', backgroundColor: 'rgba(255,255,255,0.55)' },
 });

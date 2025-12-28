@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { authAPI, karyawanAPI } from '../../services/api';
-import { Bahan, BahanGudang, FileAsset, PermintaanStok, User } from '../../types';
+import { BarangKeluar, Bahan, BahanGudang, FileAsset, PermintaanStok, User } from '../../types';
 
 interface StockItem {
   id: string;
@@ -79,8 +79,9 @@ export default function StokScreen() {
   const [activeTab, setActiveTab] = useState<'stok' | 'terima' | 'riwayat'>('stok');
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [requestHistory, setRequestHistory] = useState<PermintaanStok[]>([]);
-  const [incomingShipments, setIncomingShipments] = useState<PermintaanStok[]>([]);
+  const [incomingShipments, setIncomingShipments] = useState<(BarangKeluar | PermintaanStok)[]>([]);
   const [bahanGudang, setBahanGudang] = useState<BahanGudang[]>([]);
+  const [dropdownVisible, setDropdownVisible] = useState(false);
   
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -144,12 +145,17 @@ export default function StokScreen() {
       if (reqRes.data) {
         const allReq = (reqRes.data as PermintaanStok[]);
         setRequestHistory([...allReq].sort((a, b) => b.id - a.id));
+      }
 
+      // Cek barangKeluar dulu; jika kosong atau error, fallback ke PermintaanStok dengan status 'dikirim'
+      if (reqRes.data) {
+        // Fallback: gunakan PermintaanStok dengan status 'dikirim'
+        const allReq = (reqRes.data as PermintaanStok[]);
         const inTransit = allReq.filter(i => 
-          (i.status || '').toString().toLowerCase() === 'dikirim' || 
-          (i.status || '').toString().toLowerCase() === 'in_transit'
+          (i.status || '').toString().toLowerCase() === 'dikirim'
         );
-        setIncomingShipments(inTransit);
+        // Sort by ID ascending (FIFO - pertama dikirim duluan)
+        setIncomingShipments(inTransit.sort((a, b) => a.id - b.id));
       }
 
       if (bahanGudangRes.data) {
@@ -201,16 +207,16 @@ export default function StokScreen() {
   };
 
   // --- CONFIRM RECEIPT ---
-  const handleConfirmReceipt = async (id: number) => {
+  const handleConfirmReceipt = async (ship: BarangKeluar | PermintaanStok) => {
     Alert.alert('Konfirmasi Terima', 'Barang sudah sampai dan sesuai?', [
       { text: 'Batal', style: 'cancel' },
-      { text: 'Foto Bukti', onPress: () => pickImage(id) },
+      { text: 'Foto Bukti', onPress: () => pickImage(ship.id) },
       { 
         text: 'Ya, Terima', 
         onPress: async () => {
           setActionLoading(true);
           try {
-            const res = await karyawanAPI.terimaBarangKeluar(id, buktiFoto);
+            const res = await karyawanAPI.terimaBarangKeluar(ship.id, buktiFoto);
             if (res.error) throw new Error(res.error);
             Alert.alert('Sukses', 'Barang diterima dan stok diperbarui!');
             setBuktiFoto(null);
@@ -236,15 +242,32 @@ export default function StokScreen() {
       if (modalType === 'create') {
         const bId = modalFromGudang ? selectedBahanGudangId : selectedStockItem?.bahan_id;
         if (!bId) throw new Error("Pilih bahan!");
-        await karyawanAPI.createPermintaanStok({ bahan_id: bId, jumlah: qty });
+        console.log('[DEBUG] Create PermintaanStok:', { bahan_id: bId, jumlah: qty });
+        const res = await karyawanAPI.createPermintaanStok({ bahan_id: bId, jumlah: qty });
+        if (res.error) throw new Error(res.error);
         Alert.alert('Sukses', 'Permintaan stok telah diajukan.');
       } else if (selectedRequestItem) {
-        await karyawanAPI.updatePermintaanStok(selectedRequestItem.id, { bahan_id: selectedRequestItem.bahan_id, jumlah: qty });
+        const payload = { 
+          bahan_id: selectedRequestItem.bahan_id, 
+          jumlah: qty 
+        };
+        console.log('[DEBUG] Update PermintaanStok ID:', selectedRequestItem.id);
+        console.log('[DEBUG] Current bahan_id:', selectedRequestItem.bahan_id);
+        console.log('[DEBUG] Current bahan:', selectedRequestItem.bahan);
+        console.log('[DEBUG] Payload:', payload);
+        const res = await karyawanAPI.updatePermintaanStok(selectedRequestItem.id, payload);
+        console.log('[DEBUG] Update response:', res);
+        if (res.error) throw new Error(res.error);
         Alert.alert('Sukses', 'Permintaan telah diperbarui.');
       }
+      // Close modal dulu, baru refresh data
       setModalVisible(false);
-      loadAllData(true);
+      setSelectedRequestItem(null);
+      setInputQuantity('');
+      // Refresh data after closing modal
+      await loadAllData(true);
     } catch (err: any) {
+      console.error('[ERROR] Submit error:', err);
       Alert.alert('Gagal', err.message || 'Terjadi kesalahan.');
     } finally {
       setActionLoading(false);
@@ -473,7 +496,7 @@ export default function StokScreen() {
                       <Text style={styles.cardTitle}>KIRIMAN #{ship.id}</Text>
                       <Text style={styles.cardUnit}>{ship.bahan?.nama}</Text>
                     </View>
-                    <Ionicons name="time" size={28} color={getStatusColor(ship.status)} />
+                    <Ionicons name="time" size={28} color={getStatusColor(ship.status || '')} />
                   </View>
 
                   {buktiFoto && ship.id === selectedShipmentId && (
@@ -495,7 +518,7 @@ export default function StokScreen() {
                     </View>
                     <TouchableOpacity
                       style={[styles.confirmButton, actionLoading && styles.buttonDisabled]}
-                      onPress={() => handleConfirmReceipt(ship.id)}
+                      onPress={() => handleConfirmReceipt(ship)}
                       disabled={actionLoading}
                     >
                       {actionLoading ? (
@@ -584,32 +607,68 @@ export default function StokScreen() {
             </View>
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {/* Bahan Selection for "Minta Bahan Baru" */}
+              {/* Bahan Selection Dropdown for "Minta Bahan Baru" */}
               {modalType === 'create' && modalFromGudang && (
                 <View style={styles.bahanListSection}>
                   <Text style={styles.sectionLabel}>Pilih Bahan</Text>
-                  <View style={styles.bahanList}>
-                    {bahanGudang.map(b => (
-                      <TouchableOpacity
-                        key={b.id}
-                        style={[
-                          styles.bahanItem,
-                          selectedBahanGudangId === b.id && styles.bahanItemSelected
-                        ]}
-                        onPress={() => setSelectedBahanGudangId(b.id)}
+                  <TouchableOpacity
+                    style={styles.dropdownButton}
+                    onPress={() => setDropdownVisible(!dropdownVisible)}
+                  >
+                    <View style={{ flex: 1 }}>
+                      {selectedBahanGudangId ? (
+                        <>
+                          <Text style={styles.dropdownButtonLabel}>
+                            {bahanGudang.find(b => b.id === selectedBahanGudangId)?.nama}
+                          </Text>
+                          <Text style={styles.dropdownButtonSubLabel}>
+                            {bahanGudang.find(b => b.id === selectedBahanGudangId)?.satuan}
+                          </Text>
+                        </>
+                      ) : (
+                        <Text style={styles.dropdownPlaceholder}>Pilih bahan...</Text>
+                      )}
+                    </View>
+                    <Ionicons
+                      name={dropdownVisible ? 'chevron-up' : 'chevron-down'}
+                      size={24}
+                      color={Colors.primary}
+                    />
+                  </TouchableOpacity>
+
+                  {/* Dropdown List */}
+                  {dropdownVisible && (
+                    <View style={styles.dropdownList}>
+                      <ScrollView
+                        scrollEnabled
+                        nestedScrollEnabled={true}
+                        style={styles.dropdownListContent}
+                        showsVerticalScrollIndicator={true}
                       >
-                        <View style={styles.bahanCheckbox}>
-                          {selectedBahanGudangId === b.id && (
-                            <Ionicons name="checkmark" size={16} color="white" />
-                          )}
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.bahanName}>{b.nama}</Text>
-                          <Text style={styles.bahanUnit}>{b.satuan}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                        {bahanGudang.map(b => (
+                          <TouchableOpacity
+                            key={b.id}
+                            style={[
+                              styles.dropdownItem,
+                              selectedBahanGudangId === b.id && styles.dropdownItemSelected
+                            ]}
+                            onPress={() => {
+                              setSelectedBahanGudangId(b.id);
+                              setDropdownVisible(false);
+                            }}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.dropdownItemName}>{b.nama}</Text>
+                              <Text style={styles.dropdownItemUnit}>{b.satuan}</Text>
+                            </View>
+                            {selectedBahanGudangId === b.id && (
+                              <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
                 </View>
               )}
 
@@ -1029,6 +1088,71 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     marginTop: 2,
+  },
+  // Dropdown Styles
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: '#E8E8E8',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  dropdownButtonLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#333',
+  },
+  dropdownButtonSubLabel: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  dropdownPlaceholder: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#999',
+  },
+  dropdownList: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
+    maxHeight: 200,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  dropdownListContent: {
+    maxHeight: 200,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
+    gap: 10,
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#F0FDF4',
+  },
+  dropdownItemName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#333',
+  },
+  dropdownItemUnit: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
+    fontWeight: '500',
   },
   infoSection: {
     marginBottom: 24,

@@ -405,7 +405,7 @@ export const karyawanAPI = {
   getStokOutlet: async () => makeRequest<StokOutletItem[]>('/stok/outlet'),
   getBahanGudang: async () => makeRequest<BahanGudang[]>('/bahan-gudang'),
 
-  // Endpoint Konfirmasi Terima Barang (Post /api/barang-keluar/{id}/terima)
+  // Endpoint Konfirmasi Terima Barang - POST /barang-keluar/{id}/terima dengan PermintaanStok ID
   terimaBarangKeluar: async (id: number, bukti_foto?: FileAsset | null) => {
     if (bukti_foto) {
       const formData = new FormData();

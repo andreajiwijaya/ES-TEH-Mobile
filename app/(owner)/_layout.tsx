@@ -8,15 +8,12 @@ export default function OwnerTabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.primary, // Hijau saat aktif
-        tabBarInactiveTintColor: '#B0BEC5', // Abu soft saat tidak aktif
-        tabBarShowLabel: true, 
-        
-        // Style Tab Bar Modern
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: '#94A3B8',
+        tabBarShowLabel: true,
         tabBarStyle: styles.tabBar,
         tabBarItemStyle: styles.tabItem,
         tabBarLabelStyle: styles.tabLabel,
-        
         tabBarHideOnKeyboard: true,
       }}
     >
@@ -41,7 +38,7 @@ export default function OwnerTabsLayout() {
       <Tabs.Screen
         name="pegawai"
         options={{
-          title: 'Karyawan', 
+          title: 'Karyawan',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} color={color} name="people" />
           ),
@@ -69,13 +66,13 @@ export default function OwnerTabsLayout() {
   );
 }
 
-// Komponen Helper untuk Icon dengan Efek "Green Pill"
+// Komponen Helper untuk Icon dengan Efek Active
 const TabIcon = ({ focused, color, name }: { focused: boolean; color: string; name: keyof typeof Ionicons.glyphMap }) => {
   return (
     <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
       <Ionicons 
         name={focused ? name : (name + '-outline') as any} 
-        size={22} 
+        size={24} 
         color={color} 
       />
     </View>
@@ -85,38 +82,41 @@ const TabIcon = ({ focused, color, name }: { focused: boolean; color: string; na
 const styles = StyleSheet.create({
   tabBar: {
     backgroundColor: '#FFFFFF',
-    borderTopWidth: 0, 
-    elevation: 10, // Shadow Android
-    shadowColor: '#000', // Shadow iOS
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    
-    // Tinggi responsif
-    height: Platform.OS === 'ios' ? 88 : 70,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-    paddingTop: 10,
+    borderTopWidth: 0,
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    height: Platform.OS === 'ios' ? 88 : 68,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 10,
+    paddingTop: 8,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   tabItem: {
-    paddingVertical: 4, 
+    paddingVertical: 6,
   },
   tabLabel: {
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '800',
     marginTop: 4,
+    letterSpacing: 0.2,
   },
-  
-  // Icon Styles
   iconContainer: {
-    width: 40,
-    height: 40,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 20,
-    marginBottom: 2,
+    borderRadius: 16,
+    marginBottom: 0,
   },
   iconContainerActive: {
-    backgroundColor: '#E8F5E9', // Green Pill Background (Soft Green)
-    transform: [{ scale: 1.05 }], 
+    backgroundColor: '#E8F5E9',
+    transform: [{ scale: 1.08 }],
   },
 });
