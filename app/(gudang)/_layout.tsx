@@ -1,9 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { Platform, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 
 export default function WarehouseTabsLayout() {
+  const insets = useSafeAreaInsets();
+  const baseHeight = Platform.OS === 'ios' ? 88 : 68;
+  const basePadBottom = Platform.OS === 'ios' ? 28 : 10;
+  const tabBarInsetStyle = {
+    height: baseHeight + insets.bottom,
+    paddingBottom: basePadBottom + insets.bottom,
+  } as const;
   return (
     <Tabs
       screenOptions={{
@@ -12,7 +20,7 @@ export default function WarehouseTabsLayout() {
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarShowLabel: true,
         tabBarHideOnKeyboard: true,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [styles.tabBar, tabBarInsetStyle],
         tabBarItemStyle: styles.tabItem,
         tabBarLabelStyle: styles.tabLabel,
       }}

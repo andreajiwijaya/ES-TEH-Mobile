@@ -16,6 +16,7 @@ import {
 import { Colors } from '../../constants/Colors';
 import { authAPI, ownerAPI } from '../../services/api';
 import { User } from '../../types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ==================== SKELETON SHIMMER ====================
 const SkeletonShimmer = ({ 
@@ -60,6 +61,7 @@ const SkeletonShimmer = ({
 // ==================== MAIN COMPONENT ====================
 export default function OwnerDashboardScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -308,7 +310,10 @@ export default function OwnerDashboardScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
         }
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(24, insets.bottom + 24) }
+        ]}
       >
         {loading && !refreshing ? (
           renderSkeleton()
@@ -1104,7 +1109,7 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 30, // Will be adjusted at render time if used
     right: 24,
     width: 60,
     height: 60,

@@ -39,6 +39,12 @@
         }
       ],
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "541b52a8-5d21-42d5-9b4a-b1aad6a746da"
+      }
+    }
   }
 }
