@@ -17,10 +17,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
-import { spacing, radius, typography } from '../../constants/DesignSystem';
+import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { ownerAPI } from '../../services/api';
 
 // FIX: Kompatibilitas Expo SDK 54
@@ -40,9 +38,6 @@ interface ReportItem {
 }
 
 export default function LaporanScreen() {
-  const insets = useSafeAreaInsets();
-  const bottomPad = insets.bottom + spacing.lg;
-
   // --- STATE ---
   const [selectedType, setSelectedType] = useState<'all' | 'penjualan' | 'stok' | 'keuangan' | 'gudang'>('all');
   const [reports, setReports] = useState<ReportItem[]>([]);
@@ -472,7 +467,7 @@ export default function LaporanScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
         style={styles.mainContent}
-        contentContainerStyle={[styles.scrollPadding, { paddingBottom: bottomPad }]}
+        contentContainerStyle={styles.scrollPadding}
       >
         <View style={styles.section}>
           <Text style={styles.sectionHeading}>Buat Laporan Baru</Text>
@@ -490,7 +485,7 @@ export default function LaporanScreen() {
         </View>
 
         <View style={styles.tabSection}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.tabScroll, { paddingBottom: bottomPad }]}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScroll}>
             {['all', 'penjualan', 'stok', 'gudang'].map((type) => (
               <TouchableOpacity key={type} style={[styles.tabBtn, selectedType === type && styles.tabBtnActive]} onPress={() => setSelectedType(type as any)}>
                 <Text style={[styles.tabBtnText, selectedType === type && styles.tabBtnTextActive]}>{type === 'all' ? 'Semua Riwayat' : type.charAt(0).toUpperCase() + type.slice(1)}</Text>
@@ -557,7 +552,7 @@ export default function LaporanScreen() {
             )
           )}
         </View>
-        <View style={{ height: 100 }} />
+        <View style={{ height: 20 }} />
       </ScrollView>
 
       <Modal visible={showFilterModal} transparent animationType="fade">
@@ -583,19 +578,19 @@ export default function LaporanScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  premiumHeader: { backgroundColor: Colors.primary, paddingTop: Platform.OS === 'ios' ? 60 : 50, paddingBottom: spacing.xl + spacing.md, paddingHorizontal: spacing.xl, borderBottomLeftRadius: radius.xl, borderBottomRightRadius: radius.xl, zIndex: 10 },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  premiumHeader: { backgroundColor: Colors.primary, paddingTop: Platform.OS === 'ios' ? 60 : 50, paddingBottom: spacing.xl + spacing.lg + spacing.md, paddingHorizontal: spacing.xl, borderBottomLeftRadius: radius.xl, borderBottomRightRadius: radius.xl, zIndex: 10 },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 20 },
   headerTitle: { color: 'white', fontSize: typography.title, fontWeight: '900' },
   headerSubtitle: { color: 'rgba(255,255,255,0.7)', fontSize: typography.body, fontWeight: '600', marginTop: 2 },
   headerAvatar: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
   avatarText: { color: 'white', fontSize: typography.bodyStrong, fontWeight: '900' },
-  statsCard: { position: 'absolute', bottom: -35, left: spacing.xl, right: spacing.xl, flexDirection: 'row', backgroundColor: 'white', borderRadius: radius.xl, paddingVertical: spacing.lg, elevation: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 15, borderWidth: 1, borderColor: '#F1F5F9' },
+  statsCard: { position: 'absolute', bottom: -35, left: spacing.xl, right: spacing.xl, flexDirection: 'row', backgroundColor: 'white', borderRadius: radius.xl, paddingVertical: spacing.lg, elevation: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 15, borderWidth: 1, borderColor: '#F1F5F9', zIndex: 5 },
   statBox: { flex: 1, alignItems: 'center' },
   statVal: { fontSize: typography.headline, fontWeight: '900', color: '#1E293B' },
   statLab: { fontSize: typography.caption, fontWeight: '900', color: '#94A3B8', letterSpacing: 1, marginTop: 4 },
   vDivider: { width: 1, height: '60%', backgroundColor: '#F1F5F9', alignSelf: 'center' },
   mainContent: { flex: 1 },
-  scrollPadding: { paddingTop: spacing.xl + spacing.md, paddingHorizontal: spacing.xl },
+  scrollPadding: { paddingTop: spacing.xl + spacing.md, paddingHorizontal: spacing.xl, paddingBottom: 140 },
   section: { marginTop: spacing.sm },
   sectionHeading: { fontSize: typography.title, fontWeight: '900', color: '#1E293B', marginBottom: spacing.md },
   reportGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },

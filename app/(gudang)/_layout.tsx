@@ -4,11 +4,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 
-import { spacing } from '../../constants/DesignSystem';
 export default function WarehouseTabsLayout() {
-  const insets = useSafeAreaInsets();
-  const bottomPad = insets.bottom + spacing.lg;
-
   const insets = useSafeAreaInsets();
   const baseHeight = Platform.OS === 'ios' ? 88 : 68;
   const basePadBottom = Platform.OS === 'ios' ? 28 : 10;

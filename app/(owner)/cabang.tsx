@@ -19,8 +19,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { spacing, radius, typography } from '../../constants/DesignSystem';
 import { ownerAPI } from '../../services/api';
@@ -67,9 +65,6 @@ const SkeletonShimmer = ({ width = '100%', height = 16, radius = 12, style }: Sk
 };
 
 export default function OutletScreen() {
-  const insets = useSafeAreaInsets();
-  const bottomPad = insets.bottom + spacing.lg;
-
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -405,7 +400,7 @@ export default function OutletScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
         }
         style={styles.mainContent}
-        contentContainerStyle={[styles.scrollPadding, { paddingBottom: bottomPad }]}
+        contentContainerStyle={styles.scrollPadding}
       >
         <View style={styles.actionRow}>
           <View style={styles.searchBox}>

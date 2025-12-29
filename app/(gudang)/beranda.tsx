@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useState, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   Animated,
@@ -14,12 +14,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Colors } from '../../constants/Colors';
+import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI, gudangAPI } from '../../services/api';
 import { Bahan, User } from '../../types';
-import { Colors } from '../../constants/Colors';
-import { spacing, radius, typography } from '../../constants/DesignSystem';
 
 
 // Skeleton Shimmer Component
@@ -81,9 +79,6 @@ interface ActivityItem {
 }
 
 export default function WarehouseOverviewScreen() {
-  const insets = useSafeAreaInsets();
-  const bottomPad = insets.bottom + spacing.lg;
-
   const router = useRouter();
 
   // State Management
@@ -397,7 +392,7 @@ export default function WarehouseOverviewScreen() {
             colors={[Colors.primary]}
           />
         }
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
+        contentContainerStyle={styles.scrollContent}
       >
         {/* Stats Grid */}
         <View style={styles.section}>
@@ -413,8 +408,8 @@ export default function WarehouseOverviewScreen() {
             </View>
           ) : (
             <View style={styles.statsGrid}>
-              <View style={[styles.statCard, styles.statCardPrimary]}>
-                <Text style={styles.statValueWhite}>{totalSKU}</Text>
+              <View style={styles.statCard}>
+                <Text style={[styles.statValue, { color: '#1E293B' }]}>{totalSKU}</Text>
                 <Text style={styles.statLabel}>Total SKU</Text>
               </View>
 
@@ -538,38 +533,41 @@ export default function WarehouseOverviewScreen() {
               <Text style={styles.emptyText}>Belum ada aktivitas</Text>
             </View>
           ) : (
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[styles.activityScrollContent, { paddingBottom: bottomPad }]}
-            >
-              {recentActivities.map((activity) => (
-                <View key={activity.id} style={styles.activityCardHorizontal}>
-                  <View
-                    style={[
-                      styles.activityIcon,
-                      { backgroundColor: `${activity.color}20` },
-                    ]}
-                  >
-                    <Ionicons
-                      name={activity.icon as any}
-                      size={20}
-                      color={activity.color}
-                    />
+            <View>
+              {recentActivities.map((activity, index) => (
+                <View key={activity.id}>
+                  <View style={styles.activityListItem}>
+                    <View
+                      style={[
+                        styles.activityBadge,
+                        { backgroundColor: `${activity.color}20` },
+                      ]}
+                    >
+                      <Ionicons
+                        name={activity.icon as any}
+                        size={20}
+                        color={activity.color}
+                      />
+                    </View>
+                    <View style={styles.activityListContent}>
+                      <Text style={styles.activityListTitle}>{activity.title}</Text>
+                      <Text style={styles.activityListDesc} numberOfLines={1}>
+                        {activity.description}
+                      </Text>
+                    </View>
+                    <View style={styles.activityListRight}>
+                      <Text style={styles.activityListAmount}>{activity.amount}</Text>
+                      <Text style={styles.activityListTime}>
+                        {getRelativeTime(activity.time)}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.activityContent}>
-                    <Text style={styles.activityTitle}>{activity.title}</Text>
-                    <Text style={styles.activityDesc} numberOfLines={2}>{activity.description}</Text>
-                  </View>
-                  <View style={styles.activityRight}>
-                    <Text style={styles.activityAmount}>{activity.amount}</Text>
-                    <Text style={styles.activityTime}>
-                      {getRelativeTime(activity.time)}
-                    </Text>
-                  </View>
+                  {index < recentActivities.length - 1 && (
+                    <View style={styles.activityDivider} />
+                  )}
                 </View>
               ))}
-            </ScrollView>
+            </View>
           )}
         </View>
 
@@ -605,45 +603,61 @@ export default function WarehouseOverviewScreen() {
               <Text style={styles.emptyText}>Data tidak ditemukan</Text>
             </View>
           ) : (
-            <ScrollView 
-              style={styles.stockScrollView}
+            <ScrollView
+              style={styles.stockListScroll}
               showsVerticalScrollIndicator={false}
               nestedScrollEnabled={true}
             >
-              {filteredStocks.map((stock) => (
-                <View key={stock.id} style={styles.stockCard}>
-                  <View style={styles.stockLeft}>
-                    <Text style={styles.stockName}>{stock.bahan.nama}</Text>
-                    <Text style={styles.stockMinimum}>
-                      Min: {stock.bahan.stok_minimum_gudang.toLocaleString('id-ID')} {stock.bahan.satuan}
-                    </Text>
-                  </View>
-                  <View style={styles.stockRight}>
-                    {(() => {
-                      const unit = (stock.bahan.satuan || '').toLowerCase();
-                      let displayQty = `${stock.stok.toLocaleString('id-ID')} ${stock.bahan.satuan}`;
-                      if (unit !== 'gr') {
-                        const perUnitWeight = (Number(stock.bahan.berat_per_isi) || 0) * (Number(stock.bahan.isi_per_satuan) || 1);
-                        if (perUnitWeight > 0) {
-                          const packCount = Math.floor(Number(stock.stok) / perUnitWeight);
-                          displayQty = `${packCount.toLocaleString('id-ID')} ${stock.bahan.satuan}`;
+              <View style={styles.stockListWrapper}>
+                {filteredStocks.map((stock, index) => (
+                  <View key={stock.id}>
+                    <View style={styles.stockListItem}>
+                    <View style={styles.stockListInfo}>
+                      <Text style={styles.stockListName} numberOfLines={1}>
+                        {stock.bahan.nama}
+                      </Text>
+                      <Text style={styles.stockListMinimum}>
+                        Min: {stock.bahan.stok_minimum_gudang.toLocaleString('id-ID')} {stock.bahan.satuan}
+                      </Text>
+                    </View>
+                    <View style={styles.stockListQtyBadge}>
+                      {(() => {
+                        const unit = (stock.bahan.satuan || '').toLowerCase();
+                        let displayQty = `${stock.stok.toLocaleString('id-ID')} ${stock.bahan.satuan}`;
+                        if (unit !== 'gr') {
+                          const perUnitWeight = (Number(stock.bahan.berat_per_isi) || 0) * (Number(stock.bahan.isi_per_satuan) || 1);
+                          if (perUnitWeight > 0) {
+                            const packCount = Math.floor(Number(stock.stok) / perUnitWeight);
+                            const remainder = Number(stock.stok) - (packCount * perUnitWeight);
+                            if (packCount > 0 && remainder > 0) {
+                              displayQty = `${packCount.toLocaleString('id-ID')} ${stock.bahan.satuan} + sisa ${Math.round(remainder).toLocaleString('id-ID')} gr`;
+                            } else if (packCount > 0) {
+                              displayQty = `${packCount.toLocaleString('id-ID')} ${stock.bahan.satuan}`;
+                            } else {
+                              displayQty = `${Math.round(remainder).toLocaleString('id-ID')} gr`;
+                            }
+                          }
                         }
-                      }
-                      return <Text style={styles.stockQty}>{displayQty}</Text>;
-                    })()}
+                        return <Text style={styles.stockListQty}>{displayQty}</Text>;
+                      })()}
+                    </View>
                     <View
                       style={[
-                        styles.statusBadge,
+                        styles.stockStatusBadge,
                         {
                           backgroundColor: getStatusColor(stock.status),
                         },
                       ]}
                     >
-                      <Text style={styles.statusText}>{stock.status}</Text>
+                      <Text style={styles.stockStatusText}>{stock.status}</Text>
                     </View>
                   </View>
+                  {index < filteredStocks.length - 1 && (
+                    <View style={styles.stockListDivider} />
+                  )}
                 </View>
               ))}
+              </View>
             </ScrollView>
           )}
         </View>
@@ -756,7 +770,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   statCard: {
-    flexBasis: '31%',
+    flexBasis: '48%',
     backgroundColor: 'white',
     borderRadius: radius.lg,
     padding: spacing.md,
@@ -856,6 +870,54 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
   },
+  activityListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    gap: spacing.md,
+  },
+  activityBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  activityListContent: {
+    flex: 1,
+  },
+  activityListTitle: {
+    fontSize: typography.bodyStrong,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 2,
+  },
+  activityListDesc: {
+    fontSize: typography.caption,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  activityListRight: {
+    alignItems: 'flex-end',
+    gap: 2,
+    flexShrink: 0,
+  },
+  activityListAmount: {
+    fontSize: typography.caption,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  activityListTime: {
+    fontSize: typography.caption,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  activityDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+  },
   activityCardHorizontal: {
     flexDirection: 'column',
     backgroundColor: 'white',
@@ -911,6 +973,10 @@ const styles = StyleSheet.create({
   stockScrollView: {
     maxHeight: 400,
   },
+  stockListScroll: {
+    maxHeight: 450,
+    borderRadius: radius.lg,
+  },
   stockCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -926,6 +992,65 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
+  },
+  stockListWrapper: {
+    backgroundColor: 'white',
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  stockListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    gap: spacing.md,
+  },
+  stockListInfo: {
+    flex: 1,
+  },
+  stockListName: {
+    fontSize: typography.bodyStrong,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 4,
+  },
+  stockListMinimum: {
+    fontSize: typography.caption,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  stockListQtyBadge: {
+    flexShrink: 0,
+  },
+  stockListQty: {
+    fontSize: typography.caption,
+    fontWeight: '700',
+    color: '#1E293B',
+    textAlign: 'right',
+  },
+  stockStatusBadge: {
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    flexShrink: 0,
+  },
+  stockStatusText: {
+    fontSize: typography.caption,
+    fontWeight: '700',
+    color: 'white',
+    textTransform: 'uppercase',
+  },
+  stockListDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginHorizontal: spacing.md,
   },
   stockLeft: {
     flex: 1,

@@ -19,17 +19,11 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
-import { spacing } from '../../constants/DesignSystem';
 import { ownerAPI } from '../../services/api';
 import { Outlet, User } from '../../types';
 
 export default function KaryawanScreen() {
-  const insets = useSafeAreaInsets();
-  const bottomPad = insets.bottom + spacing.lg;
-
   const [employees, setEmployees] = useState<User[]>([]);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,14 +102,15 @@ export default function KaryawanScreen() {
 
   const filteredEmployees = useMemo(() => {
     return employees.filter(e => 
-      e.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.role.toLowerCase().includes(searchQuery.toLowerCase())
+      (e.role !== 'supervisor') &&
+      (e.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      e.role.toLowerCase().includes(searchQuery.toLowerCase()))
     );
   }, [employees, searchQuery]);
 
   const stats = useMemo(() => {
     return {
-      total: employees.length,
+      total: employees.filter(e => e.role !== 'supervisor').length,
       staff: employees.filter(e => e.role === 'karyawan').length,
       gudang: employees.filter(e => e.role === 'gudang').length
     };
@@ -259,43 +254,45 @@ export default function KaryawanScreen() {
               </View>
             </View>
           </View>
-          <TouchableOpacity
-            style={styles.settingsBtn}
-            onPress={() => {
-              setSelectedEmployee(item);
-              setFormData({
-                username: item.username,
-                password: '',
-                role: item.role as any,
-                outlet_id: item.outlet_id?.toString() || '',
-              });
-              setShowEditModal(true);
-            }}
-          >
-            <Ionicons name="create-outline" size={22} color={Colors.primary} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.cardBody}>
-          <View style={styles.infoRow}>
-            <Ionicons name="location-outline" size={14} color="#94A3B8" />
-            <Text style={styles.locationText} numberOfLines={1}>
-              {item.role === 'karyawan'
-                ? `Penempatan: ${getOutletName(item.outlet_id)}`
-                : 'Akses Gudang Pusat'}
-            </Text>
+          <View style={styles.actionBtns}>
+            <TouchableOpacity
+              style={styles.settingsBtn}
+              onPress={() => {
+                setSelectedEmployee(item);
+                setFormData({
+                  username: item.username,
+                  password: '',
+                  role: item.role as any,
+                  outlet_id: item.outlet_id?.toString() || '',
+                });
+                setShowEditModal(true);
+              }}
+            >
+              <Ionicons name="create-outline" size={22} color={Colors.primary} />
+            </TouchableOpacity>
+            {item.role !== 'owner' && (
+              <TouchableOpacity onPress={() => handleDelete(item.id)}>
+                <Ionicons name="trash-outline" size={22} color="#EF4444" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
+
+        {item.role === 'karyawan' && (
+          <View style={styles.cardBody}>
+            <View style={styles.infoRow}>
+              <Ionicons name="location-outline" size={14} color="#94A3B8" />
+              <Text style={styles.locationText} numberOfLines={1}>
+                {`Penempatan: ${getOutletName(item.outlet_id)}`}
+              </Text>
+            </View>
+          </View>
+        )}
 
         <View style={styles.cardDivider} />
 
         <View style={styles.cardFooter}>
           <Text style={styles.idText}>ID: USR-{item.id}</Text>
-          {item.role !== 'owner' && (
-            <TouchableOpacity onPress={() => handleDelete(item.id)}>
-              <Ionicons name="trash-outline" size={18} color="#EF4444" />
-            </TouchableOpacity>
-          )}
         </View>
       </View>
     ));
@@ -382,7 +379,7 @@ export default function KaryawanScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
         style={styles.mainContent}
-        contentContainerStyle={[styles.scrollPadding, { paddingBottom: bottomPad }]}
+        contentContainerStyle={styles.scrollPadding}
       >
         <View style={styles.actionRow}>
           <View style={styles.searchBox}>
@@ -412,7 +409,7 @@ export default function KaryawanScreen() {
           </View>
           {renderListContent()}
         </View>
-        <View style={{height: 100}} />
+        <View style={{ height: 20 }} />
       </ScrollView>
 
       <TouchableOpacity
@@ -553,7 +550,7 @@ const styles = StyleSheet.create({
   vDivider: { width: 1, height: '60%', backgroundColor: '#F1F5F9', alignSelf: 'center' },
 
   mainContent: { flex: 1 },
-  scrollPadding: { paddingTop: 60, paddingHorizontal: 25 },
+  scrollPadding: { paddingTop: 60, paddingHorizontal: 25, paddingBottom: 100 },
 
   actionRow: { flexDirection: 'row', gap: 12, marginBottom: 25 },
   searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 18, paddingHorizontal: 15, height: 56, borderWidth: 1, borderColor: '#E2E8F0' },
@@ -581,13 +578,14 @@ const styles = StyleSheet.create({
   rolePill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start' },
   rolePillText: { fontSize: 10, fontWeight: '900' },
   settingsBtn: { padding: 4 },
+  actionBtns: { flexDirection: 'row', alignItems: 'center', gap: 12 },
 
   cardBody: { marginBottom: 15 },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   locationText: { fontSize: 13, color: '#64748B', fontWeight: '500' },
 
   cardDivider: { height: 1, backgroundColor: '#F1F5F9', marginBottom: 15 },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cardFooter: { flexDirection: 'row', alignItems: 'center' },
   idText: { fontSize: 11, color: '#CBD5E1', fontWeight: '600' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.8)', justifyContent: 'center', padding: 25 },
@@ -623,7 +621,7 @@ const styles = StyleSheet.create({
 
   fab: {
     position: 'absolute',
-    bottom: 92,
+    bottom: 100,
     right: 22,
     width: 58,
     height: 58,

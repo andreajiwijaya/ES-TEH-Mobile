@@ -15,8 +15,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { spacing, radius, typography } from '../../constants/DesignSystem';
 import { authAPI } from '../../services/api';
@@ -65,9 +63,6 @@ const SkeletonShimmer = ({ width, height, borderRadius = 8, style }: any) => {
 };
 
 export default function WarehouseProfileScreen() {
-  const insets = useSafeAreaInsets();
-  const bottomPad = insets.bottom + spacing.lg;
-
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [outlet, setOutlet] = useState<Outlet | null>(null);
@@ -234,7 +229,7 @@ export default function WarehouseProfileScreen() {
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
           {/* Skeleton Profile Card */}
@@ -292,7 +287,7 @@ export default function WarehouseProfileScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl

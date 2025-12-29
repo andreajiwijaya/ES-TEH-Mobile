@@ -18,12 +18,10 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
-import { spacing, radius, typography } from '../../constants/DesignSystem';
+import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI, karyawanAPI } from '../../services/api';
-import { BarangKeluar, Bahan, BahanGudang, FileAsset, PermintaanStok, User } from '../../types';
+import { Bahan, BahanGudang, BarangKeluar, FileAsset, PermintaanStok, User } from '../../types';
 
 interface StockItem {
   id: string;
@@ -77,9 +75,6 @@ const SkeletonShimmer = ({ width, height, borderRadius = 8, style }: any) => {
 };
 
 export default function StokScreen() {
-  const insets = useSafeAreaInsets();
-  const bottomPad = insets.bottom + spacing.lg;
-
   // --- STATE ---
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'stok' | 'terima' | 'riwayat'>('stok');
@@ -308,6 +303,38 @@ export default function StokScreen() {
     return '#EF4444';
   };
 
+  // Convert grams to packs (bungkus) based on bahan.berat_per_isi
+  // Rounds to nearest pack; shows half-pack when exactly 0.5
+  const getPackDisplay = (stok: number, bahan: Bahan) => {
+    const perIsi = Number((bahan as any)?.berat_per_isi) || 0;
+    if (!perIsi || perIsi <= 0) {
+      // Fallback: show raw stok with satuan if available
+      const unit = (bahan as any)?.satuan ? ` ${String((bahan as any)?.satuan)}` : '';
+      return `${stok}${unit}`;
+    }
+    const exact = stok / perIsi;
+    const flo = Math.floor(exact);
+    const frac = exact - flo;
+    const epsilon = 1e-6;
+    if (Math.abs(frac - 0.5) <= epsilon && flo > 0) {
+      return `${flo} ½ bungkus`;
+    }
+    const rounded = Math.round(exact);
+    return `${rounded} bungkus`;
+  };
+
+  const getPerPackText = (bahan: Bahan) => {
+    const perIsi = Number((bahan as any)?.berat_per_isi) || 0;
+    if (!perIsi) return '';
+    return `(${perIsi} gr per bungkus)`;
+  };
+
+  const getPerPackUnit = (bahan: Bahan) => {
+    const perIsi = Number((bahan as any)?.berat_per_isi) || 0;
+    if (!perIsi) return '-';
+    return `${perIsi} gr / bungkus`;
+  };
+
   // --- OPEN MODAL HELPERS ---
   const openCreateRequestModal = (item?: StockItem, fromGudang = false) => {
     setModalFromGudang(fromGudang);
@@ -345,7 +372,7 @@ export default function StokScreen() {
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <SkeletonShimmer width="100%" height={50} borderRadius={15} style={{ marginBottom: spacing.lg }} />
           <SkeletonShimmer width="100%" height={50} borderRadius={15} style={{ marginBottom: spacing.lg }} />
           {[1, 2, 3].map((i) => (
@@ -409,7 +436,7 @@ export default function StokScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
         showsVerticalScrollIndicator={false}
       >
@@ -468,8 +495,11 @@ export default function StokScreen() {
                       <View>
                         <Text style={styles.stockLabel}>Stok Sekarang</Text>
                         <Text style={[styles.stockValue, { color: getStatusColor(item.status) }]}>
-                          {item.stok}
+                          {getPackDisplay(item.stok, item.bahan)}
                         </Text>
+                        {!!getPerPackText(item.bahan) && (
+                          <Text style={styles.perPackText}>{getPerPackText(item.bahan)}</Text>
+                        )}
                       </View>
                       <TouchableOpacity
                         style={styles.requestButton}
@@ -690,8 +720,12 @@ export default function StokScreen() {
                     <View style={styles.infoRow}>
                       <Text style={styles.infoLabel}>Stok Saat Ini</Text>
                       <Text style={[styles.infoValue, { color: getStatusColor(selectedStockItem.status) }]}>
-                        {selectedStockItem.stok}
+                        {getPackDisplay(selectedStockItem.stok, selectedStockItem.bahan)}
                       </Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Kemasan</Text>
+                      <Text style={styles.infoValue}>{getPerPackUnit(selectedStockItem.bahan)}</Text>
                     </View>
                     <View style={styles.infoRow}>
                       <Text style={styles.infoLabel}>Status</Text>
@@ -849,7 +883,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.lg,
-    paddingBottom: 40,
+    paddingBottom: 120,
   },
   skeletonCard: {
     backgroundColor: 'white',
@@ -957,6 +991,12 @@ const styles = StyleSheet.create({
     fontSize: typography.headline,
     fontWeight: '900',
     marginTop: spacing.xs,
+  },
+  perPackText: {
+    fontSize: typography.caption,
+    color: '#999',
+    marginTop: spacing.xs,
+    fontWeight: '600',
   },
   requestButton: {
     backgroundColor: Colors.primary,

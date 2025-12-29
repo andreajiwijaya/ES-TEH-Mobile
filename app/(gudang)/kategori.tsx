@@ -19,8 +19,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { spacing, radius, typography } from '../../constants/DesignSystem';
 import { authAPI, gudangAPI } from '../../services/api';
@@ -66,9 +64,6 @@ const SkeletonShimmer = ({ width = '100%', height = 12, borderRadius = 8 }: { wi
 };
 
 export default function KategoriScreen() {
-  const insets = useSafeAreaInsets();
-  const bottomPad = insets.bottom + spacing.lg;
-
   // --- STATE ---
   const [user, setUser] = useState<User | null>(null);
   const [kategoriList, setKategoriList] = useState<Kategori[]>([]);

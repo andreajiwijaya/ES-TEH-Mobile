@@ -26,3 +26,54 @@ export const Colors = {
   logoGreen: '#2E7D32',
   logoYellow: '#FDD835',
 };
+
+// Semantic Material color palette (Light theme)
+export const semanticColors = {
+  // Surfaces
+  surface: '#FFFFFF',
+  surfaceVariant: '#F5F7FA',
+  background: '#F8F9FA',
+
+  // Content
+  onSurface: '#1E293B',
+  onSurfaceVariant: '#64748B',
+
+  // Primary brand
+  primary: Colors.primary,
+  onPrimary: '#FFFFFF',
+
+  // Secondary and accents
+  secondary: '#6B7280',
+  onSecondary: '#FFFFFF',
+
+  // Status
+  success: Colors.success,
+  warning: Colors.warning,
+  error: Colors.error,
+  info: Colors.info,
+
+  // Dividers / borders
+  outline: '#E2E8F0',
+
+  // Effects
+  ripple: 'rgba(0,0,0,0.12)',
+};
+
+// Optional: dark theme placeholders (not active yet)
+export const semanticColorsDark = {
+  surface: '#121212',
+  surfaceVariant: '#1E1E1E',
+  background: '#0F1115',
+  onSurface: '#FFFFFF',
+  onSurfaceVariant: '#B3B3B3',
+  primary: Colors.primary,
+  onPrimary: '#FFFFFF',
+  secondary: '#A1A1AA',
+  onSecondary: '#000000',
+  success: Colors.success,
+  warning: Colors.warning,
+  error: Colors.error,
+  info: Colors.info,
+  outline: '#2A2A2A',
+  ripple: 'rgba(255,255,255,0.16)',
+};

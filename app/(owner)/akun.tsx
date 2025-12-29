@@ -20,18 +20,13 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
+import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI, ownerAPI } from '../../services/api';
-import { spacing, radius, typography } from '../../constants/DesignSystem';
 
 const { height } = Dimensions.get('window');
 
 export default function ProfileScreen() {
-  const insets = useSafeAreaInsets();
-  const bottomPad = insets.bottom + spacing.lg;
-
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -126,7 +121,11 @@ export default function ProfileScreen() {
         <Text style={styles.headerTitleMain}>Manajemen Akun</Text>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* PROFILE FLOATING CARD */}
         <View style={styles.profileCard}>
           {loading ? (
@@ -234,7 +233,7 @@ export default function ProfileScreen() {
               <Text style={styles.copyright}>© 2025 Esteh Indonesia System</Text>
             </>
           )}
-          <View style={{ height: 40 }} />
+          <View style={{ height: 20 }} />
         </View>
       </ScrollView>
 
@@ -273,6 +272,7 @@ const styles = StyleSheet.create({
   },
   headerTitleMain: { color: 'white', fontSize: typography.headline, fontWeight: '900', textAlign: 'center' },
   scrollView: { flex: 1, marginTop: -height * 0.1 },
+  scrollContent: { paddingBottom: 120 },
   
   profileCard: {
     backgroundColor: 'white',

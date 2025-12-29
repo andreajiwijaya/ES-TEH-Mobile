@@ -1,28 +1,26 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  Platform,
-  Alert,
-  StatusBar,
-  RefreshControl,
-  Modal,
-  ScrollView,
-  TextInput,
-  Animated,
-  Image,
-} from 'react-native';
-
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/Colors';
-import { spacing, radius, typography } from '../../constants/DesignSystem';
-import { authAPI, gudangAPI } from '../../services/api';
-import { BarangKeluar, User, Outlet } from '../../types';
 import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  Alert,
+  Animated,
+  FlatList,
+  Image,
+  Modal,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Colors } from '../../constants/Colors';
+import { radius, spacing, typography } from '../../constants/DesignSystem';
+import { authAPI, gudangAPI } from '../../services/api';
+import { BarangKeluar, Outlet, User } from '../../types';
 
 // ==================== SKELETON SHIMMER ====================
 const SkeletonShimmer = ({ 
@@ -49,10 +47,10 @@ const SkeletonShimmer = ({
   }, [shimmerAnim]);
 
   return (
-    <View style={[styles.skeletonBar, { width, height, borderRadius }]}>
+    <View style={{ width: width as any, height, borderRadius, backgroundColor: '#E2E8F0', overflow: 'hidden', position: 'relative' as const }}>
       <Animated.View
         style={[
-          styles.skeletonHighlight,
+          { position: 'absolute' as const, left: 0, width: '40%', height: '100%', backgroundColor: 'rgba(255,255,255,0.6)' },
           { transform: [{ translateX: shimmerAnim }] },
         ]}
       />
@@ -62,14 +60,12 @@ const SkeletonShimmer = ({
 
 // ==================== MAIN COMPONENT ====================
 export default function BarangKeluarScreen() {
-  const insets = useSafeAreaInsets();
-  const bottomPad = insets.bottom + spacing.lg;
-
   const [user, setUser] = useState<User | null>(null);
   const [outgoingGoods, setOutgoingGoods] = useState<BarangKeluar[]>([]);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOutlet, setSelectedOutlet] = useState<number | null>(null);
+  const [showOutletSheet, setShowOutletSheet] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -206,6 +202,20 @@ export default function BarangKeluarScreen() {
     return formatDate(dateString);
   };
 
+  const formatQuantity = (item: BarangKeluar) => {
+    const qty = item.jumlah || 0;
+    const satuan = (item.bahan?.satuan || '').toLowerCase();
+    const perUnitWeight = item.bahan?.berat_per_isi || item.bahan?.isi_per_satuan;
+
+    if (satuan === 'bungkus' && perUnitWeight && perUnitWeight > 0) {
+      const bungkusTotal = qty / perUnitWeight;
+      const displayTotal = Number.isInteger(bungkusTotal) ? bungkusTotal : parseFloat(bungkusTotal.toFixed(1));
+      return `${displayTotal} Bungkus`;
+    }
+
+    return `${qty} ${item.bahan?.satuan || 'unit'}`;
+  };
+
   // Summary Stats (focus on 'diterima' items - completed deliveries)
   const summaryStats = useMemo(() => {
     const received = outgoingGoods.filter(i => getItemStatus(i) === 'diterima');
@@ -278,11 +288,14 @@ export default function BarangKeluarScreen() {
     const bukti = anyItem?.bukti_foto || anyItem?.bukti_terima || anyItem?.foto_bukti || null;
     if (bukti) {
       const uri = typeof bukti === 'string' ? bukti : bukti?.uri;
-      setPhotoToView(uri || null);
-      setShowPhotoModal(true);
-    } else {
-      Alert.alert('Info', 'Tidak ada foto bukti untuk item ini');
+      if (uri) {
+        setPhotoToView(uri);
+        setShowPhotoModal(true);
+        return;
+      }
     }
+
+    Alert.alert('Info', 'Tidak ada foto bukti untuk item ini');
   };
 
   // Render skeleton loading
@@ -313,6 +326,7 @@ export default function BarangKeluarScreen() {
     const status = getItemStatus(item);
     const statusStyle = getStatusStyle(status);
     const dateStr = item.updated_at || item.tanggal_keluar || '';
+    const quantityText = formatQuantity(item);
 
     return (
       <TouchableOpacity 
@@ -345,18 +359,11 @@ export default function BarangKeluarScreen() {
           </View>
           <View style={styles.infoRow}>
             <Ionicons name="layers-outline" size={16} color="#64748B" />
-            <Text style={styles.infoVal}>{item.jumlah} {item.bahan?.satuan || 'unit'}</Text>
+            <Text style={styles.infoVal}>{quantityText}</Text>
           </View>
         </View>
 
         <View style={styles.cardFooter}>
-          <TouchableOpacity 
-            style={styles.actionBtn}
-            onPress={() => handleViewDetail(item)}
-          >
-            <Ionicons name="eye-outline" size={16} color={Colors.primary} />
-            <Text style={styles.actionBtnTxt}>Detail</Text>
-          </TouchableOpacity>
           <TouchableOpacity 
             style={styles.actionBtn}
             onPress={() => handleViewPhoto(item)}
@@ -440,35 +447,26 @@ export default function BarangKeluarScreen() {
           </View>
         </View>
 
-        {/* Outlet Filter */}
+        {/* Outlet Filter Trigger */}
         {outlets.length > 0 && (
-          <View style={styles.filterOutletContainer}>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: spacing.sm }}
-            >
-              <TouchableOpacity
-                style={[styles.outletChip, selectedOutlet === null && styles.outletChipActive]}
-                onPress={() => setSelectedOutlet(null)}
-              >
-                <Text style={[styles.outletChipTxt, selectedOutlet === null && styles.outletChipTxtActive]}>
-                  Semua Outlet
+          <TouchableOpacity
+            style={styles.outletTrigger}
+            activeOpacity={0.8}
+            onPress={() => setShowOutletSheet(true)}
+          >
+            <View style={styles.outletTriggerLeft}>
+              <Ionicons name="storefront-outline" size={18} color={Colors.primary} />
+              <View>
+                <Text style={styles.outletTriggerLabel}>Outlet</Text>
+                <Text style={styles.outletTriggerValue}>
+                  {selectedOutlet === null
+                    ? 'Semua Outlet'
+                    : outlets.find(o => o.id === selectedOutlet)?.nama || 'Outlet'}
                 </Text>
-              </TouchableOpacity>
-              {outlets.map(outlet => (
-                <TouchableOpacity
-                  key={outlet.id}
-                  style={[styles.outletChip, selectedOutlet === outlet.id && styles.outletChipActive]}
-                  onPress={() => setSelectedOutlet(outlet.id)}
-                >
-                  <Text style={[styles.outletChipTxt, selectedOutlet === outlet.id && styles.outletChipTxtActive]}>
-                    {outlet.nama}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+              </View>
+            </View>
+            <Ionicons name="chevron-down" size={18} color="#0F172A" />
+          </TouchableOpacity>
         )}
 
         {/* List */}
@@ -529,8 +527,8 @@ export default function BarangKeluarScreen() {
 
             <View style={styles.detailSheetDivider} />
 
-            <ScrollView style={styles.detailSheetContent} showsVerticalScrollIndicator={false}>
-              {selectedItem && (
+            {selectedItem && (
+              <ScrollView style={styles.detailSheetContent} showsVerticalScrollIndicator={false}>
                 <>
                   <View style={styles.detailRow}>
                     <View style={styles.detailIconBox}>
@@ -559,7 +557,7 @@ export default function BarangKeluarScreen() {
                     <View style={styles.detailTextBox}>
                       <Text style={styles.detailLabel}>Jumlah</Text>
                       <Text style={styles.detailValue}>
-                        {selectedItem.jumlah} {selectedItem.bahan?.satuan || 'unit'}
+                        {formatQuantity(selectedItem)}
                       </Text>
                     </View>
                   </View>
@@ -634,8 +632,8 @@ export default function BarangKeluarScreen() {
                     </View>
                   )}
                 </>
-              )}
-            </ScrollView>
+              </ScrollView>
+            )}
           </View>
         </TouchableOpacity>
       </Modal>
@@ -666,6 +664,70 @@ export default function BarangKeluarScreen() {
                 <Text style={styles.emptyPhotoText}>Tidak ada foto</Text>
               </View>
             )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* OUTLET SELECTOR SHEET */}
+      <Modal
+        visible={showOutletSheet}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowOutletSheet(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowOutletSheet(false)}
+        >
+          <View style={styles.outletSheet} onStartShouldSetResponder={() => true}>
+            <View style={styles.outletSheetHandle} />
+            <View style={styles.outletSheetHeader}>
+              <Text style={styles.outletSheetTitle}>Pilih Outlet</Text>
+              {selectedOutlet !== null && (
+                <TouchableOpacity onPress={() => setSelectedOutlet(null)}>
+                  <Text style={styles.outletSheetReset}>Reset</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <TouchableOpacity
+                style={[styles.outletRow, selectedOutlet === null && styles.outletRowActive]}
+                onPress={() => {
+                  setSelectedOutlet(null);
+                  setShowOutletSheet(false);
+                }}
+              >
+                <View style={[styles.outletRadio, selectedOutlet === null && styles.outletRadioActive]}>
+                  {selectedOutlet === null && <View style={styles.outletRadioDot} />}
+                </View>
+                <Text style={[styles.outletRowText, selectedOutlet === null && styles.outletRowTextActive]}>
+                  Semua Outlet
+                </Text>
+              </TouchableOpacity>
+
+              {outlets.map(outlet => {
+                const isActive = selectedOutlet === outlet.id;
+                return (
+                  <TouchableOpacity
+                    key={outlet.id}
+                    style={[styles.outletRow, isActive && styles.outletRowActive]}
+                    onPress={() => {
+                      setSelectedOutlet(outlet.id);
+                      setShowOutletSheet(false);
+                    }}
+                  >
+                    <View style={[styles.outletRadio, isActive && styles.outletRadioActive]}>
+                      {isActive && <View style={styles.outletRadioDot} />}
+                    </View>
+                    <Text style={[styles.outletRowText, isActive && styles.outletRowTextActive]}>
+                      {outlet.nama}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -758,8 +820,8 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: '47%',
     backgroundColor: 'white',
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    borderRadius: radius.md,
+    padding: spacing.sm + 2,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -769,73 +831,68 @@ const styles = StyleSheet.create({
     borderColor: '#F1F5F9',
   },
   summaryIcon: {
-    width: 42,
-    height: 42,
+    width: 36,
+    height: 36,
     borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   summaryLabel: {
-    fontSize: typography.caption,
+    fontSize: 9,
     fontWeight: '700',
     color: '#94A3B8',
     textTransform: 'uppercase',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.xs - 2,
     letterSpacing: 0.5,
   },
   summaryValue: {
-    fontSize: typography.headline,
+    fontSize: typography.title,
     fontWeight: '900',
     color: '#1E293B',
   },
   summaryText: {
-    fontSize: typography.body,
+    fontSize: typography.caption,
     fontWeight: '800',
     color: '#1E293B',
-    numberOfLines: 1,
   },
-  filterOutletContainer: {
+  outletTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: 'white',
     borderRadius: radius.lg,
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     marginBottom: spacing.md,
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
   },
-  outletChip: { 
-    paddingHorizontal: spacing.md, 
-    paddingVertical: spacing.sm, 
-    borderRadius: radius.md, 
-    backgroundColor: '#F8FAFC', 
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    justifyContent: 'center',
+  outletTriggerLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
   },
-  outletChipActive: { 
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+  outletTriggerLabel: {
+    fontSize: typography.caption,
+    color: '#94A3B8',
+    fontWeight: '700',
   },
-  outletChipTxt: { 
-    fontSize: typography.body, 
-    fontWeight: '700', 
-    color: '#475569',
-  },
-  outletChipTxtActive: { 
-    color: 'white',
+  outletTriggerValue: {
+    fontSize: typography.bodyStrong,
+    color: '#0F172A',
     fontWeight: '800',
   },
   sectionHeader: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   sectionHeaderLeft: { 
     flexDirection: 'row', 
@@ -849,20 +906,20 @@ const styles = StyleSheet.create({
   },
   sectionBadge: { 
     backgroundColor: '#EEF2FF', 
-    paddingHorizontal: spacing.md, 
-    paddingVertical: 4, 
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
     borderRadius: radius.pill,
   },
   sectionBadgeText: { 
     color: Colors.primary, 
-    fontSize: typography.caption, 
+    fontSize: 9,
     fontWeight: '800',
   },
   card: { 
     backgroundColor: 'white', 
-    borderRadius: radius.lg, 
-    padding: spacing.md, 
-    marginBottom: spacing.md, 
+    borderRadius: radius.md,
+    padding: spacing.sm + 4,
+    marginBottom: spacing.sm + 2,
     elevation: 2, 
     borderWidth: 1, 
     borderColor: '#F1F5F9',
@@ -877,41 +934,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardId: { 
-    fontSize: typography.bodyStrong, 
+    fontSize: typography.body,
     fontWeight: '900', 
     color: '#1E293B',
   },
   cardDate: { 
-    fontSize: typography.caption, 
+    fontSize: 10,
     color: '#94A3B8', 
     marginTop: 2,
     fontWeight: '600',
   },
   badge: { 
-    paddingHorizontal: spacing.md, 
-    paddingVertical: 6, 
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
     borderRadius: radius.sm,
   },
   badgeText: { 
-    fontSize: typography.caption, 
+    fontSize: 9,
     fontWeight: '900',
     letterSpacing: 0.5,
   },
   divider: { 
     height: 1, 
     backgroundColor: '#F1F5F9', 
-    marginVertical: spacing.md,
+    marginVertical: spacing.sm,
   },
   cardBody: { 
-    gap: spacing.sm,
+    gap: spacing.xs + 2,
   },
   infoRow: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    gap: spacing.sm,
+    gap: spacing.xs + 2,
   },
   infoVal: { 
-    fontSize: typography.body, 
+    fontSize: typography.caption,
     color: '#334155', 
     fontWeight: '700',
     flex: 1,
@@ -919,22 +976,22 @@ const styles = StyleSheet.create({
   cardFooter: { 
     flexDirection: 'row', 
     justifyContent: 'flex-end', 
-    gap: spacing.sm, 
-    marginTop: spacing.md,
+    gap: spacing.xs + 2,
+    marginTop: spacing.sm,
   },
   actionBtn: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     gap: spacing.xs, 
-    paddingVertical: spacing.sm, 
-    paddingHorizontal: spacing.md, 
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.sm + 2,
     borderRadius: radius.md, 
     backgroundColor: '#F0F9FF',
     borderWidth: 1,
     borderColor: '#E0F2FE',
   },
   actionBtnTxt: { 
-    fontSize: typography.caption, 
+    fontSize: 9,
     fontWeight: '800', 
     color: Colors.primary,
   },
@@ -981,6 +1038,78 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.75)',
     justifyContent: 'flex-end',
+  },
+  outletSheet: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+    paddingTop: spacing.md,
+    maxHeight: '70%',
+  },
+  outletSheetHandle: {
+    width: 44,
+    height: 4,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: spacing.md,
+  },
+  outletSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  outletSheetTitle: {
+    fontSize: typography.title,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  outletSheetReset: {
+    fontSize: typography.caption,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  outletRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  outletRowActive: {
+    backgroundColor: '#F8FAFC',
+  },
+  outletRadio: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'white',
+  },
+  outletRadioActive: {
+    borderColor: Colors.primary,
+  },
+  outletRadioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primary,
+  },
+  outletRowText: {
+    fontSize: typography.body,
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  outletRowTextActive: {
+    color: Colors.primary,
+    fontWeight: '800',
   },
   detailSheet: {
     backgroundColor: 'white',

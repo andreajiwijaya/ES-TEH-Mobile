@@ -17,10 +17,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
-import { spacing, radius, typography } from '../../constants/DesignSystem';
+import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI, karyawanAPI } from '../../services/api';
 import { CreateTransaksiPayload, FileAsset, Product, TransaksiItemPayload, User } from '../../types';
 
@@ -83,9 +81,6 @@ const SkeletonShimmer = ({ width, height, borderRadius = 8, style }: any) => {
 };
 
 export default function TransaksiScreen() {
-  const insets = useSafeAreaInsets();
-  const bottomPad = insets.bottom + spacing.lg;
-
   // --- STATE ---
   const [user, setUser] = useState<User | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -359,7 +354,7 @@ export default function TransaksiScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[styles.categoryScroll, { paddingBottom: bottomPad }]}
+          contentContainerStyle={styles.categoryScroll}
         >
           {categories.map((cat, index) => (
             <TouchableOpacity
@@ -380,7 +375,7 @@ export default function TransaksiScreen() {
         data={filteredProducts}
         keyExtractor={item => item.id.toString()}
         numColumns={2}
-        contentContainerStyle={[styles.grid, { paddingBottom: bottomPad }]}
+        contentContainerStyle={styles.grid}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>
@@ -662,7 +657,7 @@ const styles = StyleSheet.create({
   },
   grid: {
     padding: 15,
-    paddingBottom: 140,
+    paddingBottom: 120,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -721,6 +716,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#1A1A1A',
     marginBottom: spacing.xs,
+    marginRight: 40,
   },
   cardPrice: {
     fontSize: typography.bodyStrong,
@@ -742,7 +738,7 @@ const styles = StyleSheet.create({
   },
   cartBarWrapper: {
     position: 'absolute',
-    bottom: 90,
+    bottom: 110,
     left: 20,
     right: 20,
   },

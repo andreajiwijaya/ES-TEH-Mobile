@@ -1,27 +1,25 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  Platform,
-  Alert,
-  StatusBar,
-  RefreshControl,
-  Modal,
-  ScrollView,
-  TextInput,
-  Animated,
-} from 'react-native';
-
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/Colors';
-import { spacing, radius, typography } from '../../constants/DesignSystem';
-import { authAPI, gudangAPI } from '../../services/api';
-import { BarangMasuk, Bahan, User } from '../../types';
 import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  Alert,
+  Animated,
+  FlatList,
+  Modal,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Colors } from '../../constants/Colors';
+import { radius, spacing, typography } from '../../constants/DesignSystem';
+import { authAPI, gudangAPI } from '../../services/api';
+import { Bahan, BarangMasuk, User } from '../../types';
 
 // ==================== SKELETON SHIMMER ====================
 const SkeletonShimmer = ({ 
@@ -48,10 +46,10 @@ const SkeletonShimmer = ({
   }, [shimmerAnim]);
 
   return (
-    <View style={[styles.skeletonBar, { width, height, borderRadius }]}>
+    <View style={{ width: width as any, height, borderRadius, backgroundColor: '#E2E8F0', overflow: 'hidden', position: 'relative' as const }}>
       <Animated.View
         style={[
-          styles.skeletonHighlight,
+          { position: 'absolute' as const, left: 0, width: '40%', height: '100%', backgroundColor: 'rgba(255,255,255,0.6)' },
           { transform: [{ translateX: shimmerAnim }] },
         ]}
       />
@@ -61,9 +59,6 @@ const SkeletonShimmer = ({
 
 // ==================== MAIN COMPONENT ====================
 export default function BarangMasukScreen() {
-  const insets = useSafeAreaInsets();
-  const bottomPad = insets.bottom + spacing.lg;
-
   const [user, setUser] = useState<User | null>(null);
   const [incomingGoods, setIncomingGoods] = useState<BarangMasuk[]>([]);
   const [bahanList, setBahanList] = useState<Bahan[]>([]);
@@ -839,8 +834,8 @@ const styles = StyleSheet.create({
   summaryCard: {
     flexBasis: '48%',
     backgroundColor: 'white',
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    borderRadius: radius.md,
+    padding: spacing.sm + 2,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#F0F0F0',
@@ -851,29 +846,29 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
   },
   summaryIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.lg,
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  summaryValue: {
-    fontSize: typography.headline,
-    fontWeight: '900',
-    color: '#1E293B',
     marginBottom: spacing.xs,
   },
+  summaryValue: {
+    fontSize: typography.title,
+    fontWeight: '900',
+    color: '#1E293B',
+    marginBottom: 2,
+  },
   summaryLabel: {
-    fontSize: typography.caption,
+    fontSize: 10,
     color: '#64748B',
     fontWeight: '700',
   },
   card: {
     backgroundColor: 'white',
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: 15,
+    borderRadius: radius.md,
+    padding: spacing.sm + 4,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#F0F0F0',
     elevation: 2,
@@ -886,16 +881,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   cardTitle: {
-    fontSize: typography.bodyStrong,
+    fontSize: typography.body,
     fontWeight: '800',
     color: '#1E293B',
     marginBottom: spacing.xs,
   },
   cardTime: {
-    fontSize: typography.caption,
+    fontSize: 10,
     color: '#94A3B8',
     fontWeight: '600',
   },
@@ -904,12 +899,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     backgroundColor: '#E8F5E9',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 4,
     borderRadius: radius.sm,
   },
   statusText: {
-    fontSize: typography.caption,
+    fontSize: 9,
     fontWeight: '900',
     color: '#2E7D32',
     letterSpacing: 0.5,
@@ -922,12 +917,12 @@ const styles = StyleSheet.create({
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.md,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   itemIcon: {
-    width: 48,
-    height: 48,
+    width: 42,
+    height: 42,
     borderRadius: radius.md,
     backgroundColor: '#F0FDF4',
     justifyContent: 'center',
@@ -943,7 +938,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   itemValue: {
-    fontSize: typography.body,
+    fontSize: typography.caption,
     color: '#1E293B',
     fontWeight: '700',
   },
@@ -956,13 +951,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.md,
+    padding: spacing.sm + 2,
     borderRadius: radius.md,
     gap: spacing.xs,
     backgroundColor: '#F5F7FA',
   },
   actionBtnText: {
-    fontSize: typography.body,
+    fontSize: typography.caption,
     fontWeight: '800',
     color: '#1565C0',
   },

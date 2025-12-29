@@ -19,10 +19,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
-import { spacing, radius, typography } from '../../constants/DesignSystem';
+import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI, gudangAPI } from '../../services/api';
 import { Bahan, User } from '../../types';
 
@@ -41,16 +39,8 @@ const SkeletonShimmer = ({ width = '100%', height = 12, borderRadius = 8 }: { wi
     return () => animation.stop();
   }, [shimmerAnim]);
 
-  const skeletonStyle: any = {
-    width,
-    height,
-    borderRadius,
-    backgroundColor: '#E0E0E0',
-    overflow: 'hidden',
-  };
-
   return (
-    <View style={skeletonStyle}>
+    <View style={{ width: width as any, height, borderRadius, backgroundColor: '#E0E0E0', overflow: 'hidden' }}>
       <Animated.View
         style={[
           {
@@ -66,9 +56,6 @@ const SkeletonShimmer = ({ width = '100%', height = 12, borderRadius = 8 }: { wi
 };
 
 export default function MasterBahanScreen() {
-  const insets = useSafeAreaInsets();
-  const bottomPad = insets.bottom + spacing.lg;
-
   // --- STATE ---
   const [user, setUser] = useState<User | null>(null);
   const [bahanList, setBahanList] = useState<Bahan[]>([]);
@@ -313,11 +300,15 @@ export default function MasterBahanScreen() {
                 <View style={styles.statsRow}>
                   <View style={styles.statItem}>
                     <SkeletonShimmer width={60} height={10} borderRadius={4} />
-                    <SkeletonShimmer width={80} height={14} borderRadius={4} style={{ marginTop: spacing.xs }} />
+                    <View style={{ marginTop: spacing.xs }}>
+                      <SkeletonShimmer width={80} height={14} borderRadius={4} />
+                    </View>
                   </View>
                   <View style={styles.statItem}>
                     <SkeletonShimmer width={60} height={10} borderRadius={4} />
-                    <SkeletonShimmer width={80} height={14} borderRadius={4} style={{ marginTop: spacing.xs }} />
+                    <View style={{ marginTop: spacing.xs }}>
+                      <SkeletonShimmer width={80} height={14} borderRadius={4} />
+                    </View>
                   </View>
                 </View>
               </View>

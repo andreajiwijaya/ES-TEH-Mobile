@@ -20,8 +20,6 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { spacing, radius, typography } from '../../constants/DesignSystem';
 import { authAPI, karyawanAPI } from '../../services/api';
@@ -70,9 +68,6 @@ const SkeletonShimmer = ({ width, height, borderRadius = 8, style }: any) => {
 };
 
 export default function ProdukScreen() {
-  const insets = useSafeAreaInsets();
-  const bottomPad = insets.bottom + spacing.lg;
-
   // --- STATE ---
   const [user, setUser] = useState<User | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -402,7 +397,7 @@ export default function ProdukScreen() {
         data={products}
         keyExtractor={item => String(item.id ?? item.nama ?? Math.random())}
         numColumns={2}
-        contentContainerStyle={[styles.listContent, { paddingBottom: bottomPad }]}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
         ListEmptyComponent={() => (
@@ -664,7 +659,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 15,
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   emptyContainer: {
     alignItems: 'center',

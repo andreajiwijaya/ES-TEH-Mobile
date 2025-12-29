@@ -5,11 +5,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 
-import { spacing } from '../../constants/DesignSystem';
 export default function EmployeeTabsLayout() {
-  const insets = useSafeAreaInsets();
-  const bottomPad = insets.bottom + spacing.lg;
-
   const insets = useSafeAreaInsets();
   const baseHeight = Platform.OS === 'ios' ? 90 : 70;
   const basePadBottom = Platform.OS === 'ios' ? 32 : 12;
