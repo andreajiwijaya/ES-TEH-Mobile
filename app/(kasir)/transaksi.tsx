@@ -3,20 +3,20 @@ import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  FlatList,
-  Image,
-  Modal,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Animated,
+    FlatList,
+    Image,
+    Modal,
+    Platform,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
+import AlertModal from '../../components/AlertModal';
 import { Colors } from '../../constants/Colors';
 import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI, karyawanAPI } from '../../services/api';
@@ -87,12 +87,37 @@ export default function TransaksiScreen() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
+  // Leaf animations
+  const leafFloat1 = useRef(new Animated.Value(0)).current;
+  const leafFloat2 = useRef(new Animated.Value(0)).current;
+  const leafFloat3 = useRef(new Animated.Value(0)).current;
+
   const [selectedCategory, setSelectedCategory] = useState('Semua');
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<'tunai' | 'qris' | null>(null);
   const [paymentProof, setPaymentProof] = useState<FileAsset | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  // Shared alert modal state
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success'|'error'|'warning'|'info'>('info');
+  const [alertOnClose, setAlertOnClose] = useState<(() => void) | null>(null);
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: 'success'|'error'|'warning'|'info' = 'info',
+    onClose?: () => void,
+  ) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertOnClose(() => onClose || null);
+    setAlertVisible(true);
+  };
 
   // --- LOAD USER DATA ---
   const loadUserData = useCallback(async () => {
@@ -122,13 +147,37 @@ export default function TransaksiScreen() {
       }
     } catch (err) {
       console.error('Load Error:', err);
-      Alert.alert('Error', 'Gagal memuat menu kasir.');
+      showAlert('Error', 'Gagal memuat menu kasir.', 'error');
     } finally {
       setLoading(false);
     }
   }, [loadUserData]);
 
   useFocusEffect(useCallback(() => { loadProducts(); }, [loadProducts]));
+
+  // Floating leaves animation
+  useEffect(() => {
+    const floatAnimation = (animValue: Animated.Value, duration: number) => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(animValue, {
+            toValue: 1,
+            duration: duration,
+            useNativeDriver: true,
+          }),
+          Animated.timing(animValue, {
+            toValue: 0,
+            duration: duration,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    };
+
+    floatAnimation(leafFloat1, 3000);
+    floatAnimation(leafFloat2, 4000);
+    floatAnimation(leafFloat3, 3500);
+  }, [leafFloat1, leafFloat2, leafFloat3]);
 
   // --- HELPERS ---
   const getImageUri = (img?: string | FileAsset | null) => {
@@ -160,6 +209,21 @@ export default function TransaksiScreen() {
 
   const grandTotal = orderItems.reduce((sum, item) => sum + (item.subtotal || 0), 0);
   const totalQty = orderItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  const leaf1Transform = leafFloat1.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -15],
+  });
+
+  const leaf2Transform = leafFloat2.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 20],
+  });
+
+  const leaf3Transform = leafFloat3.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -10],
+  });
 
   // --- CART MANAGEMENT ---
   const addToCart = (product: Product) => {
@@ -203,7 +267,7 @@ export default function TransaksiScreen() {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Izin dibutuhkan', 'Berikan izin akses foto untuk mengunggah bukti pembayaran.');
+        showAlert('Izin dibutuhkan', 'Berikan izin akses foto untuk mengunggah bukti pembayaran.', 'warning');
         return;
       }
 
@@ -225,7 +289,7 @@ export default function TransaksiScreen() {
       }
     } catch (err) {
       console.error('pickImage error', err);
-      Alert.alert('Error', 'Gagal memilih gambar');
+      showAlert('Error', 'Gagal memilih gambar', 'error');
     }
   };
 
@@ -233,9 +297,9 @@ export default function TransaksiScreen() {
 
   // --- PROCESS PAYMENT ---
   const handleProcessPayment = async () => {
-    if (!selectedPayment) return Alert.alert('Peringatan', 'Pilih metode pembayaran.');
-    if (selectedPayment === 'qris' && !paymentProof) return Alert.alert('Peringatan', 'Upload bukti QRIS.');
-    if (orderItems.length === 0) return Alert.alert('Peringatan', 'Tambahkan minimal 1 produk.');
+    if (!selectedPayment) return showAlert('Peringatan', 'Pilih metode pembayaran.', 'warning');
+    if (selectedPayment === 'qris' && !paymentProof) return showAlert('Peringatan', 'Upload bukti QRIS.', 'warning');
+    if (orderItems.length === 0) return showAlert('Peringatan', 'Tambahkan minimal 1 produk.', 'warning');
 
     setProcessing(true);
     try {
@@ -254,17 +318,15 @@ export default function TransaksiScreen() {
       const response = await karyawanAPI.createTransaksi(payload);
       if (response.error) throw new Error(response.error);
 
-      Alert.alert('Sukses', 'Transaksi Berhasil!', [{
-        text: 'Selesai', onPress: () => {
-          setOrderItems([]);
-          setSelectedPayment(null);
-          setPaymentProof(null);
-          setShowCheckoutModal(false);
-        }
-      }]);
+      showAlert('Sukses', 'Transaksi Berhasil!', 'success', () => {
+        setOrderItems([]);
+        setSelectedPayment(null);
+        setPaymentProof(null);
+        setShowCheckoutModal(false);
+      });
     } catch (err: any) {
       console.error('Payment Processing Error:', err);
-      Alert.alert('Gagal', err.message || 'Gagal menyimpan transaksi.');
+      showAlert('Gagal', err.message || 'Gagal menyimpan transaksi.', 'error');
     } finally {
       setProcessing(false);
     }
@@ -273,26 +335,18 @@ export default function TransaksiScreen() {
   // --- CONFIRM PAYMENT ---
   const confirmBeforePay = () => {
     if (processing || confirming) return;
-    if (orderItems.length === 0) return Alert.alert('Peringatan', 'Tambahkan minimal 1 produk.');
-    if (!selectedPayment) return Alert.alert('Peringatan', 'Pilih metode pembayaran.');
-    if (selectedPayment === 'qris' && !paymentProof) return Alert.alert('Peringatan', 'Upload bukti QRIS.');
+    if (orderItems.length === 0) return showAlert('Peringatan', 'Tambahkan minimal 1 produk.', 'warning');
+    if (!selectedPayment) return showAlert('Peringatan', 'Pilih metode pembayaran.', 'warning');
+    if (selectedPayment === 'qris' && !paymentProof) return showAlert('Peringatan', 'Upload bukti QRIS.', 'warning');
 
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmPayment = async () => {
+    setShowConfirmModal(false);
     setConfirming(true);
-    Alert.alert(
-      'Konfirmasi Transaksi',
-      `Total item: ${orderItems.length}\nTotal bayar: ${formatCurrency(grandTotal)}\nMetode: ${selectedPayment.toUpperCase()}`,
-      [
-        { text: 'Periksa Lagi', style: 'cancel', onPress: () => setConfirming(false) },
-        {
-          text: 'Konfirmasi',
-          style: 'destructive',
-          onPress: async () => {
-            setConfirming(false);
-            await handleProcessPayment();
-          }
-        }
-      ]
-    );
+    await handleProcessPayment();
+    setConfirming(false);
   };
 
   // Loading state
@@ -336,6 +390,32 @@ export default function TransaksiScreen() {
       
       {/* Header */}
       <View style={styles.header}>
+        {/* Animated Floating Leaves */}
+        <Animated.View
+          style={[
+            styles.leafDecor1,
+            { transform: [{ translateY: leaf1Transform }] },
+          ]}
+        >
+          <Ionicons name="leaf" size={70} color="rgba(255,255,255,0.15)" style={{ transform: [{ rotate: '25deg' }] }} />
+        </Animated.View>
+        <Animated.View
+          style={[
+            styles.leafDecor2,
+            { transform: [{ translateY: leaf2Transform }] },
+          ]}
+        >
+          <Ionicons name="leaf" size={50} color="rgba(255,255,255,0.12)" style={{ transform: [{ rotate: '-45deg' }] }} />
+        </Animated.View>
+        <Animated.View
+          style={[
+            styles.leafDecor3,
+            { transform: [{ translateY: leaf3Transform }] },
+          ]}
+        >
+          <Ionicons name="leaf" size={60} color="rgba(255,255,255,0.1)" style={{ transform: [{ rotate: '60deg' }] }} />
+        </Animated.View>
+
         <View style={styles.headerContent}>
           <View>
             <Text style={styles.headerTitle}>Kasir Es Teh</Text>
@@ -442,13 +522,26 @@ export default function TransaksiScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            {/* Modal Handle */}
+            <View style={styles.modalHandle} />
+
             {/* Modal Header */}
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Detail Pesanan</Text>
-              <TouchableOpacity onPress={() => setShowCheckoutModal(false)}>
-                <Ionicons name="close" size={28} color="#333" />
+              <View style={styles.modalHeaderLeft}>
+                <View style={styles.modalIconBox}>
+                  <Ionicons name="cart" size={24} color={Colors.primary} />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Detail Pesanan</Text>
+                  <Text style={styles.modalSubtitle}>{orderItems.length} item dipilih</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setShowCheckoutModal(false)} style={styles.closeBtn}>
+                <Ionicons name="close" size={24} color="#94A3B8" />
               </TouchableOpacity>
             </View>
+
+            <View style={styles.modalDivider} />
 
             {/* Cart Items List */}
             <ScrollView style={styles.cartList} showsVerticalScrollIndicator={false}>
@@ -479,12 +572,30 @@ export default function TransaksiScreen() {
 
             {/* Payment Section */}
             <View style={styles.paymentSection}>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Grand Total</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(grandTotal)}</Text>
+              <View style={styles.summaryCard}>
+                <View style={styles.summaryHeader}>
+                  <Ionicons name="receipt" size={20} color={Colors.primary} />
+                  <Text style={styles.summaryHeaderText}>Ringkasan Pembayaran</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Total Item</Text>
+                  <Text style={styles.summaryDetail}>{orderItems.length} produk</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Total Quantity</Text>
+                  <Text style={styles.summaryDetail}>{totalQty} pcs</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabelBold}>Grand Total</Text>
+                  <Text style={styles.summaryValue}>{formatCurrency(grandTotal)}</Text>
+                </View>
               </View>
 
-              <Text style={styles.payLabel}>Metode Pembayaran</Text>
+              <View style={styles.paymentHeader}>
+                <Ionicons name="wallet" size={20} color={Colors.primary} />
+                <Text style={styles.payLabel}>Metode Pembayaran</Text>
+              </View>
               <View style={styles.payRow}>
                 <TouchableOpacity
                   style={[styles.payBtn, selectedPayment === 'tunai' && styles.payBtnActive]}
@@ -556,6 +667,92 @@ export default function TransaksiScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Confirmation Modal */}
+      <Modal
+        visible={showConfirmModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowConfirmModal(false)}
+      >
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmCard}>
+            {/* Icon Header */}
+            <View style={styles.confirmIconContainer}>
+              <View style={styles.confirmIconBg}>
+                <Ionicons name="checkmark-circle" size={64} color={Colors.primary} />
+              </View>
+            </View>
+
+            {/* Title */}
+            <Text style={styles.confirmTitle}>Konfirmasi Transaksi</Text>
+            <Text style={styles.confirmSubtitle}>Pastikan detail pesanan sudah benar</Text>
+
+            {/* Details */}
+            <View style={styles.confirmDetails}>
+              <View style={styles.confirmDetailRow}>
+                <View style={styles.confirmDetailLeft}>
+                  <Ionicons name="cart-outline" size={20} color="#64748B" />
+                  <Text style={styles.confirmDetailLabel}>Total Item</Text>
+                </View>
+                <Text style={styles.confirmDetailValue}>{orderItems.length} produk</Text>
+              </View>
+
+              <View style={styles.confirmDetailRow}>
+                <View style={styles.confirmDetailLeft}>
+                  <Ionicons name="pricetag-outline" size={20} color="#64748B" />
+                  <Text style={styles.confirmDetailLabel}>Total Quantity</Text>
+                </View>
+                <Text style={styles.confirmDetailValue}>{totalQty} pcs</Text>
+              </View>
+
+              <View style={styles.confirmDetailRow}>
+                <View style={styles.confirmDetailLeft}>
+                  <Ionicons name="wallet-outline" size={20} color="#64748B" />
+                  <Text style={styles.confirmDetailLabel}>Metode Bayar</Text>
+                </View>
+                <Text style={styles.confirmDetailValue}>{selectedPayment?.toUpperCase()}</Text>
+              </View>
+
+              <View style={styles.confirmDivider} />
+
+              <View style={styles.confirmTotalRow}>
+                <Text style={styles.confirmTotalLabel}>Grand Total</Text>
+                <Text style={styles.confirmTotalValue}>{formatCurrency(grandTotal)}</Text>
+              </View>
+            </View>
+
+            {/* Actions */}
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.confirmBtnCancel}
+                onPress={() => setShowConfirmModal(false)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close-circle-outline" size={20} color="#64748B" />
+                <Text style={styles.confirmBtnCancelText}>Periksa Lagi</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.confirmBtnConfirm}
+                onPress={handleConfirmPayment}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="checkmark-circle" size={20} color="white" />
+                <Text style={styles.confirmBtnConfirmText}>Konfirmasi</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      {/* Shared Alert Modal */}
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => { setAlertVisible(false); if (alertOnClose) alertOnClose(); }}
+      />
     </View>
   );
 }
@@ -577,6 +774,23 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  leafDecor1: {
+    position: 'absolute',
+    top: 30,
+    right: 20,
+  },
+  leafDecor2: {
+    position: 'absolute',
+    top: 80,
+    left: 15,
+  },
+  leafDecor3: {
+    position: 'absolute',
+    top: 50,
+    right: -5,
   },
   headerContent: {
     flexDirection: 'row',
@@ -809,20 +1023,57 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
     padding: spacing.xl,
-    maxHeight: '85%',
+    paddingTop: spacing.md,
+    maxHeight: '90%',
     elevation: 20,
     paddingBottom: 40,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: spacing.lg,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  modalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  modalIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.lg,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalTitle: {
-    fontSize: typography.headline,
-    fontWeight: '800',
-    color: '#1A1A1A',
+    fontSize: typography.title,
+    fontWeight: '900',
+    color: '#1E293B',
+  },
+  modalSubtitle: {
+    fontSize: typography.caption,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  closeBtn: {
+    padding: spacing.xs,
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginBottom: spacing.lg,
   },
   cartList: {
     marginBottom: spacing.lg,
@@ -870,33 +1121,71 @@ const styles = StyleSheet.create({
   },
   paymentSection: {
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    paddingTop: 24,
+    borderTopColor: '#F1F5F9',
+    paddingTop: spacing.lg,
+  },
+  summaryCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  summaryHeaderText: {
+    fontSize: typography.bodyStrong,
+    fontWeight: '800',
+    color: '#1E293B',
+    letterSpacing: 0.3,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.lg,
-    paddingHorizontal: 4,
+    marginBottom: spacing.sm,
   },
   summaryLabel: {
+    fontSize: typography.body,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  summaryLabelBold: {
     fontSize: typography.bodyStrong,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  summaryDetail: {
+    fontSize: typography.body,
     fontWeight: '700',
-    color: '#666',
+    color: '#475569',
   },
   summaryValue: {
-    fontSize: typography.headline,
+    fontSize: typography.title,
     fontWeight: '900',
     color: Colors.primary,
   },
-  payLabel: {
-    fontSize: typography.body,
-    fontWeight: '800',
-    color: '#666',
+  summaryDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: spacing.md,
+  },
+  paymentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     marginBottom: spacing.md,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  },
+  payLabel: {
+    fontSize: typography.bodyStrong,
+    fontWeight: '800',
+    color: '#1E293B',
+    letterSpacing: 0.3,
   },
   payRow: {
     flexDirection: 'row',
@@ -997,5 +1286,136 @@ const styles = StyleSheet.create({
   btnDisabled: {
     backgroundColor: '#CCC',
     elevation: 0,
+  },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  confirmCard: {
+    backgroundColor: 'white',
+    borderRadius: 28,
+    padding: 32,
+    width: '100%',
+    maxWidth: 400,
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+  },
+  confirmIconContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  confirmIconBg: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#1E293B',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  confirmSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginBottom: 28,
+  },
+  confirmDetails: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: 28,
+  },
+  confirmDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  confirmDetailLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  confirmDetailLabel: {
+    fontSize: typography.body,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  confirmDetailValue: {
+    fontSize: typography.bodyStrong,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  confirmDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: spacing.md,
+  },
+  confirmTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  confirmTotalLabel: {
+    fontSize: typography.bodyStrong,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  confirmTotalValue: {
+    fontSize: typography.headline,
+    fontWeight: '900',
+    color: Colors.primary,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  confirmBtnCancel: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: '#F1F5F9',
+    gap: spacing.xs,
+  },
+  confirmBtnCancelText: {
+    fontSize: typography.body,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  confirmBtnConfirm: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: Colors.primary,
+    gap: spacing.xs,
+    elevation: 4,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  confirmBtnConfirmText: {
+    fontSize: typography.body,
+    fontWeight: '800',
+    color: 'white',
   },
 });

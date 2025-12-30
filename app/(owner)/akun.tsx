@@ -4,22 +4,23 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Dimensions,
-  Easing,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Animated,
+    Dimensions,
+    Easing,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
+import AlertModal from '../../components/AlertModal';
+import ConfirmModal from '../../components/ConfirmModal';
 import { Colors } from '../../constants/Colors';
 import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI, ownerAPI } from '../../services/api';
@@ -34,6 +35,38 @@ export default function ProfileScreen() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [modalType, setModalType] = useState<'username' | 'password'>('username');
   const [formData, setFormData] = useState({ value: '' });
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmActions, setConfirmActions] = useState<
+    { label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger'; loading?: boolean; disabled?: boolean }[]
+  >([]);
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: 'success' | 'error' | 'warning' | 'info' = 'info'
+  ) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    actions: { label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger'; loading?: boolean; disabled?: boolean }[]
+  ) => {
+    setConfirmTitle(title);
+    setConfirmMessage(message);
+    setConfirmActions(actions);
+    setConfirmVisible(true);
+  };
 
   // --- SKELETON SHIMMER ---
   const SkeletonShimmer = ({ width, height, style }: { width?: number | string; height?: number; style?: any }) => {
@@ -73,7 +106,7 @@ export default function ProfileScreen() {
 
   const handleUpdateAccount = async () => {
     if (!formData.value.trim()) {
-      Alert.alert('Validasi', 'Input tidak boleh kosong');
+      showAlert('Validasi', 'Input tidak boleh kosong', 'warning');
       return;
     }
     setProcessing(true);
@@ -84,9 +117,9 @@ export default function ProfileScreen() {
 
       const res = await ownerAPI.updateUser(user.id, payload);
       if (res.error) {
-        Alert.alert('Gagal', res.error);
+        showAlert('Gagal', res.error, 'error');
       } else {
-        Alert.alert('Sukses', `${modalType === 'username' ? 'Username' : 'Password'} diperbarui`);
+        showAlert('Sukses', `${modalType === 'username' ? 'Username' : 'Password'} diperbarui`, 'success');
         if (modalType === 'username') {
           const newUser = { ...user, username: formData.value };
           await AsyncStorage.setItem('@user_data', JSON.stringify(newUser));
@@ -96,16 +129,17 @@ export default function ProfileScreen() {
         setFormData({ value: '' });
       }
     } catch {
-      Alert.alert('Error', 'Gagal menghubungi server');
+      showAlert('Error', 'Gagal menghubungi server', 'error');
     } finally {
       setProcessing(false);
     }
   };
 
   const handleLogout = () => {
-    Alert.alert('Konfirmasi', 'Yakin ingin keluar?', [
-      { text: 'Batal', style: 'cancel' },
-      { text: 'Keluar', style: 'destructive', onPress: async () => {
+    showConfirm('Konfirmasi', 'Yakin ingin keluar?', [
+      { label: 'Batal', type: 'secondary', onPress: () => setConfirmVisible(false) },
+      { label: 'Keluar', type: 'danger', onPress: async () => {
+          setConfirmVisible(false);
           await authAPI.logout();
           router.replace('/(auth)/login');
       }},
@@ -255,6 +289,21 @@ export default function ProfileScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
+      <ConfirmModal
+        visible={confirmVisible}
+        title={confirmTitle}
+        message={confirmMessage}
+        actions={confirmActions}
+        onClose={() => setConfirmVisible(false)}
+      />
     </View>
   );
 }

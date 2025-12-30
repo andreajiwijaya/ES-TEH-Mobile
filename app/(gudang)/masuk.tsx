@@ -2,20 +2,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
-  Animated,
-  FlatList,
-  Modal,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Animated,
+    FlatList,
+    Modal,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import AlertModal from '../../components/AlertModal';
+import ConfirmModal from '../../components/ConfirmModal';
 import { Colors } from '../../constants/Colors';
 import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI, gudangAPI } from '../../services/api';
@@ -66,6 +67,34 @@ export default function BarangMasukScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processing, setProcessing] = useState(false);
+  // Shared alert/confirm state
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success'|'error'|'warning'|'info'>('info');
+
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmActions, setConfirmActions] = useState<{ label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger'; loading?: boolean; disabled?: boolean; }[]>([]);
+
+  const showAlert = (title: string, message: string, type: 'success'|'error'|'warning'|'info' = 'info') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    actions: { label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger'; loading?: boolean; disabled?: boolean; }[],
+  ) => {
+    setConfirmTitle(title);
+    setConfirmMessage(message);
+    setConfirmActions(actions);
+    setConfirmVisible(true);
+  };
 
   // Modal Create/Update
   const [showModal, setShowModal] = useState(false);
@@ -125,7 +154,7 @@ export default function BarangMasukScreen() {
       }
     } catch (error: any) {
       console.error('Load data error:', error);
-      Alert.alert('Error', 'Gagal memuat data');
+      showAlert('Error', 'Gagal memuat data', 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -220,13 +249,13 @@ export default function BarangMasukScreen() {
 
   const handleSave = async () => {
     if (!selectedBahan || !jumlah || !supplier) {
-      Alert.alert('Validasi', 'Mohon lengkapi semua data');
+      showAlert('Validasi', 'Mohon lengkapi semua data', 'warning');
       return;
     }
 
     const qty = parseFloat(jumlah);
     if (isNaN(qty) || qty <= 0) {
-      Alert.alert('Validasi', 'Jumlah harus angka lebih dari 0');
+      showAlert('Validasi', 'Jumlah harus angka lebih dari 0', 'warning');
       return;
     }
 
@@ -239,7 +268,7 @@ export default function BarangMasukScreen() {
           supplier,
         });
         if (response.error) throw new Error(response.error);
-        Alert.alert('Sukses', 'Data berhasil diperbarui');
+        showAlert('Sukses', 'Data berhasil diperbarui', 'success');
       } else {
         const response = await gudangAPI.createBarangMasuk({
           bahan_id: selectedBahan.id,
@@ -247,38 +276,35 @@ export default function BarangMasukScreen() {
           supplier,
         });
         if (response.error) throw new Error(response.error);
-        Alert.alert('Sukses', 'Barang masuk berhasil dicatat');
+        showAlert('Sukses', 'Barang masuk berhasil dicatat', 'success');
       }
       
       setShowModal(false);
       loadData(true);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Gagal menyimpan data');
+      showAlert('Error', error.message || 'Gagal menyimpan data', 'error');
     } finally {
       setProcessing(false);
     }
   };
 
   const handleDelete = (item: BarangMasuk) => {
-    Alert.alert(
+    showConfirm(
       'Hapus Data',
       `Yakin ingin menghapus data ${item.bahan?.nama || 'item'} ini?`,
       [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Hapus',
-          style: 'destructive',
-          onPress: async () => {
+        { label: 'Batal', type: 'secondary', onPress: () => setConfirmVisible(false) },
+        { label: 'Hapus', type: 'danger', onPress: async () => {
+            setConfirmVisible(false);
             try {
               const res = await gudangAPI.deleteBarangMasuk(item.id);
               if (res.error) throw new Error(res.error);
-              Alert.alert('Sukses', 'Data berhasil dihapus');
+              showAlert('Sukses', 'Data berhasil dihapus', 'success');
               loadData(true);
             } catch (error: any) {
-              Alert.alert('Gagal', error.message || 'Tidak dapat menghapus data');
+              showAlert('Gagal', error.message || 'Tidak dapat menghapus data', 'error');
             }
-          },
-        },
+          } },
       ]
     );
   };
@@ -747,6 +773,21 @@ export default function BarangMasukScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+      {/* Shared Modals */}
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
+      <ConfirmModal
+        visible={confirmVisible}
+        title={confirmTitle}
+        message={confirmMessage}
+        actions={confirmActions}
+        onClose={() => setConfirmVisible(false)}
+      />
     </View>
   );
 }

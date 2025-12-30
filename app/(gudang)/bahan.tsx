@@ -2,23 +2,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Easing,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Animated,
+    Easing,
+    FlatList,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import AlertModal from '../../components/AlertModal';
+import ConfirmModal from '../../components/ConfirmModal';
 import { Colors } from '../../constants/Colors';
 import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI, gudangAPI } from '../../services/api';
@@ -65,6 +66,38 @@ export default function MasterBahanScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmActions, setConfirmActions] = useState<
+    { label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger'; loading?: boolean; disabled?: boolean }[]
+  >([]);
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: 'success' | 'error' | 'warning' | 'info' = 'info'
+  ) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    actions: { label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger'; loading?: boolean; disabled?: boolean }[]
+  ) => {
+    setConfirmTitle(title);
+    setConfirmMessage(message);
+    setConfirmActions(actions);
+    setConfirmVisible(true);
+  };
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -120,7 +153,7 @@ export default function MasterBahanScreen() {
         setFilteredList(sortedData);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Gagal memuat data bahan');
+      showAlert('Error', error.message || 'Gagal memuat data bahan', 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -183,11 +216,11 @@ export default function MasterBahanScreen() {
 
   const handleSave = async () => {
     if (!formData.nama || !formData.satuan) {
-      Alert.alert('Validasi', 'Nama bahan dan satuan wajib diisi!');
+      showAlert('Validasi', 'Nama bahan dan satuan wajib diisi!', 'warning');
       return;
     }
     if (!formData.isi_per_satuan || !formData.berat_per_isi) {
-      Alert.alert('Validasi', 'Isi per satuan dan berat per isi wajib diisi!');
+      showAlert('Validasi', 'Isi per satuan dan berat per isi wajib diisi!', 'warning');
       return;
     }
 
@@ -211,32 +244,33 @@ export default function MasterBahanScreen() {
 
       if (response.error) throw new Error(response.error);
 
-      Alert.alert('Sukses', `Data bahan berhasil ${isEditMode ? 'diperbarui' : 'ditambahkan'}`);
+      showAlert('Sukses', `Data bahan berhasil ${isEditMode ? 'diperbarui' : 'ditambahkan'}`, 'success');
       setShowModal(false);
       loadData(true);
     } catch (error: any) {
-      Alert.alert('Gagal', error.message);
+      showAlert('Gagal', error.message, 'error');
     } finally {
       setProcessing(false);
     }
   };
 
   const handleDelete = (id: number) => {
-    Alert.alert('Hapus Bahan', 'Yakin ingin menghapus bahan ini?', [
-      { text: 'Batal', style: 'cancel' },
+    showConfirm('Hapus Bahan', 'Yakin ingin menghapus bahan ini?', [
+      { label: 'Batal', type: 'secondary', onPress: () => setConfirmVisible(false) },
       {
-        text: 'Hapus',
-        style: 'destructive',
+        label: 'Hapus',
+        type: 'danger',
         onPress: async () => {
+          setConfirmVisible(false);
           setLoading(true);
           try {
             const res = await gudangAPI.deleteBahan(id);
             if (res.error) throw new Error(res.error);
-            Alert.alert('Terhapus', 'Data bahan berhasil dihapus.');
+            showAlert('Terhapus', 'Data bahan berhasil dihapus.', 'success');
             loadData(true);
           } catch (error: any) {
             setLoading(false);
-            Alert.alert('Gagal', error.message);
+            showAlert('Gagal', error.message, 'error');
           }
         },
       },
@@ -399,6 +433,21 @@ export default function MasterBahanScreen() {
       <TouchableOpacity style={styles.fab} onPress={openCreateModal}>
         <Ionicons name="add" size={28} color="white" />
       </TouchableOpacity>
+
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
+      <ConfirmModal
+        visible={confirmVisible}
+        title={confirmTitle}
+        message={confirmMessage}
+        actions={confirmActions}
+        onClose={() => setConfirmVisible(false)}
+      />
 
       {/* MODAL FORM */}
       <Modal visible={showModal} transparent animationType="slide">

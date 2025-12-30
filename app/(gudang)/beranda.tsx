@@ -2,18 +2,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
-  Animated,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Animated,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import AlertModal from '../../components/AlertModal';
 import { Colors } from '../../constants/Colors';
 import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI, gudangAPI } from '../../services/api';
@@ -94,6 +94,21 @@ export default function WarehouseOverviewScreen() {
   const [totalSKU, setTotalSKU] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [criticalCount, setCriticalCount] = useState(0);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: 'success' | 'error' | 'warning' | 'info' = 'info'
+  ) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
 
   // Load User Data
   const loadUserData = useCallback(async () => {
@@ -242,7 +257,7 @@ export default function WarehouseOverviewScreen() {
       setRecentActivities(activities.slice(0, 5));
     } catch (error) {
       console.error('Gagal memuat data:', error);
-      Alert.alert('Gagal Memuat', 'Terjadi kesalahan saat mengambil data.');
+      showAlert('Gagal Memuat', 'Terjadi kesalahan saat mengambil data.', 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -354,6 +369,14 @@ export default function WarehouseOverviewScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
 
       {/* Header */}
       <View style={styles.header}>

@@ -3,22 +3,23 @@ import AsyncStorage from '@react-native-async-storage/async-storage'; // FIX: Di
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Easing,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Animated,
+    Easing,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
+import AlertModal from '../../components/AlertModal';
+import ConfirmModal from '../../components/ConfirmModal';
 import { Colors } from '../../constants/Colors';
 import { ownerAPI } from '../../services/api';
 import { Outlet, User } from '../../types';
@@ -32,6 +33,38 @@ export default function KaryawanScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [user, setUser] = useState<any>(null); // State User Baru untuk Header Dynamic
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmActions, setConfirmActions] = useState<
+    { label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger'; loading?: boolean; disabled?: boolean }[]
+  >([]);
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: 'success' | 'error' | 'warning' | 'info' = 'info'
+  ) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    actions: { label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger'; loading?: boolean; disabled?: boolean }[]
+  ) => {
+    setConfirmTitle(title);
+    setConfirmMessage(message);
+    setConfirmActions(actions);
+    setConfirmVisible(true);
+  };
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -82,7 +115,7 @@ export default function KaryawanScreen() {
         if (Array.isArray(rawOutlets)) setOutlets(rawOutlets);
       }
     } catch {
-      Alert.alert('Error', 'Gagal menyinkronkan data terbaru');
+      showAlert('Error', 'Gagal menyinkronkan data terbaru', 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -300,7 +333,7 @@ export default function KaryawanScreen() {
 
   const handleAdd = async () => {
     if (!formData.username || !formData.password) {
-      Alert.alert('Validasi', 'Username dan password wajib diisi');
+      showAlert('Validasi', 'Username dan password wajib diisi', 'warning');
       return;
     }
     setProcessing(true);
@@ -310,7 +343,7 @@ export default function KaryawanScreen() {
         payload.outlet_id = parseInt(formData.outlet_id);
       }
       const response = await ownerAPI.createUser(payload);
-      if (response.error) Alert.alert('Gagal', response.error);
+      if (response.error) showAlert('Gagal', response.error, 'error');
       else {
         setShowAddModal(false);
         resetForm();
@@ -333,7 +366,7 @@ export default function KaryawanScreen() {
         payload.outlet_id = null;
       }
       const response = await ownerAPI.updateUser(selectedEmployee.id, payload);
-      if (response.error) Alert.alert('Gagal', response.error);
+      if (response.error) showAlert('Gagal', response.error, 'error');
       else {
         setShowEditModal(false);
         resetForm();
@@ -345,11 +378,13 @@ export default function KaryawanScreen() {
   };
 
   const handleDelete = (id: number) => {
-    Alert.alert('Hapus Akun', 'Cabut akses user ini secara permanen?', [
-      { text: 'Batal', style: 'cancel' },
-      { text: 'Hapus', style: 'destructive', onPress: async () => {
+    showConfirm('Hapus Akun', 'Cabut akses user ini secara permanen?', [
+      { label: 'Batal', type: 'secondary', onPress: () => setConfirmVisible(false) },
+      { label: 'Hapus', type: 'danger', onPress: async () => {
+          setConfirmVisible(false);
           await ownerAPI.deleteUser(id);
           loadData(true);
+          showAlert('Terhapus', 'Akun karyawan dihapus', 'success');
       }}
     ]);
   };
@@ -506,6 +541,21 @@ export default function KaryawanScreen() {
             </View>
         </View>
       </Modal>
+
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
+      <ConfirmModal
+        visible={confirmVisible}
+        title={confirmTitle}
+        message={confirmMessage}
+        actions={confirmActions}
+        onClose={() => setConfirmVisible(false)}
+      />
     </View>
   );
 }

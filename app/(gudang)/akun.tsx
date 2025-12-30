@@ -1,10 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Platform,
   RefreshControl,
@@ -15,8 +14,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import ConfirmModal from '../../components/ConfirmModal';
 import { Colors } from '../../constants/Colors';
-import { spacing, radius, typography } from '../../constants/DesignSystem';
+import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI } from '../../services/api';
 import { Outlet, User } from '../../types';
 
@@ -69,6 +69,23 @@ export default function WarehouseProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmActions, setConfirmActions] = useState<
+    { label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger'; loading?: boolean; disabled?: boolean }[]
+  >([]);
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    actions: { label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger'; loading?: boolean; disabled?: boolean }[]
+  ) => {
+    setConfirmTitle(title);
+    setConfirmMessage(message);
+    setConfirmActions(actions);
+    setConfirmVisible(true);
+  };
 
   // Load profile setiap kali halaman difokuskan
   const loadProfile = useCallback(async (showRefreshIndicator = false) => {
@@ -140,15 +157,16 @@ export default function WarehouseProfileScreen() {
   };
 
   const handleLogout = async () => {
-    Alert.alert(
+    showConfirm(
       'Konfirmasi Keluar',
       'Apakah Anda yakin ingin mengakhiri sesi ini?',
       [
-        { text: 'Batal', style: 'cancel' },
+        { label: 'Batal', type: 'secondary', onPress: () => setConfirmVisible(false) },
         {
-          text: 'Keluar Sekarang',
-          style: 'destructive',
+          label: 'Keluar Sekarang',
+          type: 'danger',
           onPress: async () => {
+            setConfirmVisible(false);
             setIsLoggingOut(true);
             try {
               await authAPI.logout();
@@ -219,6 +237,14 @@ export default function WarehouseProfileScreen() {
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
 
+        <ConfirmModal
+          visible={confirmVisible}
+          title={confirmTitle}
+          message={confirmMessage}
+          actions={confirmActions}
+          onClose={() => setConfirmVisible(false)}
+        />
+
         {/* Header Background */}
         <View style={styles.headerBackground}>
           <View style={styles.headerContent}>
@@ -276,6 +302,14 @@ export default function WarehouseProfileScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+
+      <ConfirmModal
+        visible={confirmVisible}
+        title={confirmTitle}
+        message={confirmMessage}
+        actions={confirmActions}
+        onClose={() => setConfirmVisible(false)}
+      />
 
       {/* Header Background Modern */}
       <View style={styles.headerBackground}>

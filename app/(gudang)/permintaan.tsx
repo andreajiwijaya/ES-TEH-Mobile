@@ -2,21 +2,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
-  Animated,
-  FlatList,
-  Modal,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Animated,
+    FlatList,
+    Modal,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
+import AlertModal from '../../components/AlertModal';
+import ConfirmModal from '../../components/ConfirmModal';
 import { Colors } from '../../constants/Colors';
 import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI, gudangAPI } from '../../services/api';
@@ -194,6 +195,38 @@ export default function PermintaanScreen() {
   const [selectedRequest, setSelectedRequest] = useState<PermintaanStok | null>(null);
   const [detailVisible, setDetailVisible] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmActions, setConfirmActions] = useState<
+    { label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger'; loading?: boolean; disabled?: boolean }[]
+  >([]);
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: 'success' | 'error' | 'warning' | 'info' = 'info'
+  ) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    actions: { label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger'; loading?: boolean; disabled?: boolean }[]
+  ) => {
+    setConfirmTitle(title);
+    setConfirmMessage(message);
+    setConfirmActions(actions);
+    setConfirmVisible(true);
+  };
 
   // Avatar helpers
   const getAvatarColor = () => {
@@ -234,7 +267,7 @@ export default function PermintaanScreen() {
       }
     } catch (error: any) {
       console.error('Load data error:', error);
-      Alert.alert('Error', 'Gagal memuat data permintaan');
+      showAlert('Error', 'Gagal memuat data permintaan', 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -302,34 +335,34 @@ export default function PermintaanScreen() {
     try {
       const res = await gudangAPI.updatePermintaanStok(id, { status });
       if (res.error) throw new Error(res.error);
-      Alert.alert('Sukses', successMsg);
+      showAlert('Sukses', successMsg, 'success');
       loadData(true);
       setDetailVisible(false);
     } catch (error: any) {
-      Alert.alert('Gagal', error.message || 'Tidak dapat memperbarui status');
+      showAlert('Gagal', error.message || 'Tidak dapat memperbarui status', 'error');
     } finally {
       setProcessing(false);
     }
   };
 
   const handleApprove = (item: PermintaanStok) => {
-    Alert.alert(
+    showConfirm(
       'Setujui Permintaan',
       `Yakin menyetujui permintaan ${item.bahan?.nama || 'item'} sebanyak ${item.jumlah} ${item.bahan?.satuan || 'pcs'}?`,
       [
-        { text: 'Batal', style: 'cancel' },
-        { text: 'Setujui', onPress: () => updateStatus(item.id, 'disetujui', 'Permintaan disetujui') }
+        { label: 'Batal', type: 'secondary', onPress: () => setConfirmVisible(false) },
+        { label: 'Setujui', type: 'primary', onPress: () => updateStatus(item.id, 'disetujui', 'Permintaan disetujui') },
       ]
     );
   };
 
   const handleReject = (item: PermintaanStok) => {
-    Alert.alert(
+    showConfirm(
       'Tolak Permintaan',
       `Yakin menolak permintaan ${item.bahan?.nama || 'item'}?`,
       [
-        { text: 'Batal', style: 'cancel' },
-        { text: 'Tolak', style: 'destructive', onPress: () => updateStatus(item.id, 'ditolak', 'Permintaan ditolak') }
+        { label: 'Batal', type: 'secondary', onPress: () => setConfirmVisible(false) },
+        { label: 'Tolak', type: 'danger', onPress: () => updateStatus(item.id, 'ditolak', 'Permintaan ditolak') },
       ]
     );
   };
@@ -659,6 +692,20 @@ export default function PermintaanScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
+      <ConfirmModal
+        visible={confirmVisible}
+        title={confirmTitle}
+        message={confirmMessage}
+        actions={confirmActions}
+        onClose={() => setConfirmVisible(false)}
+      />
     </View>
   );
 }

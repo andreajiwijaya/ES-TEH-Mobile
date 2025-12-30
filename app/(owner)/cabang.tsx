@@ -3,24 +3,25 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  Animated,
-  Easing,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Animated,
+    Easing,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import AlertModal from '../../components/AlertModal';
+import ConfirmModal from '../../components/ConfirmModal';
 import { Colors } from '../../constants/Colors';
-import { spacing, radius, typography } from '../../constants/DesignSystem';
+import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { ownerAPI } from '../../services/api';
 import { Outlet } from '../../types';
 
@@ -71,6 +72,38 @@ export default function OutletScreen() {
   const [processing, setProcessing] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [user, setUser] = useState<any>(null);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmActions, setConfirmActions] = useState<
+    { label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger'; loading?: boolean; disabled?: boolean }[]
+  >([]);
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: 'success' | 'error' | 'warning' | 'info' = 'info'
+  ) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    actions: { label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger'; loading?: boolean; disabled?: boolean }[]
+  ) => {
+    setConfirmTitle(title);
+    setConfirmMessage(message);
+    setConfirmActions(actions);
+    setConfirmVisible(true);
+  };
 
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
@@ -90,7 +123,7 @@ export default function OutletScreen() {
 
       const response = await ownerAPI.getOutlets();
       if (response.error) {
-        Alert.alert('Error', response.error);
+        showAlert('Error', response.error, 'error');
         return;
       }
 
@@ -114,7 +147,7 @@ export default function OutletScreen() {
 
       setOutlets(mappedOutlets);
     } catch (err: any) {
-      Alert.alert('Error', err?.message ?? 'Gagal memuat outlet');
+      showAlert('Error', err?.message ?? 'Gagal memuat outlet', 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -153,7 +186,7 @@ export default function OutletScreen() {
 
   const handleAdd = async () => {
     if (!formData.nama.trim() || !formData.alamat.trim()) {
-      Alert.alert('Validasi', 'Nama dan alamat outlet harus diisi');
+      showAlert('Validasi', 'Nama dan alamat outlet harus diisi', 'warning');
       return;
     }
     setProcessing(true);
@@ -164,15 +197,15 @@ export default function OutletScreen() {
         is_active: formData.is_active,
       });
       if (response.error) {
-        Alert.alert('Gagal', response.error);
+        showAlert('Gagal', response.error, 'error');
       } else {
-        Alert.alert('Sukses', 'Outlet berhasil ditambahkan');
+        showAlert('Sukses', 'Outlet berhasil ditambahkan', 'success');
         setShowAddModal(false);
         resetForm();
         loadOutlets(true);
       }
     } catch (err: any) {
-      Alert.alert('Error', err?.message ?? 'Gagal menambahkan outlet');
+      showAlert('Error', err?.message ?? 'Gagal menambahkan outlet', 'error');
     } finally {
       setProcessing(false);
     }
@@ -191,7 +224,7 @@ export default function OutletScreen() {
   const handleUpdate = async () => {
     if (!selectedOutlet) return;
     if (!formData.nama.trim() || !formData.alamat.trim()) {
-      Alert.alert('Validasi', 'Nama dan alamat harus diisi');
+      showAlert('Validasi', 'Nama dan alamat harus diisi', 'warning');
       return;
     }
     setProcessing(true);
@@ -202,36 +235,38 @@ export default function OutletScreen() {
         is_active: formData.is_active,
       });
       if (response.error) {
-        Alert.alert('Gagal', response.error);
+        showAlert('Gagal', response.error, 'error');
       } else {
-        Alert.alert('Sukses', 'Data outlet berhasil diperbarui');
+        showAlert('Sukses', 'Data outlet berhasil diperbarui', 'success');
         setShowEditModal(false);
         resetForm();
         loadOutlets(true);
       }
     } catch (err: any) {
-      Alert.alert('Error', err?.message ?? 'Gagal mengupdate outlet');
+      showAlert('Error', err?.message ?? 'Gagal mengupdate outlet', 'error');
     } finally {
       setProcessing(false);
     }
   };
 
   const handleDelete = async (id: number) => {
-    Alert.alert('Hapus Outlet', 'Yakin ingin menghapus outlet ini?', [
-      { text: 'Batal', style: 'cancel' },
+    showConfirm('Hapus Outlet', 'Yakin ingin menghapus outlet ini?', [
+      { label: 'Batal', type: 'secondary', onPress: () => setConfirmVisible(false) },
       {
-        text: 'Hapus',
-        style: 'destructive',
+        label: 'Hapus',
+        type: 'danger',
         onPress: async () => {
+          setConfirmVisible(false);
           try {
             const response = await ownerAPI.deleteOutlet(id);
-            if (response.error) Alert.alert('Gagal', response.error);
-            else {
-              Alert.alert('Sukses', 'Outlet berhasil dihapus');
+            if (response.error) {
+              showAlert('Gagal', response.error, 'error');
+            } else {
+              showAlert('Sukses', 'Outlet berhasil dihapus', 'success');
               loadOutlets(true);
             }
           } catch (err: any) {
-            Alert.alert('Error', err?.message ?? 'Gagal menghapus outlet');
+            showAlert('Error', err?.message ?? 'Gagal menghapus outlet', 'error');
           }
         },
       },
@@ -520,6 +555,21 @@ export default function OutletScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
+      <ConfirmModal
+        visible={confirmVisible}
+        title={confirmTitle}
+        message={confirmMessage}
+        actions={confirmActions}
+        onClose={() => setConfirmVisible(false)}
+      />
     </View>
   );
 }

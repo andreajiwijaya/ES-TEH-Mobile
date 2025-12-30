@@ -2,21 +2,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
-  Animated,
-  FlatList,
-  Image,
-  Modal,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Animated,
+    FlatList,
+    Image,
+    Modal,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import AlertModal from '../../components/AlertModal';
 import { Colors } from '../../constants/Colors';
 import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI, gudangAPI } from '../../services/api';
@@ -74,6 +74,17 @@ export default function BarangKeluarScreen() {
   const [selectedItem, setSelectedItem] = useState<BarangKeluar | null>(null);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [photoToView, setPhotoToView] = useState<string | null>(null);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
+
+  const showAlert = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
 
   // Avatar helpers
   const getAvatarColor = () => {
@@ -144,7 +155,7 @@ export default function BarangKeluarScreen() {
       }
     } catch (error: any) {
       console.error('Load data error:', error);
-      Alert.alert('Error', 'Gagal memuat data');
+      showAlert('Error', 'Gagal memuat data', 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -294,8 +305,7 @@ export default function BarangKeluarScreen() {
         return;
       }
     }
-
-    Alert.alert('Info', 'Tidak ada foto bukti untuk item ini');
+    showAlert('Info', 'Tidak ada foto bukti untuk item ini', 'info');
   };
 
   // Render skeleton loading
@@ -731,6 +741,13 @@ export default function BarangKeluarScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
     </View>
   );
 }

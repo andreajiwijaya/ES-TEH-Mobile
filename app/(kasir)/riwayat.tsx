@@ -4,7 +4,6 @@ import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Image,
   Modal,
@@ -17,8 +16,10 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import AlertModal from '../../components/AlertModal';
+import ConfirmModal from '../../components/ConfirmModal';
 import { Colors } from '../../constants/Colors';
-import { spacing, radius, typography } from '../../constants/DesignSystem';
+import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI, karyawanAPI } from '../../services/api';
 import { Transaksi, TransaksiItem, User } from '../../types';
 
@@ -82,6 +83,32 @@ export default function RiwayatScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTx, setSelectedTx] = useState<TransactionWithItems | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Custom alert & confirm state
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success'|'error'|'warning'|'info'>('info');
+
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [confirmOnConfirm, setConfirmOnConfirm] = useState<null | (() => Promise<void> | void)>(null);
+
+  const showAlert = (title: string, message: string, type: 'success'|'error'|'warning'|'info' = 'info') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
+
+  const showConfirm = (title: string, message: string, onConfirm: () => Promise<void> | void) => {
+    setConfirmTitle(title);
+    setConfirmMessage(message);
+    setConfirmOnConfirm(() => onConfirm);
+    setConfirmVisible(true);
+  };
 
   // --- LOAD USER DATA ---
   const loadUserData = useCallback(async () => {
@@ -205,7 +232,7 @@ export default function RiwayatScreen() {
       }
     } catch (err) {
       console.error(err);
-      Alert.alert('Error', 'Gagal memuat detail.');
+      showAlert('Error', 'Gagal memuat detail.', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -214,25 +241,25 @@ export default function RiwayatScreen() {
   // --- HAPUS TRANSAKSI ---
   const handleVoidTransaction = () => {
     if (!selectedTx) return;
-    Alert.alert('Hapus Riwayat', 'Yakin ingin menghapus transaksi ini? Stok akan dikembalikan.', [
-      { text: 'Kembali', style: 'cancel' },
-      { text: 'Ya, Hapus', style: 'destructive', onPress: async () => {
-        setActionLoading(true);
-        try {
-          const res = await karyawanAPI.deleteTransaksi(selectedTx.id);
-          if (!res.error) {
-            Alert.alert('Sukses', 'Transaksi telah dihapus.');
-            setModalVisible(false);
-            loadTransactions(true);
-          }
-        } catch (err) {
-          console.error(err);
-          Alert.alert('Gagal', 'Gagal menghapus transaksi.');
-        } finally { 
-          setActionLoading(false); 
+    showConfirm('Hapus Riwayat', 'Yakin ingin menghapus transaksi ini? Stok akan dikembalikan.', async () => {
+      setConfirmLoading(true);
+      setActionLoading(true);
+      try {
+        const res = await karyawanAPI.deleteTransaksi(selectedTx.id);
+        if (!res.error) {
+          showAlert('Sukses', 'Transaksi telah dihapus.', 'success');
+          setModalVisible(false);
+          await loadTransactions(true);
         }
-      }}
-    ]);
+      } catch (err) {
+        console.error(err);
+        showAlert('Gagal', 'Gagal menghapus transaksi.', 'error');
+      } finally {
+        setActionLoading(false);
+        setConfirmLoading(false);
+        setConfirmVisible(false);
+      }
+    });
   };
 
   const formatDate = (dateString: string | undefined) => {
@@ -505,6 +532,25 @@ export default function RiwayatScreen() {
           </View>
         </View>
       </Modal>
+
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
+
+      <ConfirmModal
+        visible={confirmVisible}
+        title={confirmTitle}
+        message={confirmMessage}
+        onClose={() => setConfirmVisible(false)}
+        actions={[
+          { label: 'Kembali', type: 'secondary', onPress: () => setConfirmVisible(false), disabled: confirmLoading },
+          { label: 'Ya, Hapus', type: 'primary', onPress: async () => { if (confirmOnConfirm) await confirmOnConfirm(); }, loading: confirmLoading },
+        ]}
+      />
     </View>
   );
 }
@@ -894,5 +940,54 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     fontWeight: '600',
     marginTop: spacing.sm,
+  },
+  // Extra styles for alert/confirm
+  alertIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  alertMessage: {
+    fontSize: typography.body,
+    color: '#555',
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: typography.body,
+    color: '#777',
+    marginBottom: spacing.md,
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  modalButtonSecondary: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#EEE',
+    backgroundColor: '#F8F9FA',
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+  },
+  modalButtonPrimary: {
+    flex: 1,
+    backgroundColor: Colors.primary,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+  },
+  modalButtonTextSecondary: {
+    fontWeight: '800',
+    color: '#333',
+    fontSize: typography.body,
+  },
+  modalButtonTextPrimary: {
+    fontWeight: '800',
+    color: 'white',
+    fontSize: typography.body,
   },
 });

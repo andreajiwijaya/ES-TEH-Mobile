@@ -3,20 +3,21 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Easing,
-  Modal,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Animated,
+    Easing,
+    Modal,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import AlertModal from '../../components/AlertModal';
+import ConfirmModal from '../../components/ConfirmModal';
 import { Colors } from '../../constants/Colors';
 import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { ownerAPI } from '../../services/api';
@@ -51,6 +52,38 @@ export default function LaporanScreen() {
   const [tempSelectedCategory, setTempSelectedCategory] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [processing, setProcessing] = useState(false);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmActions, setConfirmActions] = useState<
+    { label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger'; loading?: boolean; disabled?: boolean }[]
+  >([]);
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: 'success' | 'error' | 'warning' | 'info' = 'info'
+  ) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    actions: { label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger'; loading?: boolean; disabled?: boolean }[]
+  ) => {
+    setConfirmTitle(title);
+    setConfirmMessage(message);
+    setConfirmActions(actions);
+    setConfirmVisible(true);
+  };
 
   // --- SKELETON SHIMMER ---
   const SkeletonShimmer = ({ width, height, style }: { width?: number | string; height?: number; style?: any }) => {
@@ -149,12 +182,14 @@ export default function LaporanScreen() {
 
   // --- ACTIONS ---
   const handleDeleteReport = (id: string) => {
-    Alert.alert('Hapus Riwayat', 'Yakin ingin menghapus laporan ini?', [
-      { text: 'Batal', style: 'cancel' },
-      { text: 'Hapus', style: 'destructive', onPress: () => {
+    showConfirm('Hapus Riwayat', 'Yakin ingin menghapus laporan ini?', [
+      { label: 'Batal', type: 'secondary', onPress: () => setConfirmVisible(false) },
+      { label: 'Hapus', type: 'danger', onPress: () => {
+          setConfirmVisible(false);
           const updated = reports.filter(r => r.id !== id);
           setReports(updated);
           saveReportsToStorage(updated);
+          showAlert('Terhapus', 'Laporan dihapus dari riwayat', 'success');
         }
       }
     ]);
@@ -221,9 +256,9 @@ export default function LaporanScreen() {
       setReports(updated);
       await saveReportsToStorage(updated);
       setShowFilterModal(false);
-      Alert.alert('Sukses', 'Laporan berhasil dibuat.');
+      showAlert('Sukses', 'Laporan berhasil dibuat.', 'success');
     } catch {
-      Alert.alert('Gagal', 'Server tidak merespon.');
+      showAlert('Gagal', 'Server tidak merespon.', 'error');
     } finally {
       setProcessing(false);
     }
@@ -391,7 +426,7 @@ export default function LaporanScreen() {
       await FileSystem.moveAsync({ from: uri, to: targetPath });
       await Sharing.shareAsync(targetPath, { UTI: '.pdf', mimeType: 'application/pdf' });
     } catch {
-      Alert.alert('Error', 'Gagal membuat PDF.');
+      showAlert('Error', 'Gagal membuat PDF.', 'error');
     }
   };
 
@@ -408,7 +443,7 @@ export default function LaporanScreen() {
       const res = await FileSystem.downloadAsync(url, fileUri, { headers: { 'Authorization': `Bearer ${token}` } });
       if (res.status === 200) await Sharing.shareAsync(res.uri);
     } catch {
-      Alert.alert('Gagal', 'Excel tidak tersedia.');
+      showAlert('Gagal', 'Excel tidak tersedia.', 'error');
     } finally {
       setDownloading(false);
     }
@@ -572,6 +607,21 @@ export default function LaporanScreen() {
           </View>
         </View>
       </Modal>
+
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
+      <ConfirmModal
+        visible={confirmVisible}
+        title={confirmTitle}
+        message={confirmMessage}
+        actions={confirmActions}
+        onClose={() => setConfirmVisible(false)}
+      />
     </View>
   );
 }

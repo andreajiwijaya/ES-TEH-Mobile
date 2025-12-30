@@ -2,22 +2,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
-  Animated,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Animated,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AlertModal from '../../components/AlertModal';
 import { Colors } from '../../constants/Colors';
-import { spacing, radius, typography } from '../../constants/DesignSystem';
+import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI, ownerAPI } from '../../services/api';
 import { User } from '../../types';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ==================== SKELETON SHIMMER ====================
 const SkeletonShimmer = ({ 
@@ -74,6 +74,21 @@ export default function OwnerDashboardScreen() {
   const [userCount, setUserCount] = useState(0);
   const [outletCount, setOutletCount] = useState(0);
   const [showRevenueDetail, setShowRevenueDetail] = useState(false);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: 'success' | 'error' | 'warning' | 'info' = 'info'
+  ) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
 
   // Avatar helpers
   const getAvatarColor = () => {
@@ -164,7 +179,7 @@ export default function OwnerDashboardScreen() {
 
     } catch (error: any) {
       console.error('Load data error:', error);
-      Alert.alert('Error', 'Gagal memuat data dashboard');
+      showAlert('Error', 'Gagal memuat data dashboard', 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -286,6 +301,14 @@ export default function OwnerDashboardScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+      
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
       
       {/* Header */}
       <View style={styles.header}>

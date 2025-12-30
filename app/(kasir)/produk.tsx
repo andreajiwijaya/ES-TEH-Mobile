@@ -4,7 +4,6 @@ import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   FlatList,
   Image,
@@ -21,7 +20,7 @@ import {
   View
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
-import { spacing, radius, typography } from '../../constants/DesignSystem';
+import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI, karyawanAPI } from '../../services/api';
 import { CreateProductPayload, FileAsset, Kategori, Product, StokOutletItem, UpdateProductPayload, User } from '../../types';
 
@@ -91,6 +90,22 @@ export default function ProdukScreen() {
   const [komposisiList, setKomposisiList] = useState<{ bahan_id: number; quantity: string }[]>([]);
   const [selectedKategoriId, setSelectedKategoriId] = useState<number | null>(null);
 
+  // Alert & Confirm Modal States
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{
+    type: 'success' | 'error' | 'warning';
+    title: string;
+    message: string;
+    onClose?: () => void;
+  }>({ type: 'error', title: '', message: '' });
+  
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ title: '', message: '', onConfirm: () => {} });
+
   // --- LOAD USER DATA ---
   const loadUserData = useCallback(async () => {
     try {
@@ -129,7 +144,7 @@ export default function ProdukScreen() {
       setKategoriList(Array.isArray(dataKategori) ? dataKategori : []);
     } catch (err) {
       console.error('Load Error:', err);
-      Alert.alert('Error', 'Gagal memuat data produk');
+      showCustomAlert('error', 'Error', 'Gagal memuat data produk');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -137,6 +152,16 @@ export default function ProdukScreen() {
   }, [loadUserData]);
 
   useFocusEffect(useCallback(() => { loadAllData(); }, [loadAllData]));
+
+  const showCustomAlert = (type: 'success' | 'error' | 'warning', title: string, message: string, onClose?: () => void) => {
+    setAlertConfig({ type, title, message, onClose });
+    setShowAlert(true);
+  };
+
+  const showCustomConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmConfig({ title, message, onConfirm });
+    setShowConfirm(true);
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -165,7 +190,7 @@ export default function ProdukScreen() {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Izin dibutuhkan', 'Berikan izin akses foto untuk mengunggah gambar.');
+        showCustomAlert('warning', 'Izin Dibutuhkan', 'Berikan izin akses foto untuk mengunggah gambar.');
         return;
       }
 
@@ -188,7 +213,7 @@ export default function ProdukScreen() {
       }
     } catch (err) {
       console.error('pickImage error', err);
-      Alert.alert('Error', 'Gagal memilih gambar');
+      showCustomAlert('error', 'Error', 'Gagal memilih gambar');
     }
   };
 
@@ -220,7 +245,7 @@ export default function ProdukScreen() {
       const p = products.find(prod => prod.id === id);
       
       if (!p || !p.id) {
-        Alert.alert('Error', 'Produk tidak ditemukan');
+        showCustomAlert('error', 'Error', 'Produk tidak ditemukan');
         setProcessing(false);
         return;
       }
@@ -246,7 +271,7 @@ export default function ProdukScreen() {
       setShowModal(true);
     } catch (err) {
       console.error('handleOpenEdit error:', err);
-      Alert.alert('Error', 'Gagal mengambil detail produk');
+      showCustomAlert('error', 'Error', 'Gagal mengambil detail produk');
     } finally {
       setProcessing(false);
     }
@@ -254,11 +279,11 @@ export default function ProdukScreen() {
 
   // --- SAVE PRODUCT ---
   const handleSave = async () => {
-    if (!form.nama || !form.harga) return Alert.alert('Validasi', 'Nama dan harga wajib diisi');
+    if (!form.nama || !form.harga) return showCustomAlert('warning', 'Validasi', 'Nama dan harga wajib diisi');
 
     const validKomposisi = komposisiList.filter(k => k.bahan_id && k.bahan_id !== 0 && k.quantity !== '');
-    if (validKomposisi.length === 0) return Alert.alert('Validasi', 'Minimal masukkan 1 komposisi bahan');
-    if (!selectedKategoriId) return Alert.alert('Validasi', 'Kategori produk wajib dipilih');
+    if (validKomposisi.length === 0) return showCustomAlert('warning', 'Validasi', 'Minimal masukkan 1 komposisi bahan');
+    if (!selectedKategoriId) return showCustomAlert('warning', 'Validasi', 'Kategori produk wajib dipilih');
 
     setProcessing(true);
     try {
@@ -293,16 +318,17 @@ export default function ProdukScreen() {
 
       if (res.error) throw new Error(res.error);
 
-      Alert.alert('Sukses', 'Data produk berhasil disimpan');
-      setShowModal(false);
-      setForm({ nama: '', harga: '', category: 'Minuman', gambar: null });
-      setKomposisiList([{ bahan_id: 0, quantity: '' }]);
-      setEditingProduct(null);
-      setSelectedKategoriId(null);
-      await loadAllData(true);
+      showCustomAlert('success', 'Sukses', 'Data produk berhasil disimpan', () => {
+        setShowModal(false);
+        setForm({ nama: '', harga: '', category: 'Minuman', gambar: null });
+        setKomposisiList([{ bahan_id: 0, quantity: '' }]);
+        setEditingProduct(null);
+        setSelectedKategoriId(null);
+        loadAllData(true);
+      });
     } catch (error: any) {
       console.error('handleSave error detail:', error);
-      Alert.alert('Gagal', error?.message || 'Terjadi kesalahan saat menyimpan');
+      showCustomAlert('error', 'Gagal', error?.message || 'Terjadi kesalahan saat menyimpan');
     } finally {
       setProcessing(false);
     }
@@ -310,27 +336,24 @@ export default function ProdukScreen() {
 
   // --- DELETE PRODUCT ---
   const handleDelete = (id: number) => {
-    Alert.alert('Hapus Menu', 'Yakin ingin menghapus menu ini?', [
-      { text: 'Batal', style: 'cancel' },
-      {
-        text: 'Hapus',
-        style: 'destructive',
-        onPress: async () => {
-          setProcessing(true);
-          try {
-            const res = await karyawanAPI.deleteProduk(id);
-            if (res.error) throw new Error(res.error);
-            Alert.alert('Sukses', 'Menu berhasil dihapus');
-            await loadAllData(true);
-          } catch (error: any) {
-            console.error('delete error detail:', error);
-            Alert.alert('Gagal', error?.message || 'Gagal menghapus menu');
-          } finally {
-            setProcessing(false);
-          }
-        },
-      },
-    ]);
+    showCustomConfirm(
+      'Hapus Menu',
+      'Yakin ingin menghapus menu ini? Tindakan ini tidak dapat dibatalkan.',
+      async () => {
+        setProcessing(true);
+        try {
+          const res = await karyawanAPI.deleteProduk(id);
+          if (res.error) throw new Error(res.error);
+          showCustomAlert('success', 'Sukses', 'Menu berhasil dihapus');
+          await loadAllData(true);
+        } catch (error: any) {
+          console.error('delete error detail:', error);
+          showCustomAlert('error', 'Gagal', error?.message || 'Gagal menghapus menu');
+        } finally {
+          setProcessing(false);
+        }
+      }
+    );
   };
 
   // --- OPEN CREATE MODAL ---
@@ -591,6 +614,86 @@ export default function ProdukScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Custom Alert Modal */}
+      <Modal visible={showAlert} animationType="fade" transparent onRequestClose={() => setShowAlert(false)}>
+        <View style={styles.alertOverlay}>
+          <View style={styles.alertCard}>
+            <View style={styles.alertIconContainer}>
+              <View style={[
+                styles.alertIconBg,
+                { backgroundColor: alertConfig.type === 'success' ? '#DCFCE7' : alertConfig.type === 'warning' ? '#FEF3C7' : '#FEE2E2' }
+              ]}>
+                <Ionicons
+                  name={
+                    alertConfig.type === 'success' ? 'checkmark-circle' :
+                    alertConfig.type === 'warning' ? 'warning' : 'close-circle'
+                  }
+                  size={64}
+                  color={
+                    alertConfig.type === 'success' ? '#16A34A' :
+                    alertConfig.type === 'warning' ? '#D97706' : '#DC2626'
+                  }
+                />
+              </View>
+            </View>
+
+            <Text style={styles.alertTitle}>{alertConfig.title}</Text>
+            <Text style={styles.alertMessage}>{alertConfig.message}</Text>
+
+            <TouchableOpacity
+              style={[
+                styles.alertButton,
+                { backgroundColor: alertConfig.type === 'success' ? '#16A34A' : alertConfig.type === 'warning' ? '#D97706' : '#DC2626' }
+              ]}
+              onPress={() => {
+                setShowAlert(false);
+                alertConfig.onClose?.();
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.alertButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Custom Confirm Modal */}
+      <Modal visible={showConfirm} animationType="fade" transparent onRequestClose={() => setShowConfirm(false)}>
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmCard}>
+            <View style={styles.confirmIconContainer}>
+              <View style={styles.confirmIconBg}>
+                <Ionicons name="alert-circle" size={64} color="#DC2626" />
+              </View>
+            </View>
+
+            <Text style={styles.confirmTitle}>{confirmConfig.title}</Text>
+            <Text style={styles.confirmMessage}>{confirmConfig.message}</Text>
+
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.confirmBtnCancel}
+                onPress={() => setShowConfirm(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmBtnCancelText}>Batal</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.confirmBtnConfirm}
+                onPress={() => {
+                  setShowConfirm(false);
+                  confirmConfig.onConfirm();
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmBtnConfirmText}>Hapus</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -768,7 +871,7 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 130,
     right: 30,
     width: 60,
     height: 60,
@@ -995,5 +1098,145 @@ const styles = StyleSheet.create({
   },
   btnDisabled: {
     opacity: 0.6,
+  },
+  alertOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  alertCard: {
+    backgroundColor: 'white',
+    borderRadius: 28,
+    padding: 32,
+    width: '100%',
+    maxWidth: 400,
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+  },
+  alertIconContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  alertIconBg: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  alertTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#1E293B',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  alertMessage: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 28,
+    lineHeight: 22,
+  },
+  alertButton: {
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  alertButtonText: {
+    color: 'white',
+    fontSize: typography.bodyStrong,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  confirmCard: {
+    backgroundColor: 'white',
+    borderRadius: 28,
+    padding: 32,
+    width: '100%',
+    maxWidth: 400,
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+  },
+  confirmIconContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  confirmIconBg: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#1E293B',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  confirmMessage: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 28,
+    lineHeight: 22,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  confirmBtnCancel: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+  },
+  confirmBtnCancelText: {
+    fontSize: typography.body,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  confirmBtnConfirm: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  confirmBtnConfirmText: {
+    fontSize: typography.body,
+    fontWeight: '800',
+    color: 'white',
   },
 });

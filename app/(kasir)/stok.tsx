@@ -4,7 +4,6 @@ import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Image,
   Modal,
@@ -18,6 +17,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import AlertModal from '../../components/AlertModal';
+import ConfirmModal from '../../components/ConfirmModal';
 import { Colors } from '../../constants/Colors';
 import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI, karyawanAPI } from '../../services/api';
@@ -99,6 +100,34 @@ export default function StokScreen() {
   const [selectedShipmentId, setSelectedShipmentId] = useState<number | null>(null);
   const [inputQuantity, setInputQuantity] = useState('');
   const [buktiFoto, setBuktiFoto] = useState<FileAsset | null>(null);
+  // Custom alert & confirm state
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success'|'error'|'warning'|'info'>('info');
+
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmActions, setConfirmActions] = useState<{ label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger' }[]>([]);
+
+  const showAlert = (title: string, message: string, type: 'success'|'error'|'warning'|'info' = 'info') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    actions: { label: string; onPress: () => void | Promise<void>; type?: 'primary' | 'secondary' | 'danger' }[]
+  ) => {
+    setConfirmTitle(title);
+    setConfirmMessage(message);
+    setConfirmActions(actions);
+    setConfirmVisible(true);
+  };
 
   // --- LOAD USER DATA ---
   const loadUserData = useCallback(async () => {
@@ -203,40 +232,38 @@ export default function StokScreen() {
       }
     } catch (error) {
       console.error('Gallery error:', error);
-      Alert.alert('Error', 'Gagal membuka galeri foto.');
+      showAlert('Error', 'Gagal membuka galeri foto.', 'error');
     }
   };
 
   // --- CONFIRM RECEIPT ---
   const handleConfirmReceipt = async (ship: BarangKeluar | PermintaanStok) => {
-    Alert.alert('Konfirmasi Terima', 'Barang sudah sampai dan sesuai?', [
-      { text: 'Batal', style: 'cancel' },
-      { text: 'Foto Bukti', onPress: () => pickImage(ship.id) },
-      { 
-        text: 'Ya, Terima', 
-        onPress: async () => {
+    showConfirm('Konfirmasi Terima', 'Barang sudah sampai dan sesuai?', [
+      { label: 'Batal', type: 'secondary', onPress: () => setConfirmVisible(false) },
+      { label: 'Foto Bukti', type: 'secondary', onPress: () => { setConfirmVisible(false); pickImage(ship.id); } },
+      { label: 'Ya, Terima', type: 'primary', onPress: async () => {
+          setConfirmVisible(false);
           setActionLoading(true);
           try {
             const res = await karyawanAPI.terimaBarangKeluar(ship.id, buktiFoto);
             if (res.error) throw new Error(res.error);
-            Alert.alert('Sukses', 'Barang diterima dan stok diperbarui!');
+            showAlert('Sukses', 'Barang diterima dan stok diperbarui!', 'success');
             setBuktiFoto(null);
             setSelectedShipmentId(null);
             loadAllData(true);
           } catch (err: any) {
-            Alert.alert('Gagal', err.message || 'Gagal memproses permintaan.');
+            showAlert('Gagal', err.message || 'Gagal memproses permintaan.', 'error');
           } finally {
             setActionLoading(false);
           }
-        }
-      }
+        } }
     ]);
   };
 
   // --- SUBMIT FORM ---
   const handleSubmit = async () => {
     const qty = parseInt(inputQuantity);
-    if (isNaN(qty) || qty <= 0) return Alert.alert('Validasi', 'Jumlah tidak valid');
+    if (isNaN(qty) || qty <= 0) { showAlert('Validasi', 'Jumlah tidak valid', 'warning'); return; }
     
     setActionLoading(true);
     try {
@@ -246,7 +273,7 @@ export default function StokScreen() {
         console.log('[DEBUG] Create PermintaanStok:', { bahan_id: bId, jumlah: qty });
         const res = await karyawanAPI.createPermintaanStok({ bahan_id: bId, jumlah: qty });
         if (res.error) throw new Error(res.error);
-        Alert.alert('Sukses', 'Permintaan stok telah diajukan.');
+        showAlert('Sukses', 'Permintaan stok telah diajukan.', 'success');
       } else if (selectedRequestItem) {
         const payload = { 
           bahan_id: selectedRequestItem.bahan_id, 
@@ -259,7 +286,7 @@ export default function StokScreen() {
         const res = await karyawanAPI.updatePermintaanStok(selectedRequestItem.id, payload);
         console.log('[DEBUG] Update response:', res);
         if (res.error) throw new Error(res.error);
-        Alert.alert('Sukses', 'Permintaan telah diperbarui.');
+        showAlert('Sukses', 'Permintaan telah diperbarui.', 'success');
       }
       // Close modal dulu, baru refresh data
       setModalVisible(false);
@@ -269,7 +296,7 @@ export default function StokScreen() {
       await loadAllData(true);
     } catch (err: any) {
       console.error('[ERROR] Submit error:', err);
-      Alert.alert('Gagal', err.message || 'Terjadi kesalahan.');
+      showAlert('Gagal', err.message || 'Terjadi kesalahan.', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -278,20 +305,23 @@ export default function StokScreen() {
   // --- CANCEL REQUEST ---
   const handleCancelRequest = () => {
     if (!selectedRequestItem) return;
-    Alert.alert('Hapus', 'Batalkan permintaan ini?', [
-      { text: 'Kembali' },
-      { text: 'Ya, Hapus', style: 'destructive', onPress: async () => {
+    // Tutup modal form agar konfirmasi tampil jelas dan tidak tertutup overlay form
+    setModalVisible(false);
+    showConfirm('Hapus', 'Batalkan permintaan ini?', [
+      { label: 'Kembali', type: 'secondary', onPress: () => setConfirmVisible(false) },
+      { label: 'Ya, Hapus', type: 'danger', onPress: async () => {
+        setConfirmVisible(false);
         setActionLoading(true);
         try {
           await karyawanAPI.deletePermintaanStok(selectedRequestItem.id);
-          setModalVisible(false);
           loadAllData(true);
+          showAlert('Sukses', 'Permintaan berhasil dibatalkan.', 'success');
         } catch (err: any) {
-          Alert.alert('Gagal', err.message || 'Gagal menghapus permintaan.');
+          showAlert('Gagal', err.message || 'Gagal menghapus permintaan.', 'error');
         } finally {
           setActionLoading(false);
         }
-      }}
+      } }
     ]);
   };
 
@@ -781,6 +811,22 @@ export default function StokScreen() {
           </View>
         </View>
       </Modal>
+
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
+
+      <ConfirmModal
+        visible={confirmVisible}
+        title={confirmTitle}
+        message={confirmMessage}
+        onClose={() => setConfirmVisible(false)}
+        actions={confirmActions}
+      />
     </View>
   );
 }
@@ -1269,5 +1315,68 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: 60,
     elevation: 2,
+  },
+  // Simple primary button (used in alert modal)
+  modalButtonPrimary: {
+    backgroundColor: Colors.primary,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+  },
+  modalButtonTextPrimary: {
+    fontWeight: '800',
+    color: 'white',
+    fontSize: typography.body,
+  },
+  // Extra styles for alert & confirm
+  alertIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  alertMessage: {
+    fontSize: typography.body,
+    color: '#555',
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  modalSubtitle: {
+    fontSize: typography.body,
+    color: '#777',
+    marginBottom: spacing.md,
+  },
+  confirmActionBtn: {
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    borderWidth: 1.5,
+  },
+  confirmActionPrimary: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  confirmActionSecondary: {
+    backgroundColor: '#F8F9FA',
+    borderColor: '#EEE',
+  },
+  confirmActionDanger: {
+    backgroundColor: '#FFF1F0',
+    borderColor: '#FFCDD2',
+  },
+  confirmActionText: {
+    fontWeight: '800',
+    fontSize: typography.body,
+  },
+  confirmActionTextPrimary: {
+    color: 'white',
+  },
+  confirmActionTextSecondary: {
+    color: '#333',
+  },
+  confirmActionTextDanger: {
+    color: '#E53935',
   },
 });

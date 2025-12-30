@@ -3,20 +3,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Animated,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
+import ConfirmModal from '../../components/ConfirmModal';
 import { Colors } from '../../constants/Colors';
-import { spacing, radius, typography } from '../../constants/DesignSystem';
+import { radius, spacing, typography } from '../../constants/DesignSystem';
 import { authAPI } from '../../services/api';
 import { Outlet, User } from '../../types';
 
@@ -69,6 +69,7 @@ export default function AkunScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
 
   // Load profile setiap kali halaman difokuskan
   const loadProfile = useCallback(async (showRefreshIndicator = false) => {
@@ -139,30 +140,22 @@ export default function AkunScreen() {
     loadProfile(true);
   };
 
-  const handleLogout = async () => {
-    Alert.alert(
-      'Konfirmasi Keluar',
-      'Apakah Anda yakin ingin mengakhiri sesi ini?',
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Keluar Sekarang',
-          style: 'destructive',
-          onPress: async () => {
-            setIsLoggingOut(true);
-            try {
-              await authAPI.logout();
-            } catch (error) {
-              console.log('Logout API error:', error);
-            } finally {
-              await AsyncStorage.multiRemove(['@auth_token', '@user_data']);
-              setIsLoggingOut(false);
-              router.replace('/(auth)/login');
-            }
-          },
-        },
-      ]
-    );
+  const handleLogout = () => {
+    setConfirmVisible(true);
+  };
+
+  const performLogout = async () => {
+    setConfirmVisible(false);
+    setIsLoggingOut(true);
+    try {
+      await authAPI.logout();
+    } catch (error) {
+      console.log('Logout API error:', error);
+    } finally {
+      await AsyncStorage.multiRemove(['@auth_token', '@user_data']);
+      setIsLoggingOut(false);
+      router.replace('/(auth)/login');
+    }
   };
 
   const getRoleLabel = (role?: string) => {
@@ -372,6 +365,16 @@ export default function AkunScreen() {
           <Text style={styles.versionText}>Es Teh POS App v1.0.0</Text>
           <Text style={styles.footerSub}>Pekanbaru, Indonesia</Text>
         </View>
+        <ConfirmModal
+          visible={confirmVisible}
+          title="Konfirmasi Keluar"
+          message="Apakah Anda yakin ingin mengakhiri sesi ini?"
+          onClose={() => setConfirmVisible(false)}
+          actions={[
+            { label: 'Batal', type: 'secondary', onPress: () => setConfirmVisible(false) },
+            { label: 'Keluar Sekarang', type: 'danger', onPress: performLogout, loading: isLoggingOut },
+          ]}
+        />
       </ScrollView>
     </View>
   );
@@ -597,5 +600,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     fontWeight: '600',
     letterSpacing: 0.2,
-  }
+  },
+  
 });
